@@ -7,7 +7,7 @@ TypeScript 이식의 **참조 구현**과, 설계 결정을 뒷받침한 수치 
 
 | 파일 | 내용 |
 |---|---|
-| `m1a_core.py` | **3D 코어.** 원시연산 P1(EDT + feature transform, FMM)·P2(연결성)와 기판·증착·식각 연산자. 적대적 시퀀스를 실행하고 불변식을 검사합니다. TypeScript 이식은 이 구조와 이름을 그대로 따릅니다. |
+| `m1a_core.py` | **원시연산 참조** — P1(EDT + feature transform, FMM)·P2(연결성)·가시성. 여기 있는 `op_deposit`/`op_etch`는 초기 sweep/probe 판이라 **오라클로만** 쓰고, 정본 연산자는 아래 파일들입니다. |
 | `m1c_uf_check.py` | φ 진리원천 파이프라인 + union-find 봉인·돌파를 3D에 적용하고 sweep 판과 대조합니다. |
 | `m2_litho.py` | **P3**(높이 채우기)와 **P4**(광선 투영). PR 코팅·노광·현상·PR 제거·CMP. |
 | `m2_dope.py` | 이온 주입(P4 광선 + 깊이 분포)과 어닐(ADI, Crank–Nicolson). |

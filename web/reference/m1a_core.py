@@ -1,6 +1,16 @@
 # -*- coding: utf-8 -*-
 """M1a - the 3D core at reduced scale, driven by an adversarial sequence.
 
+STATUS (after the code review): this file is the reference for the PRIMITIVES
+(edt3, fmm3, ambient, visibility). Its op_deposit / op_etch are the ORIGINAL
+sweep / probe versions and are kept as oracles only. The canonical operator
+implementations that the browser port follows live in:
+  m1c_uf_check.py   op_deposit_uf / op_etch_uf  (phi as truth, union-find)
+  m2_litho.py       PR coat, expose, develop, strip, CMP
+  m2_dope.py        implant, anneal (ADI, Crank-Nicolson)
+  m2_thermal.py     oxidation (bounded oxidant reach), silicide
+
+
 Not a demo of the happy path. The sequence is built to hit the three risks the
 design has not retired:
 

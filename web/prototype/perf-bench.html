@@ -1,0 +1,459 @@
+<title>FabSim3D 코어 벤치마크</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  --bg:#eceff5;--surface:#ffffff;--surface-2:#f5f7fb;
+  --line:#d5dbe6;--line-2:#bcc5d4;
+  --ink:#151a24;--ink-2:#485266;--ink-3:#79839a;
+  --accent:#2b5fc4;--accent-2:#dce6fa;
+  --ok:#2f8478;--warn:#a8752a;--bad:#c4453c;
+  --r:6px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0d1117;--surface:#151b24;--surface-2:#1b222d;
+  --line:#28313f;--line-2:#3a4557;
+  --ink:#e7ebf2;--ink-2:#a6b0c2;--ink-3:#7c869a;
+  --accent:#6c9bf0;--accent-2:#1e2a40;
+  --ok:#4cb9a8;--warn:#e0a94d;--bad:#e86b60;
+}}
+:root[data-theme="dark"]{
+  --bg:#0d1117;--surface:#151b24;--surface-2:#1b222d;
+  --line:#28313f;--line-2:#3a4557;
+  --ink:#e7ebf2;--ink-2:#a6b0c2;--ink-3:#7c869a;
+  --accent:#6c9bf0;--accent-2:#1e2a40;
+  --ok:#4cb9a8;--warn:#e0a94d;--bad:#e86b60;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);
+  font-family:"IBM Plex Sans KR","Malgun Gothic",system-ui,sans-serif;
+  font-size:15px;line-height:1.65;-webkit-font-smoothing:antialiased}
+.wrap{max-width:860px;margin:0 auto;padding:38px 22px 70px}
+.eyebrow{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11.5px;
+  letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);margin:0 0 10px}
+h1{font-size:clamp(26px,4vw,36px);line-height:1.2;margin:0 0 13px;font-weight:600;letter-spacing:-.02em}
+.lede{margin:0;max-width:60ch;color:var(--ink-2);font-size:15.5px}
+.lede b{color:var(--ink);font-weight:600}
+
+.bar{display:flex;flex-wrap:wrap;gap:16px;align-items:end;
+  margin:26px 0 18px;padding:15px 17px;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--r)}
+.f{display:flex;flex-direction:column;gap:6px}
+.f label{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px;
+  letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3)}
+select{font-family:inherit;font-size:14px;padding:6px 10px;border-radius:4px;
+  border:1px solid var(--line-2);background:var(--surface-2);color:var(--ink)}
+button{font-family:inherit;font-size:14px;font-weight:600;padding:8px 18px;
+  border-radius:4px;border:1px solid transparent;background:var(--accent);
+  color:#fff;cursor:pointer}
+button:disabled{opacity:.5;cursor:default}
+button:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.env{margin-left:auto;font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:11.5px;color:var(--ink-3);text-align:right;line-height:1.5}
+
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+table{border-collapse:collapse;width:100%;min-width:600px;font-size:14px}
+th{text-align:left;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:10.5px;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);font-weight:500;
+  padding:10px 14px;border-bottom:1px solid var(--line);background:var(--surface-2);white-space:nowrap}
+th.n,td.n{text-align:right}
+td{padding:11px 14px;border-bottom:1px solid var(--line);color:var(--ink-2)}
+tr:last-child td{border-bottom:none}
+td.op{font-weight:600;color:var(--ink)}
+td.n{font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums;
+  color:var(--ink);font-weight:600}
+td.note{font-size:12.5px;color:var(--ink-3)}
+tr.total td{background:var(--surface-2);border-top:2px solid var(--line-2)}
+tr.total td.op,tr.total td.n{font-size:15.5px}
+.v-ok{color:var(--ok)}.v-warn{color:var(--warn)}.v-bad{color:var(--bad)}
+.run{color:var(--ink-3);font-weight:400}
+
+.verdict{margin-top:20px;padding:15px 17px;background:var(--surface);
+  border:1px solid var(--line);border-left:3px solid var(--line-2);border-radius:0 var(--r) var(--r) 0}
+.verdict h3{margin:0 0 7px;font-size:15px;font-weight:600}
+.verdict p{margin:0;font-size:13.5px;color:var(--ink-2)}
+.verdict.ok{border-left-color:var(--ok)}
+.verdict.warn{border-left-color:var(--warn)}
+.verdict.bad{border-left-color:var(--bad)}
+
+.notes{margin-top:32px;border-top:1px solid var(--line);padding-top:20px}
+.notes h3{font-size:13px;margin:0 0 11px;font-family:"IBM Plex Mono",ui-monospace,monospace;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
+.notes p{margin:0 0 11px;font-size:13.5px;color:var(--ink-2);max-width:68ch}
+.notes p:last-child{margin:0}
+code{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12.5px;
+  background:var(--surface-2);border:1px solid var(--line);padding:1px 5px;border-radius:3px;color:var(--ink)}
+</style>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">FabSim3D · 코어 성능 실측</p>
+    <h1>공정 노드 하나가 몇 초 걸리나</h1>
+    <p class="lede">400 × 150 × 100 = <b>600만 복셀</b>에서 원시연산을 실제로 돌려 시간을 잽니다. 추정치가 아니라 이 컴퓨터의 브라우저에서 나온 숫자입니다. "그래프를 고치면 자동 재실행"이라는 상호작용이 성립하려면 <b>합계가 2초 아래</b>여야 합니다.</p>
+  </header>
+
+  <div class="bar">
+    <div class="f">
+      <label for="rays">가시성 광선 수</label>
+      <select id="rays"><option>16</option><option selected>32</option><option>64</option></select>
+    </div>
+    <div class="f">
+      <label for="reps">반복</label>
+      <select id="reps"><option selected>1</option><option>3</option></select>
+    </div>
+    <div class="f"><label>&nbsp;</label><button id="go">다시 측정</button></div>
+    <div class="env" id="env"></div>
+  </div>
+
+  <div class="tw"><table>
+    <thead><tr>
+      <th>원시연산</th><th class="n">시간</th><th class="n">추정치</th><th>비고</th>
+    </tr></thead>
+    <tbody id="rows"></tbody>
+  </table></div>
+
+  <div class="verdict" id="verdict">
+    <h3>측정 중…</h3>
+    <p>페이지를 연 채로 두세요. 600만 복셀 배열을 여러 개 할당하므로 첫 실행이 가장 느립니다.</p>
+  </div>
+
+  <div class="notes">
+    <h3>측정 방법</h3>
+    <p><b>거리 지도</b>는 분리가능 EDT를 x·y·z 세 축으로 통과시킵니다. <b>+ 표면점 추적</b>은 여기에 가장 가까운 표면점 인덱스를 함께 전파하는 버전이라, 두 줄의 차이가 feature transform의 순수 추가 비용입니다.</p>
+    <p><b>가시성 광선</b>은 표면 복셀 전부가 아니라 무작위 표본에 대해 재고 전체 개수로 환산합니다. 표본 수와 환산 배율을 비고에 적었습니다. 이게 설계에서 가장 불확실한 항목입니다 — 앞서 0.5~1초와 3~10초라는 두 개의 상충하는 추정치가 있었습니다.</p>
+    <p><b>표면 추출</b>은 노출된 면을 세어 삼각형 수를 냅니다. 마칭큐브는 여기에 보간이 붙어 대략 2~3배로 봅니다.</p>
+    <p><b>FMM</b>은 합계에 넣지 않고 비교용으로만 잽니다. EDT는 무엇을 하든 전체 격자를 도는 고정 비용인 반면, FMM은 전선이 실제로 도달하는 부피에만 비용이 듭니다 — 두께 10짜리 증착이면 격자의 몇 %만 방문합니다. <b>둘 중 무엇이 싼지는 작업 크기에 달려 있고</b>, 이 줄이 그 분기점을 알려줍니다. 다중 재질 식각처럼 속도가 경로를 따라 변하는 경우는 EDT로 풀리지 않으므로 이 비교가 설계 판단에 직접 들어갑니다.</p>
+    <p>전부 단일 스레드입니다. 기존 Unity 코드는 <code>Parallel.For</code>로 멀티코어를 쓰고 있었으므로, 합계가 예산을 넘으면 Web Worker로 코어 수만큼 나누는 게 다음 수단입니다.</p>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+const NX=400, NY=150, NZ=100, N=NX*NY*NZ;
+const rowsEl=document.getElementById("rows");
+const verdictEl=document.getElementById("verdict");
+const goEl=document.getElementById("go");
+const raysEl=document.getElementById("rays");
+const repsEl=document.getElementById("reps");
+
+document.getElementById("env").innerHTML =
+  `논리 코어 ${navigator.hardwareConcurrency||"?"}개<br>${N.toLocaleString()} 복셀`;
+
+const ROWS=[
+  ["기판·패턴 생성","구조를 만드는 준비 단계"],
+  ["거리 지도 (EDT)","x·y·z 3축 분리가능 통과 · 항상 전체 격자"],
+  ["+ 표면점 추적","feature transform 추가분"],
+  ["연결성 검사","flood fill, 봉인·도달 판정"],
+  ["표면 추출","노출면 → 삼각형"],
+  ["가시성 광선","스텝 커버리지용, 표본 측정"],
+  ["FMM (두께 10)","비교용 · 비용이 영향 부피에 비례"],
+];
+function paint(vals){
+  rowsEl.innerHTML = ROWS.map((r,i)=>{
+    const v=vals[i];
+    return `<tr><td class="op">${r[0]}</td>`+
+      `<td class="n">${v&&v.ms!=null?v.ms.toFixed(0)+" ms":'<span class="run">…</span>'}</td>`+
+      `<td class="n">${v&&v.est?v.est:"—"}</td>`+
+      `<td class="note">${v&&v.note?v.note:r[1]}</td></tr>`;
+  }).join("")+
+  (vals.total!=null?`<tr class="total"><td class="op">공정 노드 1회 합계</td>`+
+    `<td class="n">${(vals.total/1000).toFixed(2)} s</td><td class="n">—</td>`+
+    `<td class="note">거리 지도 + 표면점 + 연결성 + 표면 추출 + 가시성</td></tr>`:"");
+}
+paint([]);
+
+// ---------- structure ----------
+function buildSolid(){
+  const s=new Uint8Array(N);
+  const at=(x,y,z)=>x+NX*(y+NY*z);
+  for(let z=0;z<12;z++)for(let y=0;y<NY;y++)for(let x=0;x<NX;x++)s[at(x,y,z)]=1;
+  // a field of pillars: lots of surface area, like a real patterned wafer
+  for(let py=0;py<NY;py+=30)for(let px=0;px<NX;px+=40)
+    for(let z=12;z<52;z++)
+      for(let y=py;y<Math.min(py+16,NY);y++)
+        for(let x=px;x<Math.min(px+20,NX);x++) s[at(x,y,z)]=1;
+  return s;
+}
+
+// ---------- separable exact EDT (Felzenszwalb-Huttenlocher) ----------
+const INF=1e20;
+function edtLine(f,n,d,v,z,fi,srcIn,srcOut){
+  let k=0; v[0]=0; z[0]=-INF; z[1]=INF;
+  for(let q=1;q<n;q++){
+    let s=((f[q]+q*q)-(f[v[k]]+v[k]*v[k]))/(2*q-2*v[k]);
+    while(s<=z[k]){k--;s=((f[q]+q*q)-(f[v[k]]+v[k]*v[k]))/(2*q-2*v[k]);}
+    k++; v[k]=q; z[k]=s; z[k+1]=INF;
+  }
+  k=0;
+  for(let q=0;q<n;q++){
+    while(z[k+1]<q)k++;
+    d[q]=(q-v[k])*(q-v[k])+f[v[k]];
+    if(fi) fi[q]=srcIn?srcIn[v[k]]:v[k];
+  }
+  if(fi&&srcOut) srcOut.set(fi.subarray(0,n));
+}
+function edt3(solid,withFeature){
+  const f=new Float64Array(N);
+  for(let i=0;i<N;i++) f[i]=solid[i]?0:INF;
+  const m=Math.max(NX,NY,NZ);
+  const line=new Float64Array(m), out=new Float64Array(m);
+  const v=new Int32Array(m), z=new Float64Array(m+1);
+  const fi=withFeature?new Int32Array(m):null;
+  const feat=withFeature?new Int32Array(N):null;
+  const sIn=withFeature?new Int32Array(m):null;
+
+  // x
+  for(let zz=0;zz<NZ;zz++)for(let y=0;y<NY;y++){
+    const base=NX*(y+NY*zz);
+    for(let x=0;x<NX;x++){line[x]=f[base+x]; if(sIn)sIn[x]=x;}
+    edtLine(line,NX,out,v,z,fi,sIn,null);
+    for(let x=0;x<NX;x++){f[base+x]=out[x]; if(feat)feat[base+x]=fi[x];}
+  }
+  // y
+  for(let zz=0;zz<NZ;zz++)for(let x=0;x<NX;x++){
+    for(let y=0;y<NY;y++){line[y]=f[x+NX*(y+NY*zz)]; if(sIn)sIn[y]=y;}
+    edtLine(line,NY,out,v,z,fi,sIn,null);
+    for(let y=0;y<NY;y++){f[x+NX*(y+NY*zz)]=out[y]; if(feat)feat[x+NX*(y+NY*zz)]=fi[y];}
+  }
+  // z
+  for(let y=0;y<NY;y++)for(let x=0;x<NX;x++){
+    for(let zz=0;zz<NZ;zz++){line[zz]=f[x+NX*(y+NY*zz)]; if(sIn)sIn[zz]=zz;}
+    edtLine(line,NZ,out,v,z,fi,sIn,null);
+    for(let zz=0;zz<NZ;zz++){f[x+NX*(y+NY*zz)]=out[zz]; if(feat)feat[x+NX*(y+NY*zz)]=fi[zz];}
+  }
+  const dist=new Float32Array(N);
+  for(let i=0;i<N;i++) dist[i]=Math.sqrt(f[i]);
+  return dist;
+}
+
+function floodFill(solid){
+  const reach=new Uint8Array(N);
+  const q=new Int32Array(N);
+  let n=0;
+  const at=(x,y,z)=>x+NX*(y+NY*z);
+  for(let y=0;y<NY;y++)for(let x=0;x<NX;x++){
+    const i=at(x,y,NZ-1);
+    if(!solid[i]){reach[i]=1;q[n++]=i;}
+  }
+  let h=0;
+  while(h<n){
+    const c=q[h++];
+    const x=c%NX, y=((c/NX)|0)%NY, z=(c/(NX*NY))|0;
+    if(x>0){const j=c-1;      if(!solid[j]&&!reach[j]){reach[j]=1;q[n++]=j;}}
+    if(x<NX-1){const j=c+1;   if(!solid[j]&&!reach[j]){reach[j]=1;q[n++]=j;}}
+    if(y>0){const j=c-NX;     if(!solid[j]&&!reach[j]){reach[j]=1;q[n++]=j;}}
+    if(y<NY-1){const j=c+NX;  if(!solid[j]&&!reach[j]){reach[j]=1;q[n++]=j;}}
+    if(z>0){const j=c-NX*NY;  if(!solid[j]&&!reach[j]){reach[j]=1;q[n++]=j;}}
+    if(z<NZ-1){const j=c+NX*NY;if(!solid[j]&&!reach[j]){reach[j]=1;q[n++]=j;}}
+  }
+  return reach;
+}
+
+function surfaceVoxels(solid){
+  const list=[];
+  let faces=0;
+  for(let z=0;z<NZ;z++)for(let y=0;y<NY;y++)for(let x=0;x<NX;x++){
+    const i=x+NX*(y+NY*z);
+    if(!solid[i])continue;
+    let f=0;
+    if(x===0||!solid[i-1])f++;
+    if(x===NX-1||!solid[i+1])f++;
+    if(y===0||!solid[i-NX])f++;
+    if(y===NY-1||!solid[i+NX])f++;
+    if(z===0||!solid[i-NX*NY])f++;
+    if(z===NZ-1||!solid[i+NX*NY])f++;
+    if(f>0){list.push(i);faces+=f;}
+  }
+  return {list,faces};
+}
+
+function raycastSample(solid,surf,nRays,sampleN){
+  const dirs=[];
+  for(let r=0;r<nRays;r++){
+    // uniform-ish over the upper hemisphere
+    const u=(r+0.5)/nRays;
+    const phi=u*Math.PI*2*1.618034;
+    const ct=Math.sqrt(1-u);
+    const st=Math.sqrt(1-ct*ct);
+    dirs.push([st*Math.cos(phi),st*Math.sin(phi),ct]);
+  }
+  const LEN=60;
+  const step=Math.max(1,Math.floor(surf.length/sampleN));
+  let done=0;
+  for(let s=0;s<surf.length;s+=step){
+    const i=surf[s];
+    const x0=i%NX, y0=((i/NX)|0)%NY, z0=(i/(NX*NY))|0;
+    for(let r=0;r<dirs.length;r++){
+      const d=dirs[r];
+      let px=x0+0.5,py=y0+0.5,pz=z0+0.5;
+      for(let t=0;t<LEN;t++){
+        px+=d[0];py+=d[1];pz+=d[2];
+        if(pz>=NZ||px<0||px>=NX||py<0||py>=NY)break;
+        if(pz<0)break;
+        if(solid[(px|0)+NX*((py|0)+NY*(pz|0))])break;
+      }
+    }
+    done++;
+  }
+  return done;
+}
+
+// ---------- fast marching, stopped at a finite band ----------
+// Cost tracks the volume the front actually reaches, not the whole grid.
+function fmmBand(solid,band){
+  const T=new Float32Array(N).fill(Infinity);
+  const st=new Uint8Array(N);              // 0 far, 1 trial, 2 known
+  const hi=new Int32Array(1<<22), ht=new Float32Array(1<<22);
+  let hn=0, touched=0;
+  const push=(i,t)=>{
+    if(hn>=hi.length)return;
+    let c=hn++; hi[c]=i; ht[c]=t;
+    while(c>0){const p=(c-1)>>1; if(ht[p]<=ht[c])break;
+      const a=hi[p];hi[p]=hi[c];hi[c]=a; const b=ht[p];ht[p]=ht[c];ht[c]=b; c=p;}
+  };
+  const pop=()=>{
+    const top=hi[0]; hn--;
+    if(hn>0){hi[0]=hi[hn];ht[0]=ht[hn];
+      let c=0;
+      for(;;){const l=2*c+1,r=l+1; let s=c;
+        if(l<hn&&ht[l]<ht[s])s=l;
+        if(r<hn&&ht[r]<ht[s])s=r;
+        if(s===c)break;
+        const a=hi[s];hi[s]=hi[c];hi[c]=a; const b=ht[s];ht[s]=ht[c];ht[c]=b; c=s;}
+    }
+    return top;
+  };
+  const solve=(i)=>{
+    const x=i%NX, y=((i/NX)|0)%NY, z=(i/(NX*NY))|0;
+    let a=Infinity,b=Infinity,c=Infinity,j;
+    if(x>0){j=i-1;if(st[j]===2)a=Math.min(a,T[j]);}
+    if(x<NX-1){j=i+1;if(st[j]===2)a=Math.min(a,T[j]);}
+    if(y>0){j=i-NX;if(st[j]===2)b=Math.min(b,T[j]);}
+    if(y<NY-1){j=i+NX;if(st[j]===2)b=Math.min(b,T[j]);}
+    if(z>0){j=i-NX*NY;if(st[j]===2)c=Math.min(c,T[j]);}
+    if(z<NZ-1){j=i+NX*NY;if(st[j]===2)c=Math.min(c,T[j]);}
+    const v=[]; if(a<Infinity)v.push(a); if(b<Infinity)v.push(b); if(c<Infinity)v.push(c);
+    if(!v.length)return Infinity;
+    v.sort((p,q)=>p-q);
+    let t=v[0]+1;
+    if(v.length>1&&t>v[1]){
+      const s=v[0]+v[1], q=v[0]*v[0]+v[1]*v[1];
+      const disc=s*s-2*(q-1);
+      if(disc>=0)t=(s+Math.sqrt(disc))/2;
+      if(v.length>2&&t>v[2]){
+        const s3=v[0]+v[1]+v[2], q3=v[0]*v[0]+v[1]*v[1]+v[2]*v[2];
+        const d3=s3*s3-3*(q3-1);
+        if(d3>=0)t=(s3+Math.sqrt(d3))/3;
+      }
+    }
+    return t;
+  };
+  for(let i=0;i<N;i++) if(solid[i]){T[i]=0;st[i]=2;}
+  for(let i=0;i<N;i++){
+    if(!solid[i])continue;
+    const x=i%NX, y=((i/NX)|0)%NY, z=(i/(NX*NY))|0;
+    const nb=[x>0?i-1:-1, x<NX-1?i+1:-1, y>0?i-NX:-1, y<NY-1?i+NX:-1,
+              z>0?i-NX*NY:-1, z<NZ-1?i+NX*NY:-1];
+    for(let k=0;k<6;k++){
+      const j=nb[k];
+      if(j<0||st[j]!==0)continue;
+      const t=solve(j);
+      if(t<=band){T[j]=t;st[j]=1;push(j,t);}
+    }
+  }
+  while(hn>0){
+    const i=pop();
+    if(st[i]===2)continue;
+    st[i]=2; touched++;
+    if(T[i]>band)continue;
+    const x=i%NX, y=((i/NX)|0)%NY, z=(i/(NX*NY))|0;
+    const nb=[x>0?i-1:-1, x<NX-1?i+1:-1, y>0?i-NX:-1, y<NY-1?i+NX:-1,
+              z>0?i-NX*NY:-1, z<NZ-1?i+NX*NY:-1];
+    for(let k=0;k<6;k++){
+      const j=nb[k];
+      if(j<0||st[j]===2)continue;
+      const t=solve(j);
+      if(t<=band&&t<T[j]){T[j]=t;st[j]=1;push(j,t);}
+    }
+  }
+  return touched;
+}
+
+const sleep=()=>new Promise(r=>setTimeout(r,16));
+
+async function bench(){
+  goEl.disabled=true;
+  const nRays=parseInt(raysEl.value,10);
+  const reps=parseInt(repsEl.value,10);
+  const vals=[];
+  const timeIt=async(fn)=>{
+    let best=Infinity,ret;
+    for(let r=0;r<reps;r++){
+      await sleep();
+      const t0=performance.now();
+      ret=fn();
+      const dt=performance.now()-t0;
+      if(dt<best)best=dt;
+    }
+    return [best,ret];
+  };
+
+  let [t,solid]=await timeIt(buildSolid);
+  vals[0]={ms:t}; paint(vals);
+
+  [t]=await timeIt(()=>edt3(solid,false));
+  const tEdt=t; vals[1]={ms:t}; paint(vals);
+
+  let tFeat;
+  [tFeat]=await timeIt(()=>edt3(solid,true));
+  vals[2]={ms:Math.max(0,tFeat-tEdt),note:"표면점 인덱스 전파분만"}; paint(vals);
+
+  [t]=await timeIt(()=>floodFill(solid));
+  vals[3]={ms:t}; paint(vals);
+
+  let surf;
+  [t,surf]=await timeIt(()=>surfaceVoxels(solid));
+  const tri=surf.faces*2;
+  vals[4]={ms:t,note:`표면 복셀 ${surf.list.length.toLocaleString()} · 삼각형 ${tri.toLocaleString()} · 마칭큐브는 2~3배`};
+  paint(vals);
+
+  const SAMPLE=4000;
+  await sleep();
+  const t0=performance.now();
+  const done=raycastSample(solid,surf.list,nRays,SAMPLE);
+  const tSample=performance.now()-t0;
+  const scale=surf.list.length/done;
+  const tFull=tSample*scale;
+  vals[5]={ms:tFull,est:`표본 ${done.toLocaleString()}`,
+    note:`광선 ${nRays}개 · 표본 실측 ${tSample.toFixed(0)}ms → 전체 환산 ×${scale.toFixed(0)}`};
+
+  let touched;
+  [t,touched]=await timeIt(()=>fmmBand(solid,10));
+  vals[6]={ms:t,est:`${touched.toLocaleString()} 복셀`,
+    note:`전체 격자의 ${(touched/N*100).toFixed(1)}%만 방문 · EDT 대비 ${(t/tEdt).toFixed(2)}배`};
+
+  const total=vals[1].ms+vals[2].ms+vals[3].ms+vals[4].ms+vals[5].ms;
+  vals.total=total;
+  paint(vals);
+
+  const cores=navigator.hardwareConcurrency||4;
+  let cls,head,body;
+  if(total<2000){
+    cls="ok"; head="예산 안에 들어옵니다";
+    body=`합계 ${(total/1000).toFixed(2)}초로 2초 목표 아래입니다. 자동 재실행 상호작용이 단일 스레드로도 성립합니다.`;
+  }else if(total<6000){
+    cls="warn"; head="단일 스레드로는 빠듯합니다";
+    body=`합계 ${(total/1000).toFixed(2)}초입니다. 가시성 광선이 ${(vals[5].ms/total*100).toFixed(0)}%를 차지하므로 그 부분을 Web Worker ${cores}개로 나누면 예산 안에 들어올 가능성이 높습니다.`;
+  }else{
+    cls="bad"; head="설계 수정이 필요합니다";
+    body=`합계 ${(total/1000).toFixed(2)}초로 자동 재실행이 성립하지 않습니다. 가시성 광선이 ${(vals[5].ms/total*100).toFixed(0)}%입니다 — Worker 병렬화만으로 부족하면 광선 수를 줄이거나 가시성 근사 자체를 바꿔야 합니다.`;
+  }
+  verdictEl.className="verdict "+cls;
+  verdictEl.innerHTML=`<h3>${head}</h3><p>${body}</p>`;
+  goEl.disabled=false;
+}
+
+goEl.addEventListener("click",bench);
+bench();
+})();
+</script>

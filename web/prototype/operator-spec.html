@@ -1,0 +1,410 @@
+<title>FabSim3D 연산자 명세</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  --bg:#eceff5;--surface:#ffffff;--surface-2:#f5f7fb;
+  --line:#d5dbe6;--line-2:#bcc5d4;
+  --ink:#151a24;--ink-2:#485266;--ink-3:#79839a;
+  --accent:#2b5fc4;--accent-2:#dce6fa;
+  --p1:#c9821f;--p2:#2f8478;--p3:#6a5bc0;--p4:#b8458e;
+  --ok:#2f8478;--hold:#a8752a;--bad:#c4453c;
+  --r:6px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0d1117;--surface:#151b24;--surface-2:#1b222d;
+  --line:#28313f;--line-2:#3a4557;
+  --ink:#e7ebf2;--ink-2:#a6b0c2;--ink-3:#7c869a;
+  --accent:#6c9bf0;--accent-2:#1e2a40;
+  --p1:#e8a33d;--p2:#4cb9a8;--p3:#9c8ef0;--p4:#e07ab8;
+  --ok:#4cb9a8;--hold:#e0a94d;--bad:#e86b60;
+}}
+:root[data-theme="dark"]{
+  --bg:#0d1117;--surface:#151b24;--surface-2:#1b222d;
+  --line:#28313f;--line-2:#3a4557;
+  --ink:#e7ebf2;--ink-2:#a6b0c2;--ink-3:#7c869a;
+  --accent:#6c9bf0;--accent-2:#1e2a40;
+  --p1:#e8a33d;--p2:#4cb9a8;--p3:#9c8ef0;--p4:#e07ab8;
+  --ok:#4cb9a8;--hold:#e0a94d;--bad:#e86b60;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);
+  font-family:"IBM Plex Sans KR","Malgun Gothic",system-ui,sans-serif;
+  font-size:15px;line-height:1.65;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1000px;margin:0 auto;padding:40px 22px 80px}
+.eyebrow{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11.5px;
+  letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);margin:0 0 10px}
+h1{font-size:clamp(27px,4.2vw,38px);line-height:1.18;margin:0 0 14px;font-weight:600;
+  letter-spacing:-.02em;text-wrap:balance}
+.lede{margin:0;max-width:62ch;color:var(--ink-2);font-size:16px}
+.lede b{color:var(--ink);font-weight:600}
+h2{font-size:13px;font-weight:600;margin:46px 0 16px;
+  font-family:"IBM Plex Mono",ui-monospace,monospace;
+  letter-spacing:.11em;text-transform:uppercase;color:var(--ink-3);
+  padding-bottom:9px;border-bottom:1px solid var(--line)}
+h3{font-size:16px;margin:0 0 6px;font-weight:600;letter-spacing:-.01em}
+
+.prims{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:14px}
+.prim{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:15px 16px}
+.prim .num{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px;
+  letter-spacing:.1em;color:var(--ink-3);display:block;margin-bottom:7px}
+.prim h3{display:flex;align-items:center;gap:8px;font-size:15px;margin-bottom:8px}
+.dot{width:9px;height:9px;border-radius:50%;flex:none}
+.d1{background:var(--p1)}.d2{background:var(--p2)}.d3{background:var(--p3)}.d4{background:var(--p4)}
+.prim p{margin:0 0 9px;font-size:13.5px;color:var(--ink-2)}
+.prim .used{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11.5px;
+  color:var(--ink-3);border-top:1px solid var(--line);padding-top:8px;margin:0}
+
+.grp{margin-bottom:26px}
+.grp > h3{margin:0 0 10px;font-size:13.5px;color:var(--ink-2);font-weight:600;
+  display:flex;align-items:baseline;gap:9px}
+.grp > h3 span{font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:11px;color:var(--ink-3);letter-spacing:.06em}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+table{border-collapse:collapse;width:100%;min-width:660px;font-size:13.5px}
+th{text-align:left;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:10.5px;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);font-weight:500;
+  padding:10px 14px;border-bottom:1px solid var(--line);white-space:nowrap;background:var(--surface-2)}
+td{padding:11px 14px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--ink-2)}
+tr:last-child td{border-bottom:none}
+td.node{font-weight:600;color:var(--ink);white-space:nowrap}
+td.prim-cell{white-space:nowrap}
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:11px;
+  font-family:"IBM Plex Mono",ui-monospace,monospace;
+  padding:2px 7px 2px 5px;border:1px solid var(--line);border-radius:11px;
+  margin:1px 3px 1px 0;color:var(--ink-2);white-space:nowrap}
+.chip i{width:6px;height:6px;border-radius:50%;flex:none;font-style:normal}
+.knob{color:var(--ink);font-weight:600}
+.dash{color:var(--ink-3)}
+.mono{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12.5px;
+  font-variant-numeric:tabular-nums}
+.good{color:var(--ok);font-weight:600}
+.warnv{color:var(--hold);font-weight:600}
+.badv{color:var(--bad);font-weight:600}
+
+.dec{display:flex;flex-direction:column;gap:12px}
+.drow{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
+  padding:14px 16px;display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:start}
+.dtag{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px;
+  padding:3px 9px;border-radius:3px;white-space:nowrap;letter-spacing:.05em;
+  background:var(--accent-2);color:var(--accent);font-weight:600}
+.dbody h3{font-size:14.5px;margin-bottom:5px}
+.dbody p{margin:0;font-size:13.5px;color:var(--ink-2)}
+.dbody p + p{margin-top:6px}
+
+ul.open{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:9px}
+ul.open li{display:grid;grid-template-columns:auto 1fr;gap:11px;align-items:baseline;
+  font-size:13.5px;color:var(--ink-2)}
+ul.open b{color:var(--ink);font-weight:600}
+.mark{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px;
+  color:var(--hold);border:1px solid var(--line);border-radius:3px;
+  padding:1px 6px;white-space:nowrap}
+code{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12.5px;
+  background:var(--surface-2);border:1px solid var(--line);
+  padding:1px 5px;border-radius:3px;color:var(--ink)}
+.foot{margin-top:44px;padding-top:20px;border-top:1px solid var(--line);
+  font-size:12.5px;color:var(--ink-3)}
+</style>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">FabSim3D · 설계 명세 · 2026-09-04</p>
+    <h1>공정 노드 12개, 원시연산 4개</h1>
+    <p class="lede">교육용 공정 시뮬레이터의 연산자 구성입니다. 물리 방정식은 풀지 않습니다 — 파라미터는 물리 상수가 아니라 <b>거동을 재현하는 노브</b>이고, 노브 하나가 가르치려는 개념 하나에 대응합니다. 설계 주장은 추정으로 남기지 않고 <b>2D 수치 검증</b>을 거쳤습니다.</p>
+  </header>
+
+  <h2>원시연산</h2>
+  <div class="prims">
+    <div class="prim">
+      <span class="num">P1</span>
+      <h3><span class="dot d1"></span>계면 거리 오프셋</h3>
+      <p><b>지정한 계면</b>의 부호거리 φ를 유지하고, 오프셋은 <code>φ −= t·r</code>(증착) / <code>φ += t·r</code>(식각)로 적용합니다. 고체 = φ ≤ 0. 균일 속도면 EDT 없이 뺄셈 한 번이고, 표면점별 속도가 필요할 때만 feature transform을, 경로상 속도가 변할 때만 FMM을 씁니다. 계면은 고체/빈공간 외에 <b>재질 A와 그 외</b>일 수도 있고 방향은 안팎 양쪽입니다.</p>
+      <p class="used">증착 · 식각 · 어닐 · 산화 · 실리사이드</p>
+    </div>
+    <div class="prim">
+      <span class="num">P2</span>
+      <h3><span class="dot d2"></span>연결성 검사</h3>
+      <p>이 칸이 바깥과 이어져 있는가. flood fill 한 번입니다. 미리 만든 거리 지도가 담지 못하는 <b>전달 경로가 끊기거나 열리는 사건</b>을 여기서 잡습니다.</p>
+      <p class="used">증착 봉인 · 식각 도달 · PR 채움 범위 · CMP 도달 · 어닐 경계</p>
+    </div>
+    <div class="prim">
+      <span class="num">P3</span>
+      <h3><span class="dot d3"></span>높이 기준 채우기 / 자르기</h3>
+      <p>거리가 아니라 절대 높이를 기준으로 채우거나 잘라냅니다. 액체를 붓는 것과 갈아내는 것 — 오프셋으로는 표현되지 않는 연산입니다.</p>
+      <p class="used">PR 코팅 · CMP</p>
+    </div>
+    <div class="prim">
+      <span class="num">P4</span>
+      <h3><span class="dot d4"></span>방향 광선 투영</h3>
+      <p>마스크를 한 방향으로 쏩니다. 광선마다 <b>첫 고체 진입점</b>을 찾고, 거기서부터 깊이를 잽니다. 정렬 오프셋 <code>dx, dy</code>를 함께 받습니다.</p>
+      <p class="used">노광 · 이온 주입</p>
+    </div>
+  </div>
+
+  <h2>EDT 인가 FMM 인가</h2>
+  <div class="tw"><table>
+    <thead><tr><th>연산</th><th>속도장</th><th>방법</th><th>검증</th></tr></thead>
+    <tbody>
+      <tr><td class="node">컨포멀 증착</td><td>균일</td><td><b>φ −= t</b> · EDT 불필요</td>
+          <td class="mono"><span class="good">0.46×5 = 2.3 정확</span><br>재거리화 오차 바깥 0.47</td></tr>
+      <tr><td class="node">스텝 커버리지 증착</td><td>표면점마다 다름<br><span class="dash">경로를 따라서는 일정</span></td>
+          <td>EDT + 표면점 추적</td>
+          <td class="mono"><span class="good">커버리지 오차 0%</span><br>핀치오프 10~14% 늦음</td></tr>
+      <tr><td class="node">단일 재질 식각</td><td>균일</td><td><b>φ += t</b> · EDT 불필요</td><td class="dash">증착과 대칭</td></tr>
+      <tr><td class="node">다중 재질 식각</td><td><b>경로를 따라 변함</b></td>
+          <td><b>FMM</b></td>
+          <td class="mono"><span class="badv">EDT는 2.3배 오차</span></td></tr>
+      <tr><td class="node">어닐 확산</td><td>재질마다 다름</td><td>ADI (암시적)</td>
+          <td class="mono"><span class="good">σ 오차 0%, 도즈 보존</span></td></tr>
+    </tbody>
+  </table></div>
+  <p style="margin:13px 0 0;font-size:13.5px;color:var(--ink-2);max-width:70ch">둘의 비용 구조가 다릅니다. <b>EDT는 무엇을 하든 전체 격자를 도는 고정 비용</b>이고, <b>FMM은 전선이 실제로 도달하는 부피에만</b> 비용이 듭니다. 얇은 막이나 좁은 식각에서는 FMM이 오히려 쌉니다. 분기점은 벤치마크로 실측합니다.</p>
+
+  <h2>공정 노드</h2>
+
+  <div class="grp">
+    <h3>구조 생성 <span>2</span></h3>
+    <div class="tw"><table>
+      <thead><tr><th>노드</th><th>원시연산</th><th>노브</th><th>가르치는 개념</th></tr></thead>
+      <tbody>
+        <tr><td class="node">기판 생성</td><td class="prim-cell"><span class="dash">직접 채우기</span></td>
+            <td>재질, 두께, <span class="knob">결정 방향</span></td><td class="dash">—</td></tr>
+        <tr><td class="node">증착</td>
+            <td class="prim-cell"><span class="chip"><i class="d1"></i>P1</span><span class="chip"><i class="d2"></i>P2</span></td>
+            <td>재질, 두께, <span class="knob">스텝 커버리지 %</span></td>
+            <td>컨포멀 vs PVD, 오버행, 보이드, 종횡비 의존성</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="grp">
+    <h3>리소그래피 <span>4</span></h3>
+    <div class="tw"><table>
+      <thead><tr><th>노드</th><th>원시연산</th><th>노브</th><th>가르치는 개념</th></tr></thead>
+      <tbody>
+        <tr><td class="node">PR 코팅</td>
+            <td class="prim-cell"><span class="chip"><i class="d3"></i>P3</span><span class="chip"><i class="d2"></i>P2</span></td>
+            <td>두께, <span class="knob">평탄화 정도</span></td>
+            <td>왜 평탄화가 필요한가, 단차 위 PR 두께 불균일</td></tr>
+        <tr><td class="node">노광</td><td class="prim-cell"><span class="chip"><i class="d4"></i>P4</span></td>
+            <td>마스크, <span class="knob">정렬 오차 dx·dy</span>, 코너 라운딩</td>
+            <td>오버레이 오차, 근접효과</td></tr>
+        <tr><td class="node">현상</td><td class="prim-cell"><span class="dash">재질 치환</span></td>
+            <td><span class="knob">positive / negative</span></td>
+            <td>같은 마스크로 정반대 패턴이 나오는 이유</td></tr>
+        <tr><td class="node">PR 제거</td><td class="prim-cell"><span class="dash">전역 제거</span></td>
+            <td class="dash">—</td><td class="dash">—</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="grp">
+    <h3>식각 · 평탄화 <span>2</span></h3>
+    <div class="tw"><table>
+      <thead><tr><th>노드</th><th>원시연산</th><th>노브</th><th>가르치는 개념</th></tr></thead>
+      <tbody>
+        <tr><td class="node">식각</td>
+            <td class="prim-cell"><span class="chip"><i class="d1"></i>P1</span><span class="chip"><i class="d2"></i>P2</span></td>
+            <td>식각액(선택비), 시간, <span class="knob">이방성 비율</span></td>
+            <td>선택비, etch stop, 언더컷, 마스크 소모, 사이드월 각도</td></tr>
+        <tr><td class="node">CMP</td>
+            <td class="prim-cell"><span class="chip"><i class="d3"></i>P3</span><span class="chip"><i class="d2"></i>P2</span></td>
+            <td>제거량 또는 <span class="knob">정지 재질</span>, dishing</td>
+            <td>평탄화, dishing / erosion, stop layer</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="grp">
+    <h3>열처리 · 도핑 <span>4</span></h3>
+    <div class="tw"><table>
+      <thead><tr><th>노드</th><th>원시연산</th><th>노브</th><th>가르치는 개념</th></tr></thead>
+      <tbody>
+        <tr><td class="node">이온 주입</td><td class="prim-cell"><span class="chip"><i class="d4"></i>P4</span></td>
+            <td>도펀트, <span class="knob">에너지</span>, <span class="knob">도즈</span>, 마스크</td>
+            <td>피크가 표면이 아닌 아래에 있다, 에너지↔깊이 / 도즈↔면적, 오버행 그림자</td></tr>
+        <tr><td class="node">어닐</td>
+            <td class="prim-cell"><span class="chip"><i class="d2"></i>P2</span><span class="dash">+ ADI</span></td>
+            <td><span class="knob">온도</span>, 시간</td>
+            <td>접합 깊이가 온도·시간으로 결정된다, 산화막은 확산 장벽</td></tr>
+        <tr><td class="node">산화</td>
+            <td class="prim-cell"><span class="chip"><i class="d1"></i>P1</span><span class="dash">계면</span></td>
+            <td><span class="knob">온도</span>, 시간, dry / wet</td>
+            <td>선형→포물선 성장, 부피 팽창, 붕소는 산화막에 빨려 들어간다</td></tr>
+        <tr><td class="node">실리사이드</td>
+            <td class="prim-cell"><span class="chip"><i class="d1"></i>P1</span><span class="dash">계면</span></td>
+            <td>금속, 온도, 시간</td>
+            <td>자기정렬(self-aligned) 원리</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <h2>검증 기록</h2>
+  <div class="tw"><table>
+    <thead><tr><th>검증한 것</th><th>결과</th><th>결정에 미친 영향</th></tr></thead>
+    <tbody>
+      <tr><td class="node">식각의 봉인 단조성</td>
+          <td class="mono"><span class="badv">훑기 1회로 부족</span><br>보이드 바닥 36 (정답 26)</td>
+          <td>돌파 이벤트마다 EDT 재계산 추가</td></tr>
+      <tr><td class="node">증착 EDT 근사<br><span class="dash">종횡비 × 커버리지 9조합</span></td>
+          <td class="mono"><span class="good">커버리지 오차 0%</span><br>핀치오프 10~14% 늦음<br>오차는 커버리지에만 의존</td>
+          <td>근사 채택. 한계를 문서화</td></tr>
+      <tr><td class="node">서브스테핑으로 보정</td>
+          <td class="mono"><span class="badv">양자화로 전선 정지</span></td>
+          <td>부울 격자로는 불가 — φ 필드가 필요한 이유 확인</td></tr>
+      <tr><td class="node">다중 재질 식각</td>
+          <td class="mono">공간 동시성 <span class="good">해결됨</span><br>깊이 통과 <span class="badv">2.3배 오차</span></td>
+          <td>다중 재질 식각은 FMM으로 전환</td></tr>
+      <tr><td class="node">어닐 가변-D 확산</td>
+          <td class="mono"><span class="good">σ 오차 0%</span> · 도즈 보존<br>산화막 100% 차단<br><span class="warnv">명시적은 261 패스</span></td>
+          <td>ADI 채택. 명시적 스킴을 테스트 오라클로</td></tr>
+      <tr><td class="node">M1a 3D 코어 적대적 시퀀스<br><span class="dash">72×36×44</span></td>
+          <td class="mono"><span class="good">(a)(b)(c) 전부 통과</span><br>봉인 306 → 306 → 0<br><span class="good">φ 부호 불일치 0건</span><br>스냅샷 RLE 8.2 KB</td>
+          <td>φ 필드 정합성 확인. 전체 규모 스냅샷 0.33~0.43 MB로 추정치보다 좋음</td></tr>
+      <tr><td class="node">FMM 비용 경계<br><span class="dash">식각 시간 스윕</span></td>
+          <td class="mono">t=5 → 9.1%<br>t=15 → 13.7%<br>t=25 → 27.8%<br>t=35 → 50.2%<br>t=45 → 88.7%</td>
+          <td>통상 식각은 EDT보다 싸지만 극단적 식각은 비슷해짐. 돌파 재계산이 1.5~2.2배</td></tr>
+      <tr><td class="node">φ를 진리의 원천으로<br><span class="dash">phi_and_seal_check.py</span></td>
+          <td class="mono"><span class="good">0.46×5 = 2.3 한 번, 차이 0</span><br>부울 격자 0.4×5 = <span class="badv">0</span><br>재거리화 오차 바깥 0.47 / 안 1.53</td>
+          <td>결정 O. 컨포멀 연산은 EDT 없이 뺄셈. 오목 모서리 안쪽 오차는 주기적 재거리화로</td></tr>
+      <tr><td class="node">봉인 시각 union-find<br><span class="dash">역시간 삽입</span></td>
+          <td class="mono">sweep과 <span class="good">일치</span> (188/188)<br>0.79s → <span class="good">0.04s</span> · 20배</td>
+          <td>결정 P. flood fill K회 → 단일 패스 O(N α(N)). 1차 구현은 병합 시 도장을 안 찍어 보이드가 풀렸음 — 수정 후 통과</td></tr>
+    </tbody>
+  </table></div>
+  <p style="margin:13px 0 0;font-size:13.5px;color:var(--ink-2);max-width:70ch"><b>FMM 비용 논거의 경계.</b> "전선이 도달하는 부피에만 든다"는 맞지만, 그 부피가 격자의 대부분이 될 수 있습니다. 격자의 10~25%를 제거하는 통상 식각에서는 9~28%만 방문해 EDT보다 싸고, 극단적 식각에서는 EDT와 비슷해집니다.</p>
+
+  <h2>확정된 설계 결정</h2>
+  <div class="dec">
+    <div class="drow">
+      <span class="dtag">O</span>
+      <div class="dbody">
+        <h3>φ가 진리의 원천이다 — 재질 ID는 부호에서 파생</h3>
+        <p>M1까지는 φ를 검사용으로만 재구축했고 연산자는 재질 ID를 정수 임계값으로 직접 썼습니다. 그래서 "0.4×5 = 0" 양자화가 <b>설계에서는 해결됐다고 했지만 구현에서는 남아 있었습니다.</b> 이제 φ를 유지하고 증착은 <code>φ −= t·r</code>, 식각은 <code>φ += t·r</code>, 고체는 φ ≤ 0입니다.</p>
+        <p>균일 오프셋은 바깥쪽에서 정확합니다(거리 − t가 곧 오프셋 표면까지의 거리). 그래서 <b>컨포멀 증착과 등방 식각은 EDT 없이 O(N) 뺄셈</b>이 됩니다. 안쪽 SDF는 오목 모서리에서 최대 1.5복셀 어긋나므로 몇 연산마다 EDT 한 번으로 재거리화합니다. FMM 결과(T)는 <code>φ = ±(T − t)·속도</code>로 바꾼 뒤 재거리화합니다. 격자 정렬 동점을 피하려고 임계값은 반 복셀 관례를 씁니다. <b>마칭큐브는 φ의 0-등고면에서 바로 뽑혀 매끈한 표면이 공짜</b>입니다.</p>
+      </div>
+    </div>
+    <div class="drow">
+      <span class="dtag">P</span>
+      <div class="dbody">
+        <h3>봉인·돌파 시각은 역시간 union-find 한 번</h3>
+        <p>임계값을 K번 훑으며 flood fill을 K번 도는 대신, 빈 칸을 도달시각 내림차순으로 삽입하며 union-find로 "언제 바깥과 이어지는가"를 한 번에 구합니다. 봉인 시각 = 바깥까지의 <b>병목(widest-path)</b> 값이라 정확하고, 2D에서 20배 빨랐습니다. 돌파도 같은 구조(순시간 삽입)라 식각의 탐침 루프(10×N)가 사라집니다.</p>
+        <p>주의할 구현 함정: 크기 기준 병합에서 큰 ambient 컴포넌트가 보이드를 흡수하면 보이드 셀이 이미 도장 찍힌 루트 아래로 들어갑니다. <b>병합 순간에 연결되지 않은 쪽 루트에 현재 임계값을 먼저 찍고</b> 링크해야 합니다 — 1차 구현이 이걸 놓쳐 보이드가 풀렸습니다.</p>
+      </div>
+    </div>
+    <div class="drow">
+      <span class="dtag">Q</span>
+      <div class="dbody">
+        <h3>재실행은 Worker에서, 보는 단계까지만, 취소 가능하게</h3>
+        <p>노드 k를 고치면 k부터 끝까지 다시 돌리는데, 노드당 1~2초면 앞쪽 노드 편집은 수십 초가 됩니다. 결정 E의 "자동 재실행"이 약속을 지키려면 셋이 필요합니다 — 시뮬레이션은 <b>Web Worker</b>에서 돌려 UI를 막지 않고, <b>현재 보고 있는 단계까지만</b> 계산하고 나머지는 미루며, 편집 중 다시 편집하면 <b>진행 중인 계산을 취소</b>합니다.</p>
+      </div>
+    </div>
+    <div class="drow">
+      <span class="dtag">R</span>
+      <div class="dbody">
+        <h3>식각에도 가시성 노브 — ARDE</h3>
+        <p>깊고 좁은 홈일수록 이온이 덜 닿아 식각이 느려지는 종횡비 의존 식각(RIE lag)은 흔히 가르치는 현상인데, 증착의 하늘 가시성 기계장치를 그대로 재사용하면 수직 성분 속도 ∝ 가시성으로 비용 없이 나옵니다. 노브 하나, 개념 하나.</p>
+      </div>
+    </div>
+    <div class="drow">
+      <span class="dtag">S</span>
+      <div class="dbody">
+        <h3>스크래치 버퍼는 격자당 한 번 할당</h3>
+        <p>600만 격자에서 연산마다 Float64·Int32·Float32 배열(각 24~48MB)을 새로 만들면 피크가 250MB에 이르고 GC가 멈칫합니다. 격자 크기별로 한 번 할당해 재사용합니다.</p>
+      </div>
+    </div>
+    <div class="drow">
+      <span class="dtag">T</span>
+      <div class="dbody">
+        <h3>마스크는 자산 노드</h3>
+        <p>마스크가 출력 포트를 가진 노드이고, 노광·이온 주입 노드가 마스크 입력 포트를 받습니다. 한 마스크를 여러 단계에 재사용하고 정렬 오차(결정 C)는 <b>사용처마다</b> 다르게 줄 수 있습니다.</p>
+      </div>
+    </div>
+    <div class="drow">
+      <span class="dtag">U</span>
+      <div class="dbody">
+        <h3>단위 계층</h3>
+        <p>"1 복셀 = X nm" 외에 시간(초)·온도(°C)와 종별 D₀·Eₐ, Deal-Grove B·B/A(T) 표가 있어야 온도 노브가 의미를 가집니다. 방정식이 아니라 대입용 데이터 표입니다.</p>
+      </div>
+    </div>
+    <div class="drow">
+      <span class="dtag">I</span>
+      <div class="dbody">
+        <h3>속도가 경로를 따라 변하면 FMM, 아니면 EDT</h3>
+        <p>증착에서 EDT 근사가 통한 이유는 <b>표면점의 속도가 그 광선 전체에 그대로 유지되기</b> 때문입니다. 식각의 선택비는 다릅니다 — 산화막을 뚫고 질화막에 들어가면 속도가 10배 바뀝니다. 같은 근사를 쓰면 산화막 속도로 질화막을 뚫어 2.3배 과식각합니다.</p>
+        <p>FMM을 처음 기각한 근거("600만 복셀에 3~8초")는 <b>잘못된 비용 모델</b>이었습니다. FMM은 격자 전체가 아니라 전선이 도달하는 부피에만 비용이 듭니다.</p>
+      </div>
+    </div>
+    <div class="drow">
+      <span class="dtag">J</span>
+      <div class="dbody">
+        <h3>P1은 임의의 계면에서 양방향으로 동작한다</h3>
+        <p>산화는 노출된 Si에서만 자라고, <b>기판을 먹으면서 위로도 자랍니다</b> — 소비 : 성장 = 1 : 2.17이므로 원래 Si 표면 기준 아래로 46%, 위로 54%입니다. 실리사이드도 금속과 Si를 양쪽에서 소비해 셋째 물질을 만듭니다.</p>
+        <p>둘 다 "고체/빈공간 계면에서 바깥으로"가 아니라 <b>재질 계면에서 양방향으로</b>입니다. 새 원시연산이 아니라 P1의 정의가 좁게 적혀 있던 것이라, P1을 계면 일반형으로 다시 씁니다.</p>
+      </div>
+    </div>
+    <div class="drow">
+      <span class="dtag">K</span>
+      <div class="dbody">
+        <h3>CMP는 위에서 닿는 것만 깎는다</h3>
+        <p>순수 높이 자르기로 두면 <b>오버행 아래 묻힌 재질까지 연마</b>합니다 — 등방 식각으로 처마를 만든 뒤 CMP를 돌리면 바로 나오는 비물리적 결과입니다. 절단면 위쪽이라도 바깥에서 도달 가능한 것만 제거하도록 P2를 함께 씁니다.</p>
+      </div>
+    </div>
+    <div class="drow">
+      <span class="dtag">L</span>
+      <div class="dbody">
+        <h3>이온 주입은 광선 기반</h3>
+        <p>"기둥마다 표면에서 몇 칸 아래"가 아닙니다. 이온은 직진하다 <b>물질에 처음 들어간 지점</b>부터 깊이를 재고 거기서 멈춥니다. 마스크가 열린 위치마다 광선을 쏘고, 첫 고체 진입점 아래에 가우시안 분포를 놓습니다.</p>
+        <p>그래서 <b>오버행이 그림자를 만드는 것이 공짜로 따라옵니다</b> — 물리적으로 맞는 거동입니다. 노광도 같은 광선을 쓰므로 P4 하나로 둘 다 커버합니다.</p>
+      </div>
+    </div>
+    <div class="drow">
+      <span class="dtag">M</span>
+      <div class="dbody">
+        <h3>어닐은 ADI로 푼다</h3>
+        <p>가변 확산계수 + 표면 무유출 조건을 명시적으로 풀면 정확합니다 — σ가 이론값과 0.0% 일치하고 도즈가 완전히 보존되며 산화막이 100% 차단합니다. 문제는 <b>σ를 4에서 15로 키우는 데 261 패스</b>가 필요하다는 것입니다.</p>
+        <p>ADI는 무조건 안정이라 5~10 스텝이면 끝나고, 스텝당 삼중대각 세 번이라 분리가능 블러 한 번과 비슷한 비용입니다. 검증을 마친 명시적 스킴이 ADI의 테스트 오라클이 됩니다.</p>
+      </div>
+    </div>
+    <div class="drow">
+      <span class="dtag">N</span>
+      <div class="dbody">
+        <h3>산화가 실리콘을 먹을 때 도펀트를 재배치한다</h3>
+        <p>규칙이 없으면 소비된 Si 안의 도펀트가 조용히 사라집니다. 종별 편석 계수 하나를 두어 일부는 산화막으로(비활성), 나머지는 남은 실리콘으로 밀어 넣습니다.</p>
+        <p>실제 거동과도 맞습니다 — <b>붕소는 산화막에 빨려 들어가 표면 농도가 낮아지고, 인·비소는 실리콘 쪽에 밀려 쌓입니다.</b> 계수 하나로 두 방향을 다 보여줍니다.</p>
+      </div>
+    </div>
+    <div class="drow">
+      <span class="dtag">A~H</span>
+      <div class="dbody">
+        <h3>앞서 확정된 것</h3>
+        <p><b>A</b> 도핑은 종별 농도 필드 3종, 화면엔 net doping · <b>B</b> 결정 방향 이방성은 훅만 · <b>C</b> 마스크 정렬 오차 노브 · <b>D</b> 식각은 돌파마다 재계산 · <b>E</b> 스냅샷 메모리+IndexedDB, 자동 재실행 · <b>F</b> 분기는 지원하되 보기는 한 갈래씩 · <b>G</b> 마스크 좌하단 원점 고정 · <b>H</b> 노드 에디터는 React Flow</p>
+        <p><b>스택</b> TypeScript + Three.js, 브라우저, 백엔드 없음 · <b>표현</b> 재질 ID + 표면 φ, 컬럼 기반 로직 폐기 · <b>해상도</b> 추상 복셀 단위 · <b>타임라인 스크럽</b> 필수</p>
+      </div>
+    </div>
+  </div>
+
+  <h2>화면 구성</h2>
+  <ul class="open">
+    <li><span class="mark">필수</span><span>3D 표면 메시 뷰 · <b>실시간 단면 뷰</b> · 타임라인 스크럽 · 노드 에디터 · 마스크 디자이너 · 재질 범례</span></li>
+    <li><span class="mark">교육</span><span><b>도핑 프로파일 그래프</b>(농도 vs 깊이) · 스텝 간 변경분 하이라이트 · 지점 프로브(레이어 스택 읽기)</span></li>
+  </ul>
+  <p style="margin:14px 0 0;font-size:13.5px;color:var(--ink-2);max-width:68ch">3D 뷰는 직관과 흥미를 담당하고, 실제 학습은 <b>단면과 그래프</b>에서 일어납니다. 노력 배분도 그에 맞춥니다.</p>
+
+  <h2>M1 현황</h2>
+  <ul class="open">
+    <li><span class="mark">M1a</span><span><b>완료</b> — 3D 코어를 축소 격자에서 Python으로 구현하고 적대적 시퀀스로 검증했습니다. (a)(b)(c) 전부 통과, φ 불일치 0건. 이것이 TypeScript 이식의 참조 구현입니다.</span></li>
+    <li><span class="mark">M1b</span><span><b>브라우저에서 실행 중</b> — 같은 코어를 실제 규모로 옮겨 3D 뷰·단면·타임라인·불변식 검사를 한 페이지에 담았습니다. 성능 실측이 여기에 함께 들어갑니다.<br><a href="https://claude.ai/code/artifact/683089d2-3ff5-46ba-9d00-ff52d6960115" style="color:var(--accent)">FabSim3D M1 열기</a></span></li>
+  </ul>
+
+  <h2>남은 것</h2>
+  <ul class="open">
+    <li><span class="mark">M1c</span><span><b>완료</b> — φ 파이프라인(O), union-find 봉인·돌파(P), 스크래치 버퍼(S)를 브라우저판에 적용했습니다. 참조 구현 대조에서 버그 두 건을 먼저 잡았습니다: 미연결 컴포넌트의 봉인 fallback은 INF가 아니라 0, 그리고 "얼어붙음"은 총량이 아니라 셀 단위로 검사해야 합니다.</span></li>
+    <li><span class="mark">측정</span><span><b>완료</b> — 150만 <b>0.71 s/단계</b>, 600만 <b>2.15 s/단계</b>. 복셀 4배에 시간 3.03배로 선형보다 낫습니다(~N<sup>0.79</sup>). <b>Worker 분할은 불필요</b>하고(단일 스레드로 예산 안), 편집 루프를 성립시키는 것은 속도가 아니라 <b>지연 평가</b>입니다 — 20노드 중 3번을 고칠 때 끝까지 돌리면 7초지만 보는 단계까지만 계산하면 0.7~2.1초입니다.</span></li>
+    <li><span class="mark">표면</span><span><b>마칭큐브</b> — φ가 진리의 원천이 되면 0-등고면에서 바로 뽑습니다. 복셀 면 렌더는 "복셀 보기" 토글로 남깁니다.</span></li>
+    <li><span class="mark">검증</span><span><b>이방성 사이드월 각도</b> — FMM의 축별 간격이 실행은 되지만 사이드월 기울기 = (1−α)가 실제로 나오는지는 아직 안 쟀습니다.</span></li>
+    <li><span class="mark">설계</span><span><b>LOCOS bird's beak</b> — 응력 의존 산화가 필요해 P1 계면 오프셋만으로는 안 나옵니다. 교육 범위 문제라 남겨둡니다.</span></li>
+    <li><span class="mark">이식</span><span><b>나머지 연산자</b> — 리소그래피 4종 · CMP · 이온 주입 · 어닐 · 산화 · 실리사이드. 파이썬 참조 구현에 먼저 넣어 검증한 뒤 옮깁니다.</span></li>
+  </ul>
+
+  <p class="foot">설계 논의 ①~⑨ 및 독립 검토 후속 ③~⑧ 완료. 노드가 12개든 20개든 그 아래는 원시연산 4개의 조합입니다. 새 공정을 추가할 때는 먼저 "이 연산은 무엇과 이어져 있어야 일어나는가"와 "속도가 경로를 따라 변하는가"를 묻습니다.</p>
+</div>

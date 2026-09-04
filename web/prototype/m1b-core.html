@@ -1,0 +1,861 @@
+<title>FabSim3D M1</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+:root{
+  --bg:#eceff5;--surface:#ffffff;--surface-2:#f5f7fb;
+  --line:#d5dbe6;--line-2:#bcc5d4;
+  --ink:#151a24;--ink-2:#485266;--ink-3:#79839a;
+  --accent:#2b5fc4;--accent-2:#dce6fa;
+  --ok:#2f8478;--warn:#a8752a;--bad:#c4453c;
+  --view:#10151d;--view-line:#28313f;
+  --r:6px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0d1117;--surface:#151b24;--surface-2:#1b222d;
+  --line:#28313f;--line-2:#3a4557;
+  --ink:#e7ebf2;--ink-2:#a6b0c2;--ink-3:#7c869a;
+  --accent:#6c9bf0;--accent-2:#1e2a40;
+  --ok:#4cb9a8;--warn:#e0a94d;--bad:#e86b60;
+}}
+:root[data-theme="dark"]{
+  --bg:#0d1117;--surface:#151b24;--surface-2:#1b222d;
+  --line:#28313f;--line-2:#3a4557;
+  --ink:#e7ebf2;--ink-2:#a6b0c2;--ink-3:#7c869a;
+  --accent:#6c9bf0;--accent-2:#1e2a40;
+  --ok:#4cb9a8;--warn:#e0a94d;--bad:#e86b60;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);
+  font-family:"IBM Plex Sans KR","Malgun Gothic",system-ui,sans-serif;
+  font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1140px;margin:0 auto;padding:34px 20px 70px}
+.eyebrow{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11.5px;
+  letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);margin:0 0 9px}
+h1{font-size:clamp(25px,3.8vw,34px);line-height:1.2;margin:0 0 12px;font-weight:600;letter-spacing:-.02em}
+.lede{margin:0;max-width:66ch;color:var(--ink-2);font-size:15.5px}
+.lede b{color:var(--ink);font-weight:600}
+
+.bar{display:flex;flex-wrap:wrap;gap:15px;align-items:end;margin:24px 0 16px;
+  padding:14px 16px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}
+.f{display:flex;flex-direction:column;gap:5px}
+.f label{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:10.5px;
+  letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3)}
+select,button{font-family:inherit;font-size:13.5px;padding:6px 11px;border-radius:4px;
+  border:1px solid var(--line-2);background:var(--surface-2);color:var(--ink)}
+button{background:var(--accent);color:#fff;border-color:transparent;font-weight:600;
+  padding:7px 16px;cursor:pointer}
+button:disabled{opacity:.5;cursor:default}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+input[type=range]{width:150px;accent-color:var(--accent)}
+.stat{margin-left:auto;font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:11.5px;color:var(--ink-3);text-align:right;line-height:1.5}
+
+.views{display:grid;grid-template-columns:1.35fr 1fr;gap:14px}
+@media(max-width:860px){.views{grid-template-columns:1fr}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
+  padding:12px 13px 13px;display:flex;flex-direction:column;gap:9px}
+.phead{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.phead h2{margin:0;font-size:13px;font-weight:600;
+  font-family:"IBM Plex Mono",ui-monospace,monospace;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--ink-3)}
+.phead .sub{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px;color:var(--ink-3)}
+#gl{width:100%;aspect-ratio:4/3;border-radius:3px;background:var(--view);
+  border:1px solid var(--view-line);display:block;cursor:grab}
+#gl.drag{cursor:grabbing}
+#slice{width:100%;height:auto;image-rendering:pixelated;border-radius:3px;
+  background:var(--view);border:1px solid var(--view-line);display:block}
+.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.row span{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px;color:var(--ink-3)}
+
+.legend{display:flex;flex-wrap:wrap;gap:7px 18px;margin-top:14px;padding:11px 14px;
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}
+.legend div{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--ink-2)}
+.sw{width:12px;height:12px;border-radius:2.5px;flex:none}
+
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);
+  background:var(--surface);margin-top:14px}
+table{border-collapse:collapse;width:100%;min-width:640px;font-size:13px}
+th{text-align:left;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:10px;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);font-weight:500;
+  padding:9px 12px;border-bottom:1px solid var(--line);background:var(--surface-2);white-space:nowrap}
+th.n,td.n{text-align:right}
+td{padding:9px 12px;border-bottom:1px solid var(--line);color:var(--ink-2)}
+tr:last-child td{border-bottom:none}
+td.s{font-weight:600;color:var(--ink);white-space:nowrap}
+td.n{font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums;color:var(--ink)}
+tr.active td{background:var(--accent-2)}
+.v-ok{color:var(--ok);font-weight:600}
+.v-bad{color:var(--bad);font-weight:600}
+.checks{display:flex;flex-direction:column;gap:8px;margin-top:14px;padding:13px 15px;
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}
+.chk{display:grid;grid-template-columns:auto 1fr auto;gap:11px;align-items:baseline;font-size:13px}
+.chk .tag{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:10.5px;
+  color:var(--ink-3);border:1px solid var(--line);border-radius:3px;padding:1px 6px;white-space:nowrap}
+.chk .txt{color:var(--ink-2)}
+.chk .res{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;white-space:nowrap}
+.notes{margin-top:28px;border-top:1px solid var(--line);padding-top:18px}
+.notes p{margin:0 0 10px;font-size:13px;color:var(--ink-2);max-width:72ch}
+.notes p:last-child{margin:0}
+code{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;
+  background:var(--surface-2);border:1px solid var(--line);padding:1px 5px;border-radius:3px;color:var(--ink)}
+</style>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">FabSim3D · M1c 코어</p>
+    <h1>3D 코어가 브라우저에서 도는가</h1>
+    <p class="lede">검증을 마친 Python 참조 구현을 그대로 옮긴 것입니다. 쉬운 경로가 아니라 <b>설계가 깨질 만한 순서</b>를 일부러 실행합니다 — 나쁜 스텝 커버리지로 보이드를 만들고, 그 위를 덮어 봉인한 뒤, 선택비가 다른 식각으로 다시 뚫습니다. 2차 검토 결정을 반영해 <b>φ가 진리의 원천</b>이고, 봉인·돌파는 <b>union-find 한 번</b>으로 구합니다.</p>
+  </header>
+
+  <div class="bar">
+    <div class="f"><label for="size">격자</label>
+      <select id="size">
+        <option value="0">96 × 48 × 60 · 0.28M</option>
+        <option value="1" selected>240 × 100 × 64 · 1.5M</option>
+        <option value="2">400 × 150 × 100 · 6.0M</option>
+      </select>
+    </div>
+    <div class="f"><label for="run">&nbsp;</label><button id="run">시퀀스 실행</button></div>
+    <div class="f"><label for="step">단계</label>
+      <input type="range" id="step" min="0" max="0" value="0" disabled></div>
+    <div class="f"><label for="cut">절단면</label>
+      <input type="range" id="cut" min="10" max="100" value="100"></div>
+    <div class="stat" id="stat">대기 중</div>
+  </div>
+
+  <div class="views">
+    <div class="panel">
+      <div class="phead"><h2>3D</h2><span class="sub" id="glsub">드래그 회전 · 휠 확대</span></div>
+      <canvas id="gl"></canvas>
+    </div>
+    <div class="panel">
+      <div class="phead"><h2>단면</h2><span class="sub" id="slsub">XZ</span></div>
+      <canvas id="slice"></canvas>
+      <div class="row"><span>y</span><input type="range" id="sy" min="0" max="10" value="5"></div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <div><span class="sw" style="background:#64748f"></span>Si 기판</div>
+    <div><span class="sw" style="background:#e8a33d"></span>Oxide</div>
+    <div><span class="sw" style="background:#3f9a8c"></span>Nitride</div>
+    <div><span class="sw" style="background:#e35a4d"></span>보이드 벽 (갇힌 빈 공간)</div>
+  </div>
+
+  <div class="tw"><table>
+    <thead><tr><th>단계</th><th class="n">시간</th><th class="n">보이드</th>
+      <th class="n">Si</th><th class="n">Oxide</th><th class="n">Nitride</th><th>비고</th></tr></thead>
+    <tbody id="rows"><tr><td class="s" colspan="7" style="color:var(--ink-3)">실행 전</td></tr></tbody>
+  </table></div>
+
+  <div class="checks" id="checks"></div>
+
+  <div class="notes">
+    <p><b>무엇을 확인하는가.</b> 파이썬 축소 격자에서 통과한 세 가지가 실제 규모의 브라우저에서도 성립하는지 봅니다 — 나쁜 커버리지가 보이드를 만들고, 덮으면 그 크기로 얼어붙고, 식각이 뚫고 들어가면 다시 열립니다. 재질 ID와 φ 부호가 어긋나지 않는지도 함께 검사합니다.</p>
+    <p><b>φ가 진리의 원천 (결정 O).</b> 증착은 <code>φ −= t·r</code>, 식각 뒤에는 φ를 재거리화합니다. 균일 속도면 거리 지도를 만들 필요가 없어 <b>컨포멀 증착은 EDT 없이 뺄셈 한 번</b>입니다. 비고 칸의 <code>EDT</code> 표시가 실제로 거리 지도를 만든 단계입니다.</p>
+    <p><b>봉인·돌파는 union-find (결정 P).</b> 임계값을 K번 훑으며 flood fill을 K번 도는 대신, 도달 시각 순으로 셀을 삽입하며 "언제 바깥과 이어지는가"를 한 번에 구합니다. 파이썬 2D에서 20배 빨랐고, 여기서는 증착의 훑기 12회와 식각의 탐침 10회가 사라집니다.</p>
+    <p><b>아직 안 한 것.</b> Worker(결정 Q)는 이 페이지에 넣지 않았습니다 — 아티팩트 CSP에서 blob 워커가 막힐 수 있고 확인할 방법이 없어서, 실제 빌드에서 다룹니다. 그래서 계산 중에는 화면이 잠깐 멈춥니다. 표면은 노출면 사각형 추출이고, 마칭큐브는 φ의 0-등고면에서 뽑을 수 있게 됐지만 아직 넣지 않았습니다.</p>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+const INF=1e20;
+const EMPTY=0,SI=1,OX=2,NIT=3;
+const MATCOL={1:[100,116,143],2:[232,163,61],3:[63,154,140]};
+const VOIDCOL=[227,90,77];
+const PRESETS=[[96,48,60],[240,100,64],[400,150,100]];
+
+let NX,NY,NZ,N;
+const at=(x,y,z)=>x+NX*(y+NY*z);
+
+/* ---------------- scratch buffers: one allocation per grid (decision S) ----- */
+const S={n:0};
+function allocScratch(){
+  if(S.n===N)return;
+  S.n=N;
+  const m=Math.max(NX,NY,NZ);
+  S.f64=new Float64Array(N);
+  S.feat=new Int32Array(N);
+  S.dist=new Float32Array(N);
+  S.u8a=new Uint8Array(N);
+  S.u8b=new Uint8Array(N);
+  S.i32a=new Int32Array(N);
+  S.f32a=new Float32Array(N);
+  S.f32b=new Float32Array(N);
+  S.parent=new Int32Array(N+1);
+  S.usize=new Int32Array(N+1);
+  S.stamped=new Uint8Array(N+1);
+  S.stampT=new Float32Array(N+1);
+  S.line=new Float64Array(m);S.d=new Float64Array(m);
+  S.fi=new Int32Array(m);S.col=new Int32Array(m);
+  S.v=new Int32Array(m);S.z=new Float64Array(m+1);
+}
+
+/* ---------------- P1a: separable exact EDT (+ feature transform) ------------- */
+function edt1d(f,n,d,fi,v,z){
+  let k=0;v[0]=0;z[0]=-INF;z[1]=INF;
+  for(let q=1;q<n;q++){
+    let s=((f[q]+q*q)-(f[v[k]]+v[k]*v[k]))/(2*q-2*v[k]);
+    while(s<=z[k]){k--;s=((f[q]+q*q)-(f[v[k]]+v[k]*v[k]))/(2*q-2*v[k]);}
+    k++;v[k]=q;z[k]=s;z[k+1]=INF;
+  }
+  k=0;
+  for(let q=0;q<n;q++){
+    while(z[k+1]<q)k++;
+    d[q]=(q-v[k])*(q-v[k])+f[v[k]];fi[q]=v[k];
+  }
+}
+function edt3(isSrc,wantFeat,outDist){
+  const f=S.f64,feat=S.feat,line=S.line,d=S.d,fi=S.fi,col=S.col,v=S.v,z=S.z;
+  for(let i=0;i<N;i++)f[i]=isSrc[i]?0:INF;
+  for(let zz=0;zz<NZ;zz++)for(let y=0;y<NY;y++){
+    const b=NX*(y+NY*zz);
+    for(let x=0;x<NX;x++)line[x]=f[b+x];
+    edt1d(line,NX,d,fi,v,z);
+    for(let x=0;x<NX;x++){f[b+x]=d[x];if(wantFeat)feat[b+x]=b+fi[x];}
+  }
+  for(let zz=0;zz<NZ;zz++)for(let x=0;x<NX;x++){
+    for(let y=0;y<NY;y++){const i=x+NX*(y+NY*zz);line[y]=f[i];if(wantFeat)col[y]=feat[i];}
+    edt1d(line,NY,d,fi,v,z);
+    for(let y=0;y<NY;y++){const i=x+NX*(y+NY*zz);f[i]=d[y];if(wantFeat)feat[i]=col[fi[y]];}
+  }
+  for(let y=0;y<NY;y++)for(let x=0;x<NX;x++){
+    for(let zz=0;zz<NZ;zz++){const i=x+NX*(y+NY*zz);line[zz]=f[i];if(wantFeat)col[zz]=feat[i];}
+    edt1d(line,NZ,d,fi,v,z);
+    for(let zz=0;zz<NZ;zz++){const i=x+NX*(y+NY*zz);f[i]=d[zz];if(wantFeat)feat[i]=col[fi[zz]];}
+  }
+  const out=outDist||S.dist;
+  for(let i=0;i<N;i++)out[i]=Math.sqrt(f[i]);
+  return out;
+}
+let edtCount=0;
+function redistance(mat,phi){
+  edtCount+=2;
+  const solid=S.u8a,empty=S.u8b;
+  for(let i=0;i<N;i++){const s=mat[i]!==EMPTY?1:0;solid[i]=s;empty[i]=1-s;}
+  const dOut=edt3(solid,false,S.f32a);
+  const dIn=edt3(empty,false,S.f32b);
+  for(let i=0;i<N;i++)phi[i]=solid[i]?-dIn[i]:dOut[i];
+}
+
+/* ---------------- P2: connectivity ------------------------------------------ */
+function ambient(mat,extraOpen,out){
+  const reach=out||new Uint8Array(N);
+  reach.fill(0);
+  const q=S.i32a;let n=0;
+  const isOpen=i=>mat[i]===EMPTY||(extraOpen&&extraOpen[i]===1);
+  for(let y=0;y<NY;y++)for(let x=0;x<NX;x++){
+    const i=at(x,y,NZ-1);
+    if(isOpen(i)&&!reach[i]){reach[i]=1;q[n++]=i;}
+  }
+  let h=0;
+  while(h<n){
+    const c=q[h++];
+    const x=c%NX,y=((c/NX)|0)%NY,z=(c/(NX*NY))|0;
+    if(x>0){const j=c-1;if(!reach[j]&&isOpen(j)){reach[j]=1;q[n++]=j;}}
+    if(x<NX-1){const j=c+1;if(!reach[j]&&isOpen(j)){reach[j]=1;q[n++]=j;}}
+    if(y>0){const j=c-NX;if(!reach[j]&&isOpen(j)){reach[j]=1;q[n++]=j;}}
+    if(y<NY-1){const j=c+NX;if(!reach[j]&&isOpen(j)){reach[j]=1;q[n++]=j;}}
+    if(z>0){const j=c-NX*NY;if(!reach[j]&&isOpen(j)){reach[j]=1;q[n++]=j;}}
+    if(z<NZ-1){const j=c+NX*NY;if(!reach[j]&&isOpen(j)){reach[j]=1;q[n++]=j;}}
+  }
+  return reach;
+}
+
+/* ---------------- union-find over the grid, ambient node = N ---------------- */
+function ufInit(){
+  const p=S.parent,sz=S.usize,st=S.stamped,tt=S.stampT;
+  for(let i=0;i<=N;i++){p[i]=i;sz[i]=1;st[i]=0;tt[i]=Infinity;}
+  st[N]=1;tt[N]=Infinity;              // ambient counts as connected from the start
+}
+function ufFind(i){
+  const p=S.parent;
+  while(p[i]!==i)i=p[i];
+  return i;                             // no path compression: the chain carries history
+}
+function ufUnion(a,b,now){
+  const p=S.parent,sz=S.usize,st=S.stamped,tt=S.stampT;
+  let ra=ufFind(a),rb=ufFind(b);
+  if(ra===rb)return ra;
+  const ca=st[ra],cb=st[rb];
+  // stamp the side that was NOT connected yet, BEFORE it disappears under the
+  // other root -- getting this wrong lets sealed voids leak (the 2D bug)
+  if(ca&&!cb){st[rb]=1;tt[rb]=now;}
+  else if(cb&&!ca){st[ra]=1;tt[ra]=now;}
+  if(sz[ra]<sz[rb]){const t=ra;ra=rb;rb=t;}
+  p[rb]=ra;sz[ra]+=sz[rb];
+  return ra;
+}
+function ufStampOf(i){
+  // Threshold at which i's component first reached the ambient. Never reaching
+  // it at any threshold means the cell was already walled in when this
+  // operation began -- sealed from t = 0, NOT unsealed. Returning Infinity here
+  // reads as "never sealed" and lets a later conformal deposition fill a void
+  // that already existed. (Found by the 3D reference check; the 2D test never
+  // hit this path because its void formed during the deposition.)
+  const p=S.parent,st=S.stamped,tt=S.stampT;
+  let j=i;
+  for(;;){
+    if(st[j])return tt[j];
+    if(p[j]===j)return 0;
+    j=p[j];
+  }
+}
+
+/* seal time for every empty cell, in ONE pass (decision P).
+   Insert empty cells in DECREASING arrival order; the threshold at which a
+   cell's component first touches the ambient is its seal time. */
+const BINS=512;
+function sealTimes(mat,arrival,tmax,out){
+  ufInit();
+  const seal=out;
+  const inserted=S.u8a;inserted.fill(0);
+  const head=new Int32Array(BINS+2).fill(-1);
+  const next=S.i32a;
+  const binOf=a=>{
+    if(!(a<=tmax))return BINS;                       // never filled within this op
+    const b=Math.floor(a/tmax*(BINS-1));
+    return b<0?0:(b>BINS-1?BINS-1:b);
+  };
+  for(let i=0;i<N;i++){
+    if(mat[i]!==EMPTY){seal[i]=Infinity;continue;}
+    const b=binOf(arrival[i]);
+    next[i]=head[b];head[b]=i;
+  }
+  for(let b=BINS;b>=0;b--){
+    const now=b>=BINS?Infinity:(b+1)/(BINS-1)*tmax;
+    for(let i=head[b];i!==-1;i=next[i])inserted[i]=1;
+    for(let i=head[b];i!==-1;i=next[i]){
+      const x=i%NX,y=((i/NX)|0)%NY,z=(i/(NX*NY))|0;
+      if(z===NZ-1)ufUnion(i,N,now);
+      if(x>0&&inserted[i-1])ufUnion(i,i-1,now);
+      if(x<NX-1&&inserted[i+1])ufUnion(i,i+1,now);
+      if(y>0&&inserted[i-NX])ufUnion(i,i-NX,now);
+      if(y<NY-1&&inserted[i+NX])ufUnion(i,i+NX,now);
+      if(z>0&&inserted[i-NX*NY])ufUnion(i,i-NX*NY,now);
+      if(z<NZ-1&&inserted[i+NX*NY])ufUnion(i,i+NX*NY,now);
+    }
+  }
+  for(let i=0;i<N;i++)if(mat[i]===EMPTY)seal[i]=ufStampOf(i);
+  return seal;
+}
+
+/* breakthrough time: the first moment a sealed void rejoins the ambient as the
+   etch removes material, again in one pass instead of K trial flood fills. */
+function breakthroughTime(mat,T,tmax,sealedReps){
+  if(!sealedReps.length)return null;
+  ufInit();
+  const inserted=S.u8a;inserted.fill(0);
+  const link=(i,now)=>{
+    const x=i%NX,y=((i/NX)|0)%NY,z=(i/(NX*NY))|0;
+    if(z===NZ-1)ufUnion(i,N,now);
+    if(x>0&&inserted[i-1])ufUnion(i,i-1,now);
+    if(x<NX-1&&inserted[i+1])ufUnion(i,i+1,now);
+    if(y>0&&inserted[i-NX])ufUnion(i,i-NX,now);
+    if(y<NY-1&&inserted[i+NX])ufUnion(i,i+NX,now);
+    if(z>0&&inserted[i-NX*NY])ufUnion(i,i-NX*NY,now);
+    if(z<NZ-1&&inserted[i+NX*NY])ufUnion(i,i+NX*NY,now);
+  };
+  for(let i=0;i<N;i++)if(mat[i]===EMPTY)inserted[i]=1;
+  for(let i=0;i<N;i++)if(mat[i]===EMPTY)link(i,0);
+  const ambRoot=()=>ufFind(N);
+  for(const r of sealedReps)if(ufFind(r)===ambRoot())return 0;
+  const head=new Int32Array(BINS+1).fill(-1);
+  const next=S.i32a;
+  for(let i=0;i<N;i++){
+    if(mat[i]===EMPTY)continue;
+    const t=T[i];
+    if(!(t<=tmax))continue;
+    let b=Math.floor(t/tmax*(BINS-1));
+    if(b<0)b=0;if(b>BINS-1)b=BINS-1;
+    next[i]=head[b];head[b]=i;
+  }
+  for(let b=0;b<BINS;b++){
+    if(head[b]===-1)continue;
+    const now=(b+1)/(BINS-1)*tmax;
+    for(let i=head[b];i!==-1;i=next[i])inserted[i]=1;
+    for(let i=head[b];i!==-1;i=next[i])link(i,now);
+    const ar=ambRoot();
+    for(const r of sealedReps)if(ufFind(r)===ar)return now;
+  }
+  return null;
+}
+
+/* ---------------- P1b: fast marching, per-axis spacing ---------------------- */
+function fmm3(src,speed,hx,hy,hz,tmax,T){
+  T.fill(Infinity);
+  const st=S.u8b;st.fill(0);
+  let hi=new Int32Array(1<<16),ht=new Float32Array(1<<16),hn=0;
+  const grow=()=>{const a=new Int32Array(hi.length*2),b=new Float32Array(ht.length*2);
+    a.set(hi);b.set(ht);hi=a;ht=b;};
+  const push=(i,t)=>{
+    if(hn>=hi.length)grow();
+    let c=hn++;hi[c]=i;ht[c]=t;
+    while(c>0){const p=(c-1)>>1;if(ht[p]<=ht[c])break;
+      const a=hi[p];hi[p]=hi[c];hi[c]=a;const b=ht[p];ht[p]=ht[c];ht[c]=b;c=p;}
+  };
+  const pop=()=>{
+    const top=hi[0];hn--;
+    if(hn>0){hi[0]=hi[hn];ht[0]=ht[hn];let c=0;
+      for(;;){const l=2*c+1,r=l+1;let s=c;
+        if(l<hn&&ht[l]<ht[s])s=l;
+        if(r<hn&&ht[r]<ht[s])s=r;
+        if(s===c)break;
+        const a=hi[s];hi[s]=hi[c];hi[c]=a;const b=ht[s];ht[s]=ht[c];ht[c]=b;c=s;}}
+    return top;
+  };
+  const H=[hx,hy,hz],av=[0,0,0],ah=[0,0,0];
+  function solve(i){
+    const sp=speed[i];
+    if(sp<=1e-9)return Infinity;
+    const x=i%NX,y=((i/NX)|0)%NY,zz=(i/(NX*NY))|0;
+    let a0=Infinity,a1=Infinity,a2=Infinity,j;
+    if(x>0){j=i-1;if(st[j]===2&&T[j]<a0)a0=T[j];}
+    if(x<NX-1){j=i+1;if(st[j]===2&&T[j]<a0)a0=T[j];}
+    if(y>0){j=i-NX;if(st[j]===2&&T[j]<a1)a1=T[j];}
+    if(y<NY-1){j=i+NX;if(st[j]===2&&T[j]<a1)a1=T[j];}
+    if(zz>0){j=i-NX*NY;if(st[j]===2&&T[j]<a2)a2=T[j];}
+    if(zz<NZ-1){j=i+NX*NY;if(st[j]===2&&T[j]<a2)a2=T[j];}
+    let n=0;
+    if(a0<Infinity){av[n]=a0;ah[n]=H[0];n++;}
+    if(a1<Infinity){av[n]=a1;ah[n]=H[1];n++;}
+    if(a2<Infinity){av[n]=a2;ah[n]=H[2];n++;}
+    if(n===0)return Infinity;
+    for(let p=1;p<n;p++){const kv=av[p],kh=ah[p];let q=p-1;
+      while(q>=0&&av[q]>kv){av[q+1]=av[q];ah[q+1]=ah[q];q--;}
+      av[q+1]=kv;ah[q+1]=kh;}
+    const rhs=1/(sp*sp);
+    let A=0,B=0,C=0,best=Infinity;
+    for(let k=0;k<n;k++){
+      const a=av[k],w=1/(ah[k]*ah[k]);
+      A+=w;B+=-2*a*w;C+=a*a*w;
+      const disc=B*B-4*A*(C-rhs);
+      if(disc<0)continue;
+      const t=(-B+Math.sqrt(disc))/(2*A);
+      const nxt=(k+1<n)?av[k+1]:Infinity;
+      best=t;
+      if(t>=a&&t<=nxt+1e-9)break;
+    }
+    return best;
+  }
+  const nbs=new Int32Array(6);
+  function nb(i){
+    const x=i%NX,y=((i/NX)|0)%NY,zz=(i/(NX*NY))|0;let c=0;
+    if(x>0)nbs[c++]=i-1; if(x<NX-1)nbs[c++]=i+1;
+    if(y>0)nbs[c++]=i-NX; if(y<NY-1)nbs[c++]=i+NX;
+    if(zz>0)nbs[c++]=i-NX*NY; if(zz<NZ-1)nbs[c++]=i+NX*NY;
+    return c;
+  }
+  for(let i=0;i<N;i++)if(src[i]){T[i]=0;st[i]=2;}
+  for(let i=0;i<N;i++){
+    if(!src[i])continue;
+    const c=nb(i);
+    for(let k=0;k<c;k++){const j=nbs[k];
+      if(st[j]!==0)continue;
+      const t=solve(j);
+      if(t<=tmax){T[j]=t;st[j]=1;push(j,t);}}
+  }
+  let touched=0;
+  while(hn>0){
+    const i=pop();
+    if(st[i]===2)continue;
+    st[i]=2;touched++;
+    if(T[i]>tmax)continue;
+    const c=nb(i);
+    for(let k=0;k<c;k++){const j=nbs[k];
+      if(st[j]===2)continue;
+      const t=solve(j);
+      if(t<=tmax&&t<T[j]){T[j]=t;st[j]=1;push(j,t);}}
+  }
+  return touched;
+}
+
+/* ---------------- sky visibility -------------------------------------------- */
+function visibility(mat,cells,nray,len,rate,coverage){
+  const dirs=[];
+  for(let r=0;r<nray;r++){
+    const u=(r+0.5)/nray,phi=u*Math.PI*2*1.618034;
+    const ct=Math.sqrt(1-u),stt=Math.sqrt(Math.max(0,1-ct*ct));
+    dirs.push([stt*Math.cos(phi),stt*Math.sin(phi),ct]);
+  }
+  for(let c=0;c<cells.length;c++){
+    const i=cells[c];
+    const x0=i%NX,y0=((i/NX)|0)%NY,z0=(i/(NX*NY))|0;
+    let esc=0;
+    for(let r=0;r<dirs.length;r++){
+      const d=dirs[r];let px=x0+.5,py=y0+.5,pz=z0+.5,ok=true;
+      for(let t=0;t<len;t++){
+        px+=d[0];py+=d[1];pz+=d[2];
+        if(pz>=NZ||px<0||px>=NX||py<0||py>=NY)break;
+        if(pz<0){ok=false;break;}
+        if(mat[(px|0)+NX*(((py|0))+NY*((pz|0)))]!==EMPTY){ok=false;break;}
+      }
+      if(ok)esc++;
+    }
+    rate[i]=coverage+(1-coverage)*(esc/nray);
+  }
+}
+
+/* ---------------- operators -------------------------------------------------- */
+function opSubstrate(mat,phi,material,thick){
+  for(let z=0;z<thick;z++)for(let y=0;y<NY;y++)for(let x=0;x<NX;x++)mat[at(x,y,z)]=material;
+  redistance(mat,phi);
+}
+
+/* phi -= t * rate, with growth stopping wherever the ambient is sealed off.
+   Uniform coverage needs no distance map at all -- that is the point of O. */
+function opDeposit(mat,phi,material,thick,coverage){
+  const uniform=coverage>=0.999;
+  const rate=S.f32a,arrival=S.f32b,seal=S.dist;
+  let note="";
+  if(uniform){
+    rate.fill(1);
+    note="균일 · EDT 없음";
+  }else{
+    const front=S.u8a;front.fill(0);
+    const cells=[];
+    for(let i=0;i<N;i++){
+      if(mat[i]!==EMPTY)continue;
+      const x=i%NX,y=((i/NX)|0)%NY,z=(i/(NX*NY))|0;
+      let touch=false;
+      if(x>0&&mat[i-1]!==EMPTY)touch=true;
+      else if(x<NX-1&&mat[i+1]!==EMPTY)touch=true;
+      else if(y>0&&mat[i-NX]!==EMPTY)touch=true;
+      else if(y<NY-1&&mat[i+NX]!==EMPTY)touch=true;
+      else if(z>0&&mat[i-NX*NY]!==EMPTY)touch=true;
+      else if(z<NZ-1&&mat[i+NX*NY]!==EMPTY)touch=true;
+      if(touch){front[i]=1;cells.push(i);}
+    }
+    const frate=new Float32Array(N);
+    visibility(mat,cells,12,26,frate,coverage);
+    edt3(front,true,S.f32b);edtCount++;
+    const feat=S.feat;
+    for(let i=0;i<N;i++)rate[i]=frate[feat[i]];
+    note=`EDT 1 · 전선 ${cells.length.toLocaleString()}`;
+  }
+  for(let i=0;i<N;i++){
+    const p=phi[i];
+    arrival[i]=(mat[i]===EMPTY&&rate[i]>1e-6)?p/rate[i]:Infinity;
+  }
+  sealTimes(mat,arrival,thick,seal);
+  let n=0;
+  for(let i=0;i<N;i++){
+    const eff=Math.min(thick,seal[i]);
+    const np=phi[i]-eff*rate[i];
+    phi[i]=np;
+    if(mat[i]===EMPTY&&np<=0){mat[i]=material;n++;}
+  }
+  return {n,note};
+}
+
+function opEtch(mat,phi,sel,seconds,anisotropy){
+  const lat=Math.max(1e-3,1-anisotropy);
+  const T=S.f32b,speed=S.f32a;
+  let removed=0,touchedTotal=0,rounds=0,tLeft=seconds;
+  const reachBuf=new Uint8Array(N);
+  while(tLeft>1e-6&&rounds<6){
+    rounds++;
+    ambient(mat,null,reachBuf);
+    const sealedReps=[];
+    const seen=new Uint8Array(0);
+    let anySrc=false;
+    const src=S.u8a;src.fill(0);
+    for(let i=0;i<N;i++){
+      if(mat[i]!==EMPTY)continue;
+      if(!reachBuf[i]){if(sealedReps.length<64)sealedReps.push(i);continue;}
+      const x=i%NX,y=((i/NX)|0)%NY,z=(i/(NX*NY))|0;
+      const chk=j=>mat[j]!==EMPTY&&(sel[mat[j]]||0)>0;
+      let hit=false;
+      if(x>0&&chk(i-1))hit=true;
+      else if(x<NX-1&&chk(i+1))hit=true;
+      else if(y>0&&chk(i-NX))hit=true;
+      else if(y<NY-1&&chk(i+NX))hit=true;
+      else if(z>0&&chk(i-NX*NY))hit=true;
+      else if(z<NZ-1&&chk(i+NX*NY))hit=true;
+      if(hit){src[i]=1;anySrc=true;}
+    }
+    if(!anySrc)break;
+    for(let i=0;i<N;i++)speed[i]=mat[i]!==EMPTY?(sel[mat[i]]||0):0;
+    touchedTotal+=fmm3(src,speed,1/lat,1/lat,1,tLeft,T);
+    const tb=breakthroughTime(mat,T,tLeft,sealedReps);
+    const cut=tb!==null?tb:tLeft;
+    for(let i=0;i<N;i++)
+      if(mat[i]!==EMPTY&&T[i]<=cut){mat[i]=EMPTY;removed++;}
+    tLeft-=cut;
+    if(tb===null)break;
+  }
+  redistance(mat,phi);
+  return {removed,touchedTotal,rounds};
+}
+
+function carve(mat,phi,x0,x1,y0,y1,zf){
+  for(let z=zf;z<NZ;z++)for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++)mat[at(x,y,z)]=EMPTY;
+  redistance(mat,phi);
+}
+
+/* ---------------- invariants ------------------------------------------------ */
+function voidCount(mat){
+  const r=ambient(mat,null,new Uint8Array(N));let n=0;
+  for(let i=0;i<N;i++)if(mat[i]===EMPTY&&!r[i])n++;
+  return n;
+}
+function voidMask(mat){
+  const r=ambient(mat,null,new Uint8Array(N));
+  const m=new Uint8Array(N);
+  for(let i=0;i<N;i++)if(mat[i]===EMPTY&&!r[i])m[i]=1;
+  return m;
+}
+function phiMismatch(mat,phi){
+  let bad=0;
+  for(let i=0;i<N;i++)if((mat[i]!==EMPTY)!==(phi[i]<=0))bad++;
+  return bad;
+}
+function counts(mat){
+  const c={1:0,2:0,3:0};
+  for(let i=0;i<N;i++){const m=mat[i];if(m)c[m]++;}
+  return c;
+}
+function rleBytes(mat){
+  let runs=1;
+  for(let i=1;i<N;i++)if(mat[i]!==mat[i-1])runs++;
+  return runs*5;
+}
+
+/* ---------------- three.js view ---------------------------------------------- */
+const glc=document.getElementById("gl");
+let renderer,scene,camera,mesh,yaw=-0.7,pitch=0.55,dist=1;
+function initGL(){
+  renderer=new THREE.WebGLRenderer({canvas:glc,antialias:true});
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  scene=new THREE.Scene();
+  scene.background=new THREE.Color(0x10151d);
+  camera=new THREE.PerspectiveCamera(42,4/3,1,20000);
+  scene.add(new THREE.AmbientLight(0xffffff,0.55));
+  const d1=new THREE.DirectionalLight(0xffffff,0.75);d1.position.set(1,1.4,0.8);scene.add(d1);
+  const d2=new THREE.DirectionalLight(0xffffff,0.3);d2.position.set(-1,0.4,-0.7);scene.add(d2);
+  let drag=false,px=0,py=0;
+  glc.addEventListener("pointerdown",e=>{drag=true;px=e.clientX;py=e.clientY;glc.classList.add("drag");glc.setPointerCapture(e.pointerId);});
+  glc.addEventListener("pointermove",e=>{
+    if(!drag)return;
+    yaw-=(e.clientX-px)*0.008;pitch-=(e.clientY-py)*0.008;
+    pitch=Math.max(-1.4,Math.min(1.4,pitch));px=e.clientX;py=e.clientY;place();
+  });
+  glc.addEventListener("pointerup",()=>{drag=false;glc.classList.remove("drag");});
+  glc.addEventListener("wheel",e=>{e.preventDefault();dist*=Math.exp(e.deltaY*0.0012);place();},{passive:false});
+}
+function place(){
+  if(!camera)return;
+  const R=Math.max(NX,NY,NZ)*1.5*dist;
+  camera.position.set(
+    NX/2+R*Math.cos(pitch)*Math.sin(yaw),
+    NZ/2+R*Math.sin(pitch),
+    NY/2+R*Math.cos(pitch)*Math.cos(yaw));
+  camera.lookAt(NX/2,NZ/2,NY/2);
+  render();
+}
+function render(){
+  if(!renderer)return;
+  const w=glc.clientWidth,h=Math.round(w*3/4);
+  if(glc.width!==w*renderer.getPixelRatio()){renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}
+  renderer.render(scene,camera);
+}
+function buildMesh(mat,cutX){
+  if(mesh){scene.remove(mesh);mesh.geometry.dispose();mesh.material.dispose();mesh=null;}
+  const reach=ambient(mat,null,new Uint8Array(N));
+  const pos=[],nor=[],col=[];
+  const vis=i=>mat[i]!==EMPTY&&(i%NX)<cutX;
+  const FACES=[[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
+  const quad=(x,y,z,f,c)=>{
+    const v=[];
+    if(f===0)v.push([1,0,0],[1,1,0],[1,1,1],[1,0,1]);
+    else if(f===1)v.push([0,0,1],[0,1,1],[0,1,0],[0,0,0]);
+    else if(f===2)v.push([0,1,1],[1,1,1],[1,1,0],[0,1,0]);
+    else if(f===3)v.push([0,0,0],[1,0,0],[1,0,1],[0,0,1]);
+    else if(f===4)v.push([0,0,1],[1,0,1],[1,1,1],[0,1,1]);
+    else v.push([0,1,0],[1,1,0],[1,0,0],[0,0,0]);
+    const n=FACES[f];
+    // voxel (x,y,z) -> world (X=x, Y=z, Z=y): swapping two axes flips
+    // handedness, so the quad is wound the other way
+    const idx=[0,2,1,0,3,2];
+    for(const k of idx){
+      const p=v[k];
+      pos.push(x+p[0],z+p[2],y+p[1]);
+      nor.push(n[0],n[2],n[1]);
+      col.push(c[0]/255,c[1]/255,c[2]/255);
+    }
+  };
+  for(let z=0;z<NZ;z++)for(let y=0;y<NY;y++)for(let x=0;x<NX;x++){
+    const i=at(x,y,z);
+    if(!vis(i))continue;
+    const base=MATCOL[mat[i]]||[200,200,200];
+    const nb=[[x+1,y,z],[x-1,y,z],[x,y+1,z],[x,y-1,z],[x,y,z+1],[x,y,z-1]];
+    for(let f=0;f<6;f++){
+      const q=nb[f],nx=q[0],ny=q[1],nz=q[2];
+      let show=false,c=base;
+      if(nx<0||nx>=NX||ny<0||ny>=NY||nz<0||nz>=NZ)show=true;
+      else{
+        const j=at(nx,ny,nz);
+        if(!vis(j)){show=true;if(mat[j]===EMPTY&&!reach[j])c=VOIDCOL;}
+      }
+      if(show)quad(x,y,z,f,c);
+    }
+  }
+  const g=new THREE.BufferGeometry();
+  g.setAttribute("position",new THREE.Float32BufferAttribute(pos,3));
+  g.setAttribute("normal",new THREE.Float32BufferAttribute(nor,3));
+  g.setAttribute("color",new THREE.Float32BufferAttribute(col,3));
+  mesh=new THREE.Mesh(g,new THREE.MeshLambertMaterial({vertexColors:true,side:THREE.FrontSide}));
+  scene.add(mesh);
+  return pos.length/3;
+}
+
+/* ---------------- cross-section ---------------------------------------------- */
+const slc=document.getElementById("slice"),sctx=slc.getContext("2d");
+function drawSlice(mat,y){
+  slc.width=NX;slc.height=NZ;
+  const img=sctx.createImageData(NX,NZ);
+  const reach=ambient(mat,null,new Uint8Array(N));
+  for(let z=0;z<NZ;z++)for(let x=0;x<NX;x++){
+    const i=at(x,y,z);
+    let c;
+    if(mat[i]!==EMPTY)c=MATCOL[mat[i]];
+    else if(!reach[i])c=VOIDCOL;
+    else c=[16,21,29];
+    const o=((NZ-1-z)*NX+x)*4;
+    img.data[o]=c[0];img.data[o+1]=c[1];img.data[o+2]=c[2];img.data[o+3]=255;
+  }
+  sctx.putImageData(img,0,0);
+}
+
+/* ---------------- the adversarial run ---------------------------------------- */
+const rowsEl=document.getElementById("rows"),checksEl=document.getElementById("checks"),
+      statEl=document.getElementById("stat"),runEl=document.getElementById("run"),
+      sizeEl=document.getElementById("size"),stepEl=document.getElementById("step"),
+      cutEl=document.getElementById("cut"),syEl=document.getElementById("sy");
+let snaps=[],log=[];
+const sleep=()=>new Promise(r=>setTimeout(r,16));
+
+function paintRows(active){
+  rowsEl.innerHTML=log.map((r,k)=>
+    `<tr class="${k===active?"active":""}"><td class="s">${r.tag}</td>`+
+    `<td class="n">${r.ms<1000?r.ms.toFixed(0)+" ms":(r.ms/1000).toFixed(2)+" s"}</td>`+
+    `<td class="n">${r.voids.toLocaleString()}</td>`+
+    `<td class="n">${r.c[1].toLocaleString()}</td>`+
+    `<td class="n">${r.c[2].toLocaleString()}</td>`+
+    `<td class="n">${r.c[3].toLocaleString()}</td>`+
+    `<td style="font-size:12px;color:var(--ink-3)">${r.note}</td></tr>`).join("");
+}
+function showStep(k){
+  const mat=snaps[k];
+  const tris=buildMesh(mat,parseInt(cutEl.value,10)/100*NX);
+  document.getElementById("glsub").textContent=
+    `삼각형 ${(tris/3).toLocaleString()} · 드래그 회전 · 휠 확대`;
+  drawSlice(mat,parseInt(syEl.value,10));
+  paintRows(k);
+  render();
+}
+
+async function run(){
+  runEl.disabled=true;snaps=[];log=[];checksEl.innerHTML="";edtCount=0;
+  const P=PRESETS[parseInt(sizeEl.value,10)];
+  NX=P[0];NY=P[1];NZ=P[2];N=NX*NY*NZ;
+  statEl.textContent="버퍼 할당 중…";await sleep();
+  allocScratch();
+  syEl.max=NY-1;syEl.value=Math.floor(NY*0.5);
+  if(!renderer)initGL();
+  dist=1;place();
+  const mat=new Uint8Array(N),phi=new Float32Array(N);
+  const T0=performance.now();
+
+  const step=async(tag,fn)=>{
+    statEl.textContent=tag+" 실행 중…";
+    await sleep();
+    const t0=performance.now();
+    const note=fn()||"";
+    const ms=performance.now()-t0;
+    const v=voidCount(mat),c=counts(mat);
+    log.push({tag,ms,voids:v,c,note});
+    snaps.push(mat.slice());
+    stepEl.max=snaps.length-1;stepEl.value=snaps.length-1;stepEl.disabled=false;
+    showStep(snaps.length-1);
+    return v;
+  };
+
+  const zSub=Math.round(NZ*0.23),tOx=Math.round(NZ*0.11),
+        tNit=Math.round(NZ*0.14),tCap=Math.round(NZ*0.07);
+  await step("1 기판 Si",()=>{opSubstrate(mat,phi,SI,zSub);return `두께 ${zSub}`;});
+  await step(`2 증착 Oxide ${tOx} · 커버리지 100%`,()=>{
+    const r=opDeposit(mat,phi,OX,tOx,1.0);
+    return `성장 ${r.n.toLocaleString()} · ${r.note}`;});
+  await step("3 트렌치 절삭",()=>{
+    const nw=Math.max(3,Math.round(NX*0.028)),ww=Math.round(NX*0.085);
+    const y0=Math.round(NY*0.22),y1=Math.round(NY*0.78),zf=Math.round(NZ*0.05);
+    carve(mat,phi,Math.round(NX*0.19),Math.round(NX*0.19)+nw,y0,y1,zf);
+    carve(mat,phi,Math.round(NX*0.55),Math.round(NX*0.55)+ww,y0,y1,zf);
+    return `좁은 ${nw} / 넓은 ${ww}`;});
+  const vBefore=await step(`4 증착 Nitride ${tNit} · 커버리지 35%`,()=>{
+    const r=opDeposit(mat,phi,NIT,tNit,0.35);
+    return `성장 ${r.n.toLocaleString()} · ${r.note}`;});
+  const sealedBefore=voidMask(mat);
+  const vCapped=await step(`5 증착 Oxide ${tCap} · 커버리지 100% (캡)`,()=>{
+    const r=opDeposit(mat,phi,OX,tCap,1.0);
+    return `성장 ${r.n.toLocaleString()} · ${r.note}`;});
+  const sealedAfter=voidMask(mat);
+  let survived=0,filledIn=0;
+  for(let i=0;i<N;i++){
+    if(!sealedBefore[i])continue;
+    if(mat[i]!==EMPTY)filledIn++;
+    else if(sealedAfter[i])survived++;
+  }
+
+  const sel={};sel[OX]=1.0;sel[NIT]=0.25;sel[SI]=0.30;
+  const etchT=Math.round(NZ*0.40);
+  let er=null;
+  const vEtched=await step(`6 식각 Ox1.0/Nit0.25/Si0.3 · 이방성 0.6 · t=${etchT}`,()=>{
+    er=opEtch(mat,phi,sel,etchT,0.6);
+    return `제거 ${er.removed.toLocaleString()} · FMM 방문 ${er.touchedTotal.toLocaleString()} `+
+           `(${(er.touchedTotal/N*100).toFixed(1)}%) · ${er.rounds}라운드`;});
+
+  statEl.textContent="불변식 검사 중…";await sleep();
+  const bad=phiMismatch(mat,phi);
+  const total=performance.now()-T0;
+  const snapKB=rleBytes(snaps[snaps.length-1])/1024;
+
+  const mk=(tag,txt,ok,detail)=>
+    `<div class="chk"><span class="tag">${tag}</span><span class="txt">${txt}</span>`+
+    `<span class="res ${ok?"v-ok":"v-bad"}">${ok?"OK":"FAIL"} · ${detail}</span></div>`;
+  checksEl.innerHTML=
+    mk("a","나쁜 스텝 커버리지가 보이드를 봉인했는가",vBefore>0,`${vBefore.toLocaleString()} 복셀`)+
+    mk("b","봉인된 셀이 캡 아래에서 그대로 얼어붙었는가",
+       filledIn===0&&survived===vBefore,
+       `${survived.toLocaleString()}/${vBefore.toLocaleString()} 생존 · ${filledIn} 채워짐`)+
+    `<div class="chk"><span class="tag">참고</span>`+
+    `<span class="txt">전체 보이드 ${vBefore.toLocaleString()} → ${vCapped.toLocaleString()}`+
+    ` — 컨포멀 캡이 다른 구역을 새로 막는 것은 정상입니다. 총량이 아니라 셀 단위로 봅니다.</span>`+
+    `<span class="res"></span></div>`+
+    mk("c","식각이 다시 뚫고 들어갔는가",vEtched<vCapped,
+       `${vCapped.toLocaleString()} → ${vEtched.toLocaleString()} · ${er.rounds}라운드`)+
+    mk("φ","재질 ID와 φ 부호가 어긋나지 않는가",bad===0,`불일치 ${bad.toLocaleString()}`)+
+    `<div class="chk"><span class="tag">EDT</span>`+
+    `<span class="txt">거리 지도를 실제로 만든 횟수 (컨포멀 증착은 만들지 않음)</span>`+
+    `<span class="res">${edtCount}회</span></div>`+
+    `<div class="chk"><span class="tag">합계</span>`+
+    `<span class="txt">시퀀스 6단계 · 격자 ${N.toLocaleString()} 복셀</span>`+
+    `<span class="res">${(total/1000).toFixed(2)} s · 스냅샷 ${snapKB.toFixed(0)} KB (RLE)</span></div>`;
+
+  statEl.innerHTML=`${N.toLocaleString()} 복셀 · ${(total/1000).toFixed(2)}s<br>`+
+    `단계당 평균 ${(total/6/1000).toFixed(2)}s`;
+  runEl.disabled=false;
+}
+
+stepEl.addEventListener("input",()=>{if(snaps.length)showStep(parseInt(stepEl.value,10));});
+cutEl.addEventListener("input",()=>{if(snaps.length)showStep(parseInt(stepEl.value,10));});
+syEl.addEventListener("input",()=>{if(snaps.length)drawSlice(snaps[parseInt(stepEl.value,10)],parseInt(syEl.value,10));});
+runEl.addEventListener("click",run);
+addEventListener("resize",()=>render());
+run();
+})();
+</script>

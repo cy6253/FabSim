@@ -1,0 +1,1237 @@
+<title>FabSim3D M2</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+:root{
+  --bg:#eceff5;--surface:#ffffff;--surface-2:#f5f7fb;
+  --line:#d5dbe6;--line-2:#bcc5d4;
+  --ink:#151a24;--ink-2:#485266;--ink-3:#79839a;
+  --accent:#2b5fc4;--accent-2:#dce6fa;
+  --ok:#2f8478;--warn:#a8752a;--bad:#c4453c;
+  --view:#10151d;--view-line:#28313f;--r:6px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0d1117;--surface:#151b24;--surface-2:#1b222d;
+  --line:#28313f;--line-2:#3a4557;
+  --ink:#e7ebf2;--ink-2:#a6b0c2;--ink-3:#7c869a;
+  --accent:#6c9bf0;--accent-2:#1e2a40;
+  --ok:#4cb9a8;--warn:#e0a94d;--bad:#e86b60;
+}}
+:root[data-theme="dark"]{
+  --bg:#0d1117;--surface:#151b24;--surface-2:#1b222d;
+  --line:#28313f;--line-2:#3a4557;
+  --ink:#e7ebf2;--ink-2:#a6b0c2;--ink-3:#7c869a;
+  --accent:#6c9bf0;--accent-2:#1e2a40;
+  --ok:#4cb9a8;--warn:#e0a94d;--bad:#e86b60;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);
+  font-family:"IBM Plex Sans KR","Malgun Gothic",system-ui,sans-serif;
+  font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1160px;margin:0 auto;padding:34px 20px 70px}
+.eyebrow{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11.5px;
+  letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);margin:0 0 9px}
+h1{font-size:clamp(25px,3.8vw,34px);line-height:1.2;margin:0 0 12px;font-weight:600;letter-spacing:-.02em}
+.lede{margin:0;max-width:68ch;color:var(--ink-2);font-size:15.5px}
+.lede b{color:var(--ink);font-weight:600}
+.bar{display:flex;flex-wrap:wrap;gap:14px;align-items:end;margin:24px 0 14px;
+  padding:13px 15px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}
+.f{display:flex;flex-direction:column;gap:5px}
+.f label{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:10.5px;
+  letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3)}
+select,button{font-family:inherit;font-size:13.5px;padding:6px 11px;border-radius:4px;
+  border:1px solid var(--line-2);background:var(--surface-2);color:var(--ink)}
+button{background:var(--accent);color:#fff;border-color:transparent;font-weight:600;padding:7px 16px;cursor:pointer}
+button:disabled{opacity:.5;cursor:default}
+button.ghost{background:var(--surface-2);color:var(--ink);border:1px solid var(--line-2);font-weight:500}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+input[type=range]{width:140px;accent-color:var(--accent)}
+.stat{margin-left:auto;font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:11.5px;color:var(--ink-3);text-align:right;line-height:1.5}
+.views{display:grid;grid-template-columns:1.15fr 1fr;gap:13px}
+@media(max-width:900px){.views{grid-template-columns:1fr}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
+  padding:11px 12px 12px;display:flex;flex-direction:column;gap:8px}
+.phead{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.phead h2{margin:0;font-size:12.5px;font-weight:600;
+  font-family:"IBM Plex Mono",ui-monospace,monospace;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--ink-3)}
+.phead .sub{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px;color:var(--ink-3)}
+#gl{width:100%;aspect-ratio:4/3;border-radius:3px;background:var(--view);
+  border:1px solid var(--view-line);display:block;cursor:grab}
+#gl.drag{cursor:grabbing}
+#slice{width:100%;height:auto;image-rendering:pixelated;border-radius:3px;
+  background:var(--view);border:1px solid var(--view-line);display:block}
+#prof{width:100%;height:150px;border-radius:3px;background:var(--view);
+  border:1px solid var(--view-line);display:block}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.row span{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px;color:var(--ink-3)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:12px;padding:10px 13px;
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}
+.legend div{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-2)}
+.sw{width:11px;height:11px;border-radius:2.5px;flex:none}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);margin-top:13px}
+table{border-collapse:collapse;width:100%;min-width:700px;font-size:12.5px}
+th{text-align:left;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:10px;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);font-weight:500;
+  padding:8px 11px;border-bottom:1px solid var(--line);background:var(--surface-2);white-space:nowrap}
+th.n,td.n{text-align:right}
+td{padding:8px 11px;border-bottom:1px solid var(--line);color:var(--ink-2);vertical-align:top}
+tr:last-child td{border-bottom:none}
+td.s{font-weight:600;color:var(--ink);white-space:nowrap}
+td.n{font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums;color:var(--ink)}
+tr.active td{background:var(--accent-2)}
+.chk-ok{color:var(--ok);font-weight:600}
+.chk-bad{color:var(--bad);font-weight:600}
+.notes{margin-top:26px;border-top:1px solid var(--line);padding-top:16px}
+.notes p{margin:0 0 9px;font-size:13px;color:var(--ink-2);max-width:74ch}
+.notes p:last-child{margin:0}
+code{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;
+  background:var(--surface-2);border:1px solid var(--line);padding:1px 5px;border-radius:3px;color:var(--ink)}
+</style>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">FabSim3D · M2 연산자</p>
+    <h1>공정 노드 12종이 브라우저에서</h1>
+    <p class="lede">파이썬 참조 구현에서 수치로 검증한 연산자를 그대로 옮긴 것입니다. 시퀀스는 <b>모든 연산자를 한 번씩 통과</b>하도록 짰고, 각 단계마다 그 연산자가 지켜야 할 성질을 확인합니다 — 봉인된 보이드에 PR이 안 들어가는지, 질화막이 산화를 막는지, 실리사이드가 마스크 없이 자기정렬되는지.</p>
+  </header>
+
+  <div class="bar">
+    <div class="f"><label for="size">격자</label>
+      <select id="size">
+        <option value="0">96 × 48 × 60 · 0.28M</option>
+        <option value="1" selected>160 × 80 × 72 · 0.92M</option>
+        <option value="2">240 × 100 × 64 · 1.5M</option>
+      </select></div>
+    <div class="f"><label for="run">&nbsp;</label><button id="run">시퀀스 실행</button></div>
+    <div class="f"><label for="step">단계</label>
+      <input type="range" id="step" min="0" max="0" value="0" disabled></div>
+    <div class="f"><label for="cut">절단면</label>
+      <input type="range" id="cut" min="10" max="100" value="100"></div>
+    <div class="f"><label for="dope">&nbsp;</label>
+      <button id="dope" class="ghost">도핑 보기</button></div>
+    <div class="stat" id="stat">대기 중</div>
+  </div>
+
+  <div class="views">
+    <div class="panel">
+      <div class="phead"><h2>3D</h2><span class="sub" id="glsub">드래그 회전 · 휠 확대</span></div>
+      <canvas id="gl"></canvas>
+    </div>
+    <div class="panel">
+      <div class="phead"><h2>단면</h2><span class="sub" id="slsub">XZ</span></div>
+      <canvas id="slice"></canvas>
+      <div class="row"><span>y</span><input type="range" id="sy" min="0" max="10" value="5">
+        <span id="probe"></span></div>
+      <div class="phead" style="margin-top:2px"><h2>도핑 프로파일</h2>
+        <span class="sub" id="prsub">농도 vs 깊이 · log</span></div>
+      <canvas id="prof"></canvas>
+      <div class="row"><span>x</span><input type="range" id="px" min="0" max="10" value="5"></div>
+    </div>
+  </div>
+
+  <div class="legend" id="legend"></div>
+
+  <div class="tw"><table>
+    <thead><tr><th>단계</th><th class="n">시간</th><th>결과</th><th>확인</th></tr></thead>
+    <tbody id="rows"><tr><td class="s" colspan="4" style="color:var(--ink-3)">실행 전</td></tr></tbody>
+  </table></div>
+
+  <div class="notes">
+    <p><b>연산자별로 무엇을 확인하는가.</b> PR 코팅은 액체라 트렌치를 채우고 평탄화하지만 <b>이미 봉인된 보이드에는 들어가지 못해야</b> 합니다(P2). 노광은 광선이라 <b>오버행이 그림자를 만들고</b> 정렬 오프셋이 패턴을 옮깁니다. CMP는 패드가 수직으로 내려오므로 <b>정지층이 지붕을 이루면 그 아래가 살아남습니다</b>. 산화는 산화제가 질화막을 통과하지 못해 <b>마스크가 저절로 동작</b>하고, 실리사이드는 금속이 실리콘에 닿은 곳에만 생겨 <b>마스크 없이 자기정렬</b>됩니다.</p>
+    <p><b>도핑.</b> 주입은 이온이 물질에 <b>처음 들어간 지점</b>부터 깊이를 재므로 피크가 표면이 아니라 그 아래에 있습니다. 어닐은 각 방향 Crank–Nicolson ADI로, 진공 쪽 면의 확산계수를 0으로 두어 도펀트가 밖으로 새지 않습니다. 산화가 실리콘을 먹을 때는 계면에서 <code>C_Si/C_ox = m</code>으로 평형을 맞춰 <b>붕소는 고갈되고 비소는 쌓입니다</b>.</p>
+    <p><b>Worker는 아직 없습니다.</b> 계산 중에는 화면이 잠깐 멈춥니다(결정 Q는 실제 빌드에서).</p>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+const INF=1e20;
+const EMPTY=0,SI=1,OX=2,NIT=3,PR=4,EPR=5,MET=6,MSI=7;
+const MATCOL={1:[100,116,143],2:[232,163,61],3:[63,154,140],
+              4:[185,138,212],5:[124,95,168],6:[185,190,201],7:[168,134,86]};
+const MATNAME={1:"Si",2:"SiO2",3:"Nitride",4:"PR",5:"노광 PR",6:"Metal",7:"MetalSi"};
+const VOIDCOL=[227,90,77];
+const PRESETS=[[96,48,60],[160,80,72],[240,100,64]];
+const NSP=3, B=0, P_=1, AS=2;
+const DREL=[1.0,0.6,0.18];
+const SEG_M=[0.30,4.0,10.0];        // C_Si / C_oxide at the interface
+const D_BLOCK=0.004;
+const CONSUME=1/2.17, GROW=1-1/2.17;
+const DG={"dry1000":[0.22,0.075],"wet1000":[0.35,1.10],"wet1100":[0.24,2.20]};
+
+let NX,NY,NZ,N;
+const at=(x,y,z)=>x+NX*(y+NY*z);
+const XOF=i=>i%NX, YOF=i=>((i/NX)|0)%NY, ZOF=i=>(i/(NX*NY))|0;
+
+/* ---------------- scratch ---------------- */
+const S={n:0};
+function alloc(){
+  if(S.n===N)return;
+  S.n=N;
+  const m=Math.max(NX,NY,NZ);
+  S.f64=new Float64Array(N);S.feat=new Int32Array(N);
+  S.d1=new Float32Array(N);S.d2=new Float32Array(N);
+  S.u8a=new Uint8Array(N);S.u8b=new Uint8Array(N);
+  S.i32=new Int32Array(N);S.fa=new Float32Array(N);S.fb=new Float32Array(N);
+  S.parent=new Int32Array(N+1);S.usize=new Int32Array(N+1);
+  S.stamped=new Uint8Array(N+1);S.stampT=new Float32Array(N+1);
+  S.line=new Float64Array(m);S.dd=new Float64Array(m);
+  S.fi=new Int32Array(m);S.col=new Int32Array(m);
+  S.v=new Int32Array(m);S.z=new Float64Array(m+1);
+  S.ta=new Float64Array(m);S.tb=new Float64Array(m);S.tc=new Float64Array(m);
+  S.td=new Float64Array(m);S.tx=new Float64Array(m);
+  S.cp=new Float64Array(m);S.dp=new Float64Array(m);
+  S.top=new Int32Array(NX*NY);
+}
+
+/* ---------------- P1a: EDT ---------------- */
+function edt1d(f,n,d,fi,v,z){
+  let k=0;v[0]=0;z[0]=-INF;z[1]=INF;
+  for(let q=1;q<n;q++){
+    let s=((f[q]+q*q)-(f[v[k]]+v[k]*v[k]))/(2*q-2*v[k]);
+    while(s<=z[k]){k--;s=((f[q]+q*q)-(f[v[k]]+v[k]*v[k]))/(2*q-2*v[k]);}
+    k++;v[k]=q;z[k]=s;z[k+1]=INF;
+  }
+  k=0;
+  for(let q=0;q<n;q++){while(z[k+1]<q)k++;d[q]=(q-v[k])*(q-v[k])+f[v[k]];fi[q]=v[k];}
+}
+let edtCount=0;
+function edt3(isSrc,wantFeat,out){
+  edtCount++;
+  const f=S.f64,feat=S.feat,line=S.line,d=S.dd,fi=S.fi,col=S.col,v=S.v,z=S.z;
+  for(let i=0;i<N;i++)f[i]=isSrc[i]?0:INF;
+  for(let zz=0;zz<NZ;zz++)for(let y=0;y<NY;y++){
+    const b=NX*(y+NY*zz);
+    for(let x=0;x<NX;x++)line[x]=f[b+x];
+    edt1d(line,NX,d,fi,v,z);
+    for(let x=0;x<NX;x++){f[b+x]=d[x];if(wantFeat)feat[b+x]=b+fi[x];}
+  }
+  for(let zz=0;zz<NZ;zz++)for(let x=0;x<NX;x++){
+    for(let y=0;y<NY;y++){const i=x+NX*(y+NY*zz);line[y]=f[i];if(wantFeat)col[y]=feat[i];}
+    edt1d(line,NY,d,fi,v,z);
+    for(let y=0;y<NY;y++){const i=x+NX*(y+NY*zz);f[i]=d[y];if(wantFeat)feat[i]=col[fi[y]];}
+  }
+  for(let y=0;y<NY;y++)for(let x=0;x<NX;x++){
+    for(let zz=0;zz<NZ;zz++){const i=x+NX*(y+NY*zz);line[zz]=f[i];if(wantFeat)col[zz]=feat[i];}
+    edt1d(line,NZ,d,fi,v,z);
+    for(let zz=0;zz<NZ;zz++){const i=x+NX*(y+NY*zz);f[i]=d[zz];if(wantFeat)feat[i]=col[fi[zz]];}
+  }
+  const o=out||S.d1;
+  for(let i=0;i<N;i++)o[i]=Math.sqrt(f[i]);
+  return o;
+}
+function redistance(mat,phi){
+  const a=S.u8a,b=S.u8b;
+  for(let i=0;i<N;i++){const s=mat[i]!==EMPTY?1:0;a[i]=s;b[i]=1-s;}
+  const dOut=edt3(a,false,S.fa), dIn=edt3(b,false,S.fb);
+  for(let i=0;i<N;i++)phi[i]=a[i]?-dIn[i]:dOut[i];
+}
+/* phi is READ by exactly one operator: deposition (arrival = phi / rate).
+   Everything else only changes mat. So instead of re-distancing after every
+   etch, CMP, oxidation, ... (two full EDTs each), mark phi dirty and rebuild
+   it once, right before the next deposition actually needs it. A uniform
+   deposition keeps phi a valid SDF by construction (decision O), so it does
+   not dirty it; a non-uniform one does. */
+let phiDirty=false;
+function ensurePhi(mat,phi){
+  if(phiDirty){redistance(mat,phi);phiDirty=false;}
+}
+
+/* ---------------- P2: connectivity ---------------- */
+function floodTop(passable,out){
+  const reach=out;reach.fill(0);
+  const q=S.i32;let n=0;
+  for(let y=0;y<NY;y++)for(let x=0;x<NX;x++){
+    const i=at(x,y,NZ-1);
+    if(passable(i)&&!reach[i]){reach[i]=1;q[n++]=i;}
+  }
+  let h=0;
+  while(h<n){
+    const c=q[h++],x=XOF(c),y=YOF(c),z=ZOF(c);
+    if(x>0){const j=c-1;if(!reach[j]&&passable(j)){reach[j]=1;q[n++]=j;}}
+    if(x<NX-1){const j=c+1;if(!reach[j]&&passable(j)){reach[j]=1;q[n++]=j;}}
+    if(y>0){const j=c-NX;if(!reach[j]&&passable(j)){reach[j]=1;q[n++]=j;}}
+    if(y<NY-1){const j=c+NX;if(!reach[j]&&passable(j)){reach[j]=1;q[n++]=j;}}
+    if(z>0){const j=c-NX*NY;if(!reach[j]&&passable(j)){reach[j]=1;q[n++]=j;}}
+    if(z<NZ-1){const j=c+NX*NY;if(!reach[j]&&passable(j)){reach[j]=1;q[n++]=j;}}
+  }
+  return reach;
+}
+const ambient=(mat,out)=>floodTop(i=>mat[i]===EMPTY,out||new Uint8Array(N));
+
+/* ---------------- union-find seal ---------------- */
+function ufInit(){
+  const p=S.parent,sz=S.usize,st=S.stamped,tt=S.stampT;
+  for(let i=0;i<=N;i++){p[i]=i;sz[i]=1;st[i]=0;tt[i]=Infinity;}
+  st[N]=1;
+}
+function ufFind(i){const p=S.parent;while(p[i]!==i)i=p[i];return i;}
+function ufUnion(a,b,now){
+  const p=S.parent,sz=S.usize,st=S.stamped,tt=S.stampT;
+  let ra=ufFind(a),rb=ufFind(b);
+  if(ra===rb)return;
+  const ca=st[ra],cb=st[rb];
+  if(ca&&!cb){st[rb]=1;tt[rb]=now;}
+  else if(cb&&!ca){st[ra]=1;tt[ra]=now;}
+  if(sz[ra]<sz[rb]){const t=ra;ra=rb;rb=t;}
+  p[rb]=ra;sz[ra]+=sz[rb];
+}
+function ufStamp(i){
+  const p=S.parent,st=S.stamped,tt=S.stampT;
+  let j=i;
+  for(;;){
+    if(st[j])return tt[j];
+    if(p[j]===j)return 0;      // never reached the ambient: sealed from t=0
+    j=p[j];
+  }
+}
+const BINS=384;
+function sealTimes(mat,arrival,tmax,seal){
+  ufInit();
+  const ins=S.u8a;ins.fill(0);
+  const head=new Int32Array(BINS+2).fill(-1),next=S.i32;
+  for(let i=0;i<N;i++){
+    if(mat[i]!==EMPTY){seal[i]=Infinity;continue;}
+    const a=arrival[i];
+    let b;
+    if(!(a<=tmax))b=BINS;
+    else{b=Math.floor(a/tmax*(BINS-1));b=b<0?0:(b>BINS-1?BINS-1:b);}
+    next[i]=head[b];head[b]=i;
+  }
+  for(let b=BINS;b>=0;b--){
+    const now=b>=BINS?Infinity:(b+1)/(BINS-1)*tmax;
+    for(let i=head[b];i!==-1;i=next[i])ins[i]=1;
+    for(let i=head[b];i!==-1;i=next[i]){
+      const x=XOF(i),y=YOF(i),z=ZOF(i);
+      if(z===NZ-1)ufUnion(i,N,now);
+      if(x>0&&ins[i-1])ufUnion(i,i-1,now);
+      if(x<NX-1&&ins[i+1])ufUnion(i,i+1,now);
+      if(y>0&&ins[i-NX])ufUnion(i,i-NX,now);
+      if(y<NY-1&&ins[i+NX])ufUnion(i,i+NX,now);
+      if(z>0&&ins[i-NX*NY])ufUnion(i,i-NX*NY,now);
+      if(z<NZ-1&&ins[i+NX*NY])ufUnion(i,i+NX*NY,now);
+    }
+  }
+  for(let i=0;i<N;i++)if(mat[i]===EMPTY)seal[i]=ufStamp(i);
+}
+
+/* breakthrough time: the first moment a sealed void rejoins the ambient as the
+   etch removes material -- one union-find pass, forward in time (decision P). */
+function breakthroughTime(mat,T,tmax,sealedReps){
+  if(!sealedReps.length)return null;
+  ufInit();
+  const ins=S.u8a;ins.fill(0);
+  const link=(i,now)=>{
+    const x=XOF(i),y=YOF(i),z=ZOF(i);
+    if(z===NZ-1)ufUnion(i,N,now);
+    if(x>0&&ins[i-1])ufUnion(i,i-1,now);
+    if(x<NX-1&&ins[i+1])ufUnion(i,i+1,now);
+    if(y>0&&ins[i-NX])ufUnion(i,i-NX,now);
+    if(y<NY-1&&ins[i+NX])ufUnion(i,i+NX,now);
+    if(z>0&&ins[i-NX*NY])ufUnion(i,i-NX*NY,now);
+    if(z<NZ-1&&ins[i+NX*NY])ufUnion(i,i+NX*NY,now);
+  };
+  for(let i=0;i<N;i++)if(mat[i]===EMPTY)ins[i]=1;
+  for(let i=0;i<N;i++)if(mat[i]===EMPTY)link(i,0);
+  let ar=ufFind(N);
+  for(const r of sealedReps)if(ufFind(r)===ar)return 0;
+  const head=new Int32Array(BINS+1).fill(-1),next=S.i32;
+  for(let i=0;i<N;i++){
+    if(mat[i]===EMPTY)continue;
+    const t=T[i];
+    if(!(t<=tmax))continue;
+    let b=Math.floor(t/tmax*(BINS-1));
+    if(b<0)b=0;if(b>BINS-1)b=BINS-1;
+    next[i]=head[b];head[b]=i;
+  }
+  for(let b=0;b<BINS;b++){
+    if(head[b]===-1)continue;
+    const now=(b+1)/(BINS-1)*tmax;
+    for(let i=head[b];i!==-1;i=next[i])ins[i]=1;
+    for(let i=head[b];i!==-1;i=next[i])link(i,now);
+    ar=ufFind(N);
+    for(const r of sealedReps)if(ufFind(r)===ar)return now;
+  }
+  return null;
+}
+
+/* ---------------- P1b: FMM ---------------- */
+function fmm3(src,speed,hx,hy,hz,tmax,T){
+  T.fill(Infinity);
+  const st=S.u8b;st.fill(0);
+  let hi=new Int32Array(1<<16),ht=new Float32Array(1<<16),hn=0;
+  const grow=()=>{const a=new Int32Array(hi.length*2),b=new Float32Array(ht.length*2);
+    a.set(hi);b.set(ht);hi=a;ht=b;};
+  const push=(i,t)=>{if(hn>=hi.length)grow();
+    let c=hn++;hi[c]=i;ht[c]=t;
+    while(c>0){const p=(c-1)>>1;if(ht[p]<=ht[c])break;
+      const a=hi[p];hi[p]=hi[c];hi[c]=a;const b=ht[p];ht[p]=ht[c];ht[c]=b;c=p;}};
+  const pop=()=>{const top=hi[0];hn--;
+    if(hn>0){hi[0]=hi[hn];ht[0]=ht[hn];let c=0;
+      for(;;){const l=2*c+1,r=l+1;let s=c;
+        if(l<hn&&ht[l]<ht[s])s=l;
+        if(r<hn&&ht[r]<ht[s])s=r;
+        if(s===c)break;
+        const a=hi[s];hi[s]=hi[c];hi[c]=a;const b=ht[s];ht[s]=ht[c];ht[c]=b;c=s;}}
+    return top;};
+  const H=[hx,hy,hz],av=[0,0,0],ah=[0,0,0];
+  function solve(i){
+    const sp=speed[i];
+    if(sp<=1e-9)return Infinity;
+    const x=XOF(i),y=YOF(i),zz=ZOF(i);
+    let a0=Infinity,a1=Infinity,a2=Infinity,j;
+    if(x>0){j=i-1;if(st[j]===2&&T[j]<a0)a0=T[j];}
+    if(x<NX-1){j=i+1;if(st[j]===2&&T[j]<a0)a0=T[j];}
+    if(y>0){j=i-NX;if(st[j]===2&&T[j]<a1)a1=T[j];}
+    if(y<NY-1){j=i+NX;if(st[j]===2&&T[j]<a1)a1=T[j];}
+    if(zz>0){j=i-NX*NY;if(st[j]===2&&T[j]<a2)a2=T[j];}
+    if(zz<NZ-1){j=i+NX*NY;if(st[j]===2&&T[j]<a2)a2=T[j];}
+    let n=0;
+    if(a0<Infinity){av[n]=a0;ah[n]=H[0];n++;}
+    if(a1<Infinity){av[n]=a1;ah[n]=H[1];n++;}
+    if(a2<Infinity){av[n]=a2;ah[n]=H[2];n++;}
+    if(n===0)return Infinity;
+    for(let p=1;p<n;p++){const kv=av[p],kh=ah[p];let q=p-1;
+      while(q>=0&&av[q]>kv){av[q+1]=av[q];ah[q+1]=ah[q];q--;}
+      av[q+1]=kv;ah[q+1]=kh;}
+    const rhs=1/(sp*sp);
+    let A=0,Bq=0,C=0,best=Infinity;
+    for(let k=0;k<n;k++){
+      const a=av[k],w=1/(ah[k]*ah[k]);
+      A+=w;Bq+=-2*a*w;C+=a*a*w;
+      const disc=Bq*Bq-4*A*(C-rhs);
+      if(disc<0)continue;
+      const t=(-Bq+Math.sqrt(disc))/(2*A);
+      const nxt=(k+1<n)?av[k+1]:Infinity;
+      best=t;
+      if(t>=a&&t<=nxt+1e-9)break;
+    }
+    return best;
+  }
+  const nbs=new Int32Array(6);
+  function nb(i){const x=XOF(i),y=YOF(i),zz=ZOF(i);let c=0;
+    if(x>0)nbs[c++]=i-1;if(x<NX-1)nbs[c++]=i+1;
+    if(y>0)nbs[c++]=i-NX;if(y<NY-1)nbs[c++]=i+NX;
+    if(zz>0)nbs[c++]=i-NX*NY;if(zz<NZ-1)nbs[c++]=i+NX*NY;
+    return c;}
+  for(let i=0;i<N;i++)if(src[i]){T[i]=0;st[i]=2;}
+  for(let i=0;i<N;i++){
+    if(!src[i])continue;
+    const c=nb(i);
+    for(let k=0;k<c;k++){const j=nbs[k];if(st[j]!==0)continue;
+      const t=solve(j);if(t<=tmax){T[j]=t;st[j]=1;push(j,t);}}
+  }
+  let touched=0;
+  while(hn>0){
+    const i=pop();
+    if(st[i]===2)continue;
+    st[i]=2;touched++;
+    if(T[i]>tmax)continue;
+    const c=nb(i);
+    for(let k=0;k<c;k++){const j=nbs[k];if(st[j]===2)continue;
+      const t=solve(j);if(t<=tmax&&t<T[j]){T[j]=t;st[j]=1;push(j,t);}}
+  }
+  return touched;
+}
+
+/* ---------------- visibility ---------------- */
+function visibility(mat,cells,nray,len,rate,coverage){
+  const dirs=[];
+  for(let r=0;r<nray;r++){
+    const u=(r+0.5)/nray,ph=u*Math.PI*2*1.618034;
+    const ct=Math.sqrt(1-u),stt=Math.sqrt(Math.max(0,1-ct*ct));
+    dirs.push([stt*Math.cos(ph),stt*Math.sin(ph),ct]);
+  }
+  for(let c=0;c<cells.length;c++){
+    const i=cells[c],x0=XOF(i),y0=YOF(i),z0=ZOF(i);
+    let esc=0;
+    for(let r=0;r<dirs.length;r++){
+      const d=dirs[r];let px=x0+.5,py=y0+.5,pz=z0+.5,ok=true;
+      for(let t=0;t<len;t++){
+        px+=d[0];py+=d[1];pz+=d[2];
+        if(pz>=NZ||px<0||px>=NX||py<0||py>=NY)break;
+        if(pz<0){ok=false;break;}
+        if(mat[(px|0)+NX*((py|0)+NY*(pz|0))]!==EMPTY){ok=false;break;}
+      }
+      if(ok)esc++;
+    }
+    rate[i]=coverage+(1-coverage)*(esc/nray);
+  }
+}
+
+/* ---------------- column top ---------------- */
+function columnTop(mat){
+  const top=S.top;top.fill(0);
+  for(let z=NZ-1;z>=0;z--)for(let y=0;y<NY;y++)for(let x=0;x<NX;x++){
+    const k=x+NX*y;
+    if(top[k]===0&&mat[at(x,y,z)]!==EMPTY)top[k]=z+1;
+  }
+  return top;
+}
+
+/* ================= operators ================= */
+function opSubstrate(mat,phi,m,thick){
+  for(let z=0;z<thick;z++)for(let y=0;y<NY;y++)for(let x=0;x<NX;x++)mat[at(x,y,z)]=m;
+  phiDirty=true;
+}
+
+function opDeposit(mat,phi,material,thick,coverage){
+  ensurePhi(mat,phi);                 // the only reader of phi
+  const uniform=coverage>=0.999;
+  const rate=S.fa,arrival=S.fb,seal=S.d2;
+  let note;
+  if(uniform){rate.fill(1);note="균일 · EDT 없음";}
+  else{
+    const front=S.u8a;front.fill(0);
+    const cells=[];
+    for(let i=0;i<N;i++){
+      if(mat[i]!==EMPTY)continue;
+      const x=XOF(i),y=YOF(i),z=ZOF(i);
+      let t=false;
+      if(x>0&&mat[i-1]!==EMPTY)t=true;
+      else if(x<NX-1&&mat[i+1]!==EMPTY)t=true;
+      else if(y>0&&mat[i-NX]!==EMPTY)t=true;
+      else if(y<NY-1&&mat[i+NX]!==EMPTY)t=true;
+      else if(z>0&&mat[i-NX*NY]!==EMPTY)t=true;
+      else if(z<NZ-1&&mat[i+NX*NY]!==EMPTY)t=true;
+      if(t){front[i]=1;cells.push(i);}
+    }
+    const fr=new Float32Array(N);
+    visibility(mat,cells,12,26,fr,coverage);
+    edt3(front,true,S.d1);
+    const feat=S.feat;
+    for(let i=0;i<N;i++)rate[i]=fr[feat[i]];
+    note=`EDT 1 · 전선 ${cells.length.toLocaleString()}`;
+  }
+  for(let i=0;i<N;i++)
+    arrival[i]=(mat[i]===EMPTY&&rate[i]>1e-6)?phi[i]/rate[i]:Infinity;
+  sealTimes(mat,arrival,thick,seal);
+  let n=0;
+  for(let i=0;i<N;i++){
+    const eff=Math.min(thick,seal[i]);
+    phi[i]-=eff*rate[i];
+    if(mat[i]===EMPTY&&phi[i]<=0){mat[i]=material;n++;}
+  }
+  if(!uniform)phiDirty=true;          // a shifted non-uniform field is not an SDF
+  return {n,note};
+}
+
+function opEtch(mat,phi,sel,seconds,anisotropy){
+  const lat=Math.max(1e-3,1-anisotropy);
+  const T=S.fb,speed=S.fa;
+  let removed=0,touched=0,rounds=0,tLeft=seconds;
+  const reach=new Uint8Array(N);
+  // A sealed void carries no etchant, so the front cannot cross it. When the
+  // etch breaks into one, the void becomes a new source at that moment and
+  // the march restarts from there (decision D). The M2 port had dropped this
+  // and could never reopen a void the deposition had sealed.
+  while(tLeft>1e-6&&rounds<6){
+    rounds++;
+    ambient(mat,reach);
+    const src=S.u8a;src.fill(0);
+    const sealedReps=[];
+    let any=false;
+    for(let i=0;i<N;i++){
+      if(mat[i]!==EMPTY)continue;
+      if(!reach[i]){if(sealedReps.length<64)sealedReps.push(i);continue;}
+      const x=XOF(i),y=YOF(i),z=ZOF(i);
+      const ok=j=>mat[j]!==EMPTY&&(sel[mat[j]]||0)>0;
+      let hit=false;
+      if(x>0&&ok(i-1))hit=true;
+      else if(x<NX-1&&ok(i+1))hit=true;
+      else if(y>0&&ok(i-NX))hit=true;
+      else if(y<NY-1&&ok(i+NX))hit=true;
+      else if(z>0&&ok(i-NX*NY))hit=true;
+      else if(z<NZ-1&&ok(i+NX*NY))hit=true;
+      if(hit){src[i]=1;any=true;}
+    }
+    if(!any)break;
+    for(let i=0;i<N;i++)speed[i]=mat[i]!==EMPTY?(sel[mat[i]]||0):0;
+    touched+=fmm3(src,speed,1/lat,1/lat,1,tLeft,T);
+    const tb=breakthroughTime(mat,T,tLeft,sealedReps);
+    const cut=tb!==null?tb:tLeft;
+    for(let i=0;i<N;i++)if(mat[i]!==EMPTY&&T[i]<=cut){mat[i]=EMPTY;removed++;}
+    tLeft-=cut;
+    if(tb===null)break;
+  }
+  phiDirty=true;
+  return {removed,touched,rounds};
+}
+
+/* P3 + P2 */
+function opPRCoat(mat,phi,thick,planar){
+  const reach=ambient(mat,new Uint8Array(N));
+  const top=columnTop(mat);
+  let gmax=0;
+  for(let k=0;k<NX*NY;k++)if(top[k]>gmax)gmax=top[k];
+  let n=0;
+  for(let y=0;y<NY;y++)for(let x=0;x<NX;x++){
+    const k=x+NX*y;
+    const h=(1-planar)*top[k]+planar*gmax+thick;
+    for(let z=0;z<NZ&&z<h;z++){
+      const i=at(x,y,z);
+      if(mat[i]===EMPTY&&reach[i]){mat[i]=PR;n++;}
+    }
+  }
+  phiDirty=true;
+  return n;
+}
+
+/* P4 rays */
+function opExpose(mat,mask,dx,dy){
+  let n=0;
+  for(let y=0;y<NY;y++)for(let x=0;x<NX;x++){
+    const mx=x-dx,my=y-dy;
+    if(mx<0||mx>=NX||my<0||my>=NY||!mask[mx+NX*my])continue;
+    for(let z=NZ-1;z>=0;z--){
+      const i=at(x,y,z),m=mat[i];
+      if(m===EMPTY||m===EPR)continue;
+      if(m===PR){mat[i]=EPR;n++;}
+      else break;                 // opaque
+    }
+  }
+  return n;
+}
+function opDevelop(mat,phi,positive){
+  let n=0;
+  for(let i=0;i<N;i++){
+    if(positive&&mat[i]===EPR){mat[i]=EMPTY;n++;}
+    else if(!positive&&mat[i]===PR){mat[i]=EMPTY;n++;}
+  }
+  for(let i=0;i<N;i++)if(mat[i]===EPR)mat[i]=PR;
+  phiDirty=true;
+  return n;
+}
+function opStrip(mat,phi){
+  let n=0;
+  for(let i=0;i<N;i++)if(mat[i]===PR||mat[i]===EPR){mat[i]=EMPTY;n++;}
+  phiDirty=true;
+  return n;
+}
+
+/* P3 vertical descent */
+function opCMP(mat,phi,amount,protect){
+  const top=columnTop(mat);
+  let gmax=0;
+  for(let k=0;k<NX*NY;k++)if(top[k]>gmax)gmax=top[k];
+  const cut=Math.max(0,gmax-amount);
+  let n=0;
+  for(let y=0;y<NY;y++)for(let x=0;x<NX;x++){
+    for(let z=NZ-1;z>=cut;z--){
+      const i=at(x,y,z),m=mat[i];
+      if(m===EMPTY)continue;
+      if(protect&&protect[m])break;      // the pad rides on the stop layer
+      mat[i]=EMPTY;n++;
+    }
+  }
+  phiDirty=true;
+  return {n,cut};
+}
+
+/* P4 rays + depth profile */
+function opImplant(mat,conc,sp,mask,rp,drp,dose,dx,dy){
+  const f=conc[sp];
+  let placed=0;
+  for(let y=0;y<NY;y++)for(let x=0;x<NX;x++){
+    const mx=x-dx,my=y-dy;
+    if(mx<0||mx>=NX||my<0||my>=NY||!mask[mx+NX*my])continue;
+    let entry=-1;
+    for(let z=NZ-1;z>=0;z--)if(mat[at(x,y,z)]!==EMPTY){entry=z;break;}
+    if(entry<0)continue;
+    let tot=0;
+    for(let z=entry;z>=0;z--){
+      const d=entry-z;
+      tot+=Math.exp(-((d-rp)*(d-rp))/(2*drp*drp));
+    }
+    if(tot<=0)continue;
+    for(let z=entry;z>=0;z--){
+      const i=at(x,y,z),d=entry-z;
+      if(mat[i]===EMPTY)continue;
+      const w=Math.exp(-((d-rp)*(d-rp))/(2*drp*drp))*dose/tot;
+      f[i]+=w;placed+=w;
+    }
+  }
+  concDirty=true;
+  return placed;
+}
+
+/* ADI, Crank-Nicolson per direction */
+function thomas(a,b,c,d,n,x,cp,dp){
+  cp[0]=c[0]/b[0];dp[0]=d[0]/b[0];
+  for(let i=1;i<n;i++){
+    const m=b[i]-a[i]*cp[i-1];
+    cp[i]=c[i]/m;dp[i]=(d[i]-a[i]*dp[i-1])/m;
+  }
+  x[n-1]=dp[n-1];
+  for(let i=n-2;i>=0;i--)x[i]=dp[i]-cp[i]*x[i+1];
+}
+function opAnneal(mat,conc,steps,dt){
+  concDirty=true;
+  const a=S.ta,b=S.tb,c=S.tc,d=S.td,x=S.tx,cp=S.cp,dp=S.dp;
+  const dm=S.fa;
+  for(let sp=0;sp<NSP;sp++){
+    const f=conc[sp],dr=DREL[sp];
+    for(let i=0;i<N;i++){
+      const m=mat[i];
+      dm[i]=m===EMPTY?0:((m===OX||m===NIT)?D_BLOCK*dr:dr);
+    }
+    const face=(i,j)=>{const di=dm[i],dj=dm[j];
+      return (di<=0||dj<=0)?0:2*di*dj/(di+dj);};
+    for(let s=0;s<steps;s++){
+      for(let axis=0;axis<3;axis++){
+        const n=axis===0?NX:(axis===1?NY:NZ);
+        const stride=axis===0?1:(axis===1?NX:NX*NY);
+        const o1=axis===0?NY:(axis===1?NX:NX), o2=axis===2?NY:NZ;
+        for(let p=0;p<o2;p++)for(let q=0;q<o1;q++){
+          let b0;
+          if(axis===0)b0=at(0,q,p);
+          else if(axis===1)b0=at(q,0,p);
+          else b0=at(q,p,0);
+          const h=0.5*dt;
+          for(let k=0;k<n;k++){
+            const i=b0+k*stride;
+            const lo=k>0?face(i,i-stride):0;
+            const hi=k<n-1?face(i,i+stride):0;
+            a[k]=-h*lo;c[k]=-h*hi;b[k]=1+h*(lo+hi);
+            const cl=k>0?f[i-stride]:f[i], cr=k<n-1?f[i+stride]:f[i];
+            d[k]=f[i]+h*(lo*(cl-f[i])+hi*(cr-f[i]));
+          }
+          thomas(a,b,c,d,n,x,cp,dp);
+          for(let k=0;k<n;k++)f[b0+k*stride]=x[k];
+        }
+      }
+    }
+  }
+}
+
+/* interface reaction: oxidation */
+function dealGrove(key,seconds){
+  const [A,Bc]=DG[key];
+  return 0.5*A*(Math.sqrt(1+4*Bc*seconds/(A*A))-1);
+}
+/* Where the oxidant can get to. Vacuum is free, but travelling THROUGH oxide
+   costs distance and the oxidant only diffuses about as far as the oxide is
+   thick. An unbounded flood is wrong in the one case that matters: a pad oxide
+   runs under the whole nitride mask, so the oxidant would creep the full width
+   of the wafer and the mask would do nothing. Bounding it also produces the
+   lateral encroachment at the mask edge -- bird's beak -- at about the right
+   scale. */
+function oxidantReach(mat,lOx){
+  const reach=floodTop(i=>mat[i]===EMPTY,new Uint8Array(N));
+  let cur=[];
+  for(let i=0;i<N;i++){
+    if(!reach[i])continue;
+    const x=XOF(i),y=YOF(i),z=ZOF(i);
+    const nb=[];
+    if(x>0)nb.push(i-1); if(x<NX-1)nb.push(i+1);
+    if(y>0)nb.push(i-NX); if(y<NY-1)nb.push(i+NX);
+    if(z>0)nb.push(i-NX*NY); if(z<NZ-1)nb.push(i+NX*NY);
+    for(const j of nb)if(mat[j]===OX&&!reach[j]){reach[j]=1;cur.push(j);}
+  }
+  for(let d=1;d<lOx&&cur.length;d++){
+    const nxt=[];
+    for(const c of cur){
+      const x=XOF(c),y=YOF(c),z=ZOF(c);
+      const nb=[];
+      if(x>0)nb.push(c-1); if(x<NX-1)nb.push(c+1);
+      if(y>0)nb.push(c-NX); if(y<NY-1)nb.push(c+NX);
+      if(z>0)nb.push(c-NX*NY); if(z<NZ-1)nb.push(c+NX*NY);
+      for(const j of nb)if(mat[j]===OX&&!reach[j]){reach[j]=1;nxt.push(j);}
+    }
+    cur=nxt;
+  }
+  return reach;
+}
+function opOxidize(mat,phi,conc,key,seconds){
+  const x=dealGrove(key,seconds);
+  const cd=x*CONSUME, gd=x*GROW;
+  const reach=oxidantReach(mat,Math.max(1,Math.round(x)));
+  const oxid=S.u8a,isSi=S.u8b;
+  let anyO=false,anySi=false;
+  for(let i=0;i<N;i++){
+    const m=mat[i];
+    oxid[i]=(reach[i]&&(m===EMPTY||m===OX))?1:0;
+    isSi[i]=m===SI?1:0;
+    if(oxid[i])anyO=true;
+    if(isSi[i])anySi=true;
+  }
+  if(!anyO||!anySi)return {c:0,g:0,x};
+  const dIn=edt3(oxid,false,S.d1);      // depth below the surface
+  const consumed=[];
+  for(let i=0;i<N;i++)if(mat[i]===SI&&dIn[i]<=cd)consumed.push(i);
+
+  // New oxide appears AT the interface and pushes whatever sits above it up,
+  // so the outward growth is measured from the top of the existing stack --
+  // not from the silicon. Measuring from silicon only works on a bare wafer:
+  // once a pad oxide covers it the vacuum is too far from any Si, so the
+  // surface stops rising while the silicon keeps being eaten.
+  const active=new Uint8Array(NX*NY);
+  for(const i of consumed)active[XOF(i)+NX*YOF(i)]=1;
+  const solid=S.u8b;
+  for(let i=0;i<N;i++)solid[i]=mat[i]!==EMPTY?1:0;
+  const dOff=edt3(solid,false,S.d2);
+  const grown=[];
+  for(let i=0;i<N;i++)
+    if(mat[i]===EMPTY&&reach[i]&&dOff[i]<=gd&&active[XOF(i)+NX*YOF(i)])grown.push(i);
+  segregate(mat,conc,consumed);
+  if(consumed.length)concDirty=true;
+  for(const i of consumed)mat[i]=OX;
+  for(const i of grown)mat[i]=OX;
+  phiDirty=true;
+  return {c:consumed.length,g:grown.length,x};
+}
+function segregate(mat,conc,consumed,passes){
+  if(!consumed.length)return;
+  passes=passes||6;
+  const cs=new Uint8Array(N);
+  for(const i of consumed)cs[i]=1;
+  const po=[],ps=[];
+  for(const i of consumed){
+    const x=XOF(i),y=YOF(i),z=ZOF(i);
+    const nb=[];
+    if(x>0)nb.push(i-1); if(x<NX-1)nb.push(i+1);
+    if(y>0)nb.push(i-NX); if(y<NY-1)nb.push(i+NX);
+    if(z>0)nb.push(i-NX*NY); if(z<NZ-1)nb.push(i+NX*NY);
+    for(const j of nb)if(mat[j]===SI&&!cs[j]){po.push(i);ps.push(j);}
+  }
+  if(!po.length)return;
+  for(let sp=0;sp<NSP;sp++){
+    const f=conc[sp],w=SEG_M[sp]/(1+SEG_M[sp]);
+    for(let p=0;p<passes;p++){
+      for(let k=0;k<po.length;k++){
+        const o=po[k],s=ps[k],tot=f[o]+f[s];
+        if(tot===0)continue;
+        f[s]+=0.5*(tot*w-f[s]);
+        f[o]=tot-f[s];
+      }
+    }
+  }
+}
+
+/* interface reaction: silicide */
+function opSilicide(mat,phi,thick,siFrac){
+  const isSi=S.u8a,isM=S.u8b;
+  let a=false,b=false;
+  for(let i=0;i<N;i++){
+    isSi[i]=mat[i]===SI?1:0;isM[i]=mat[i]===MET?1:0;
+    if(isSi[i])a=true;if(isM[i])b=true;
+  }
+  if(!a||!b)return {si:0,me:0};
+  const dSi=edt3(isM,false,S.d1), dMe=edt3(isSi,false,S.d2);
+  const tS=thick*siFrac, tM=thick*(1-siFrac);
+  let si=0,me=0;
+  const hit=[];
+  for(let i=0;i<N;i++){
+    if(mat[i]===SI&&dSi[i]<=tS){hit.push(i);si++;}
+    else if(mat[i]===MET&&dMe[i]<=tM){hit.push(i);me++;}
+  }
+  for(const i of hit)mat[i]=MSI;
+  phiDirty=true;
+  return {si,me};
+}
+
+/* ---------------- masks ---------------- */
+function stripeMask(x0,x1){
+  const m=new Uint8Array(NX*NY);
+  for(let y=0;y<NY;y++)for(let x=x0;x<x1;x++)m[x+NX*y]=1;
+  return m;
+}
+const fullMask=()=>new Uint8Array(NX*NY).fill(1);
+
+/* ---------------- measures ---------------- */
+function voidMask(mat){
+  const r=ambient(mat,new Uint8Array(N)),m=new Uint8Array(N);
+  for(let i=0;i<N;i++)if(mat[i]===EMPTY&&!r[i])m[i]=1;
+  return m;
+}
+const countOf=(mat,k)=>{let n=0;for(let i=0;i<N;i++)if(mat[i]===k)n++;return n;};
+const sumOf=f=>{let s=0;for(let i=0;i<N;i++)s+=f[i];return s;};
+function surfaceZ(mat,x,y,kind){
+  for(let z=NZ-1;z>=0;z--){const m=mat[at(x,y,z)];
+    if(kind===undefined?m!==EMPTY:m===kind)return z;}
+  return -1;
+}
+
+/* ---------------- rendering ---------------- */
+const glc=document.getElementById("gl");
+let renderer,scene,camera,mesh,yaw=-0.7,pitch=0.55,dist=1;
+function initGL(){
+  renderer=new THREE.WebGLRenderer({canvas:glc,antialias:true});
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  scene=new THREE.Scene();scene.background=new THREE.Color(0x10151d);
+  camera=new THREE.PerspectiveCamera(42,4/3,1,20000);
+  scene.add(new THREE.AmbientLight(0xffffff,0.55));
+  const d1=new THREE.DirectionalLight(0xffffff,0.75);d1.position.set(1,1.4,0.8);scene.add(d1);
+  const d2=new THREE.DirectionalLight(0xffffff,0.3);d2.position.set(-1,0.4,-0.7);scene.add(d2);
+  let drag=false,px=0,py=0;
+  glc.addEventListener("pointerdown",e=>{drag=true;px=e.clientX;py=e.clientY;
+    glc.classList.add("drag");glc.setPointerCapture(e.pointerId);});
+  glc.addEventListener("pointermove",e=>{if(!drag)return;
+    yaw-=(e.clientX-px)*0.008;pitch-=(e.clientY-py)*0.008;
+    pitch=Math.max(-1.4,Math.min(1.4,pitch));px=e.clientX;py=e.clientY;place();});
+  glc.addEventListener("pointerup",()=>{drag=false;glc.classList.remove("drag");});
+  glc.addEventListener("wheel",e=>{e.preventDefault();dist*=Math.exp(e.deltaY*0.0012);place();},{passive:false});
+}
+function place(){
+  if(!camera)return;
+  const R=Math.max(NX,NY,NZ)*1.5*dist;
+  camera.position.set(NX/2+R*Math.cos(pitch)*Math.sin(yaw),NZ/2+R*Math.sin(pitch),
+    NY/2+R*Math.cos(pitch)*Math.cos(yaw));
+  camera.lookAt(NX/2,NZ/2,NY/2);render();
+}
+function render(){
+  if(!renderer)return;
+  const w=glc.clientWidth,h=Math.round(w*3/4);
+  if(glc.width!==w*renderer.getPixelRatio()){
+    renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}
+  renderer.render(scene,camera);
+}
+/* Exposed-face extraction in two passes: count faces, then fill typed arrays
+   sized exactly. The previous version grew three plain JS arrays with push()
+   a few million times and then copied them -- most of the redraw cost. The
+   void mask comes in precomputed (one flood fill per step, not per redraw). */
+const FACE_N=[[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
+const FACE_V=[
+  [[1,0,0],[1,1,0],[1,1,1],[1,0,1]],
+  [[0,0,1],[0,1,1],[0,1,0],[0,0,0]],
+  [[0,1,1],[1,1,1],[1,1,0],[0,1,0]],
+  [[0,0,0],[1,0,0],[1,0,1],[0,0,1]],
+  [[0,0,1],[1,0,1],[1,1,1],[0,1,1]],
+  [[0,1,0],[1,1,0],[1,0,0],[0,0,0]]];
+const FACE_IDX=[0,2,1,0,3,2];          // axis swap flips handedness
+const FACE_OFF=[[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
+function buildMesh(mat,voidm,cutX){
+  if(mesh){scene.remove(mesh);mesh.geometry.dispose();mesh.material.dispose();mesh=null;}
+  const vis=i=>mat[i]!==EMPTY&&XOF(i)<cutX;
+  // pass 1: how many faces
+  let faces=0;
+  for(let z=0;z<NZ;z++)for(let y=0;y<NY;y++)for(let x=0;x<NX;x++){
+    const i=at(x,y,z);
+    if(!vis(i))continue;
+    for(let f=0;f<6;f++){
+      const nx=x+FACE_OFF[f][0],ny=y+FACE_OFF[f][1],nz=z+FACE_OFF[f][2];
+      if(nx<0||nx>=NX||ny<0||ny>=NY||nz<0||nz>=NZ||!vis(at(nx,ny,nz)))faces++;
+    }
+  }
+  const pos=new Float32Array(faces*18),nor=new Float32Array(faces*18),col=new Float32Array(faces*18);
+  // pass 2: write them
+  let o=0;
+  for(let z=0;z<NZ;z++)for(let y=0;y<NY;y++)for(let x=0;x<NX;x++){
+    const i=at(x,y,z);
+    if(!vis(i))continue;
+    const base=MATCOL[mat[i]]||[200,200,200];
+    for(let f=0;f<6;f++){
+      const nx=x+FACE_OFF[f][0],ny=y+FACE_OFF[f][1],nz=z+FACE_OFF[f][2];
+      let show=false,c=base;
+      if(nx<0||nx>=NX||ny<0||ny>=NY||nz<0||nz>=NZ)show=true;
+      else{const j=at(nx,ny,nz);if(!vis(j)){show=true;if(voidm[j])c=VOIDCOL;}}
+      if(!show)continue;
+      const n=FACE_N[f],v=FACE_V[f];
+      const r=c[0]/255,g=c[1]/255,b=c[2]/255;
+      for(let k=0;k<6;k++){
+        const p=v[FACE_IDX[k]];
+        pos[o]=x+p[0];pos[o+1]=z+p[2];pos[o+2]=y+p[1];
+        nor[o]=n[0];nor[o+1]=n[2];nor[o+2]=n[1];
+        col[o]=r;col[o+1]=g;col[o+2]=b;
+        o+=3;
+      }
+    }
+  }
+  const geo=new THREE.BufferGeometry();
+  geo.setAttribute("position",new THREE.BufferAttribute(pos,3));
+  geo.setAttribute("normal",new THREE.BufferAttribute(nor,3));
+  geo.setAttribute("color",new THREE.BufferAttribute(col,3));
+  mesh=new THREE.Mesh(geo,new THREE.MeshLambertMaterial({vertexColors:true,side:THREE.FrontSide}));
+  scene.add(mesh);
+  return faces*6;
+}
+const slc=document.getElementById("slice"),sctx=slc.getContext("2d");
+function drawSlice(mat,conc,voidm,y,doping){
+  slc.width=NX;slc.height=NZ;
+  const img=sctx.createImageData(NX,NZ);
+  let mx=1e-9;
+  if(doping)for(let i=0;i<N;i++){let s=0;for(let k=0;k<NSP;k++)s+=conc[k][i];if(s>mx)mx=s;}
+  for(let z=0;z<NZ;z++)for(let x=0;x<NX;x++){
+    const i=at(x,y,z);
+    let c;
+    if(doping&&mat[i]!==EMPTY){
+      let s=0;for(let k=0;k<NSP;k++)s+=conc[k][i];
+      if(s>mx*1e-4){
+        const t=Math.max(0,Math.min(1,(Math.log10(s/mx)+4)/4));
+        c=[Math.round(30+225*t),Math.round(50+120*(1-t)+40*t),Math.round(160-120*t)];
+      }else c=[42,48,58];
+    }
+    else if(mat[i]!==EMPTY)c=MATCOL[mat[i]];
+    else if(voidm[i])c=VOIDCOL;
+    else c=[16,21,29];
+    const o=((NZ-1-z)*NX+x)*4;
+    img.data[o]=c[0];img.data[o+1]=c[1];img.data[o+2]=c[2];img.data[o+3]=255;
+  }
+  sctx.putImageData(img,0,0);
+}
+const prc=document.getElementById("prof"),pctx=prc.getContext("2d");
+function drawProfile(mat,conc,x,y){
+  const w=prc.clientWidth||420,h=150;
+  prc.width=w*2;prc.height=h*2;pctx.setTransform(2,0,0,2,0,0);
+  pctx.clearRect(0,0,w,h);
+  pctx.fillStyle="#10151d";pctx.fillRect(0,0,w,h);
+  let top=-1;
+  for(let z=NZ-1;z>=0;z--)if(mat[at(x,y,z)]!==EMPTY){top=z;break;}
+  if(top<0)return;
+  const pts=[];let mx=1e-9;
+  for(let z=top;z>=0;z--){
+    let s=0;for(let k=0;k<NSP;k++)s+=conc[k][at(x,y,z)];
+    pts.push([top-z,s]);if(s>mx)mx=s;
+  }
+  pctx.strokeStyle="#28313f";pctx.lineWidth=1;
+  for(let g=1;g<4;g++){const yy=h-10-(h-24)*g/4;
+    pctx.beginPath();pctx.moveTo(28,yy);pctx.lineTo(w-6,yy);pctx.stroke();}
+  if(mx<=1e-8){
+    pctx.fillStyle="#7c869a";pctx.font="11px 'IBM Plex Mono',monospace";
+    pctx.fillText("도펀트 없음",34,h/2);return;
+  }
+  pctx.strokeStyle="#e8a33d";pctx.lineWidth=1.6;pctx.beginPath();
+  const D=pts.length;
+  for(let k=0;k<D;k++){
+    const v=Math.max(pts[k][1],mx*1e-4);
+    const t=(Math.log10(v/mx)+4)/4;
+    const xx=28+(w-36)*k/(D-1||1), yy=h-10-(h-24)*Math.max(0,Math.min(1,t));
+    k?pctx.lineTo(xx,yy):pctx.moveTo(xx,yy);
+  }
+  pctx.stroke();
+  pctx.fillStyle="#7c869a";pctx.font="10px 'IBM Plex Mono',monospace";
+  pctx.fillText("1",6,16);pctx.fillText("1e-4",2,h-8);
+  pctx.fillText("표면",30,h-1);pctx.fillText("깊이 "+(D-1),w-46,h-1);
+}
+
+/* ---------------- driver ---------------- */
+const rowsEl=document.getElementById("rows"),statEl=document.getElementById("stat"),
+      runEl=document.getElementById("run"),sizeEl=document.getElementById("size"),
+      stepEl=document.getElementById("step"),cutEl=document.getElementById("cut"),
+      syEl=document.getElementById("sy"),pxEl=document.getElementById("px"),
+      dopeEl=document.getElementById("dope"),legEl=document.getElementById("legend");
+let snaps=[],concSnaps=[],voidSnaps=[],log=[],doping=false,concDirty=false;
+const sleep=()=>new Promise(r=>setTimeout(r,16));
+
+legEl.innerHTML=Object.keys(MATNAME).map(k=>
+  `<div><span class="sw" style="background:rgb(${MATCOL[k].join(",")})"></span>${MATNAME[k]}</div>`
+).join("")+`<div><span class="sw" style="background:rgb(227,90,77)"></span>보이드</div>`;
+
+function paint(active){
+  rowsEl.innerHTML=log.map((r,k)=>
+    `<tr class="${k===active?"active":""}"><td class="s">${r.tag}</td>`+
+    `<td class="n">${r.ms<1000?r.ms.toFixed(0)+" ms":(r.ms/1000).toFixed(2)+" s"}</td>`+
+    `<td>${r.note}</td>`+
+    `<td>${r.chk?`<span class="${r.ok?"chk-ok":"chk-bad"}">${r.ok?"OK":"FAIL"}</span> ${r.chk}`:""}</td></tr>`
+  ).join("");
+}
+function show(k){
+  const mat=snaps[k],conc=concSnaps[k],voidm=voidSnaps[k];
+  const tris=buildMesh(mat,voidm,parseInt(cutEl.value,10)/100*NX);
+  document.getElementById("glsub").textContent=`삼각형 ${(tris/3).toLocaleString()}`;
+  drawSlice(mat,conc,voidm,parseInt(syEl.value,10),doping);
+  drawProfile(mat,conc,parseInt(pxEl.value,10),parseInt(syEl.value,10));
+  paint(k);render();
+}
+
+async function run(){
+  runEl.disabled=true;snaps=[];concSnaps=[];voidSnaps=[];log=[];edtCount=0;
+  concDirty=false;phiDirty=false;
+  const P=PRESETS[parseInt(sizeEl.value,10)];
+  NX=P[0];NY=P[1];NZ=P[2];N=NX*NY*NZ;
+  statEl.textContent="버퍼 할당 중…";await sleep();
+  alloc();
+  syEl.max=NY-1;syEl.value=Math.floor(NY/2);
+  pxEl.max=NX-1;pxEl.value=Math.floor(NX*0.5);
+  if(!renderer)initGL();
+  dist=1;place();
+  const mat=new Uint8Array(N),phi=new Float32Array(N);
+  const conc=[new Float32Array(N),new Float32Array(N),new Float32Array(N)];
+  const T0=performance.now();
+
+  const step=async(tag,fn)=>{
+    statEl.textContent=tag+" …";await sleep();
+    const t0=performance.now();
+    const r=fn()||{};
+    const ms=performance.now()-t0;
+    log.push({tag,ms,note:r.note||"",chk:r.chk||"",ok:r.ok!==false});
+    snaps.push(mat.slice());
+    // void mask once per step, shared by the 3D view and the cross-section --
+    // not one full flood fill per slider move
+    voidSnaps.push(voidMask(mat));
+    // the three dopant fields are 3 x 4 bytes/voxel; only copy them when a
+    // step actually changed them, otherwise point at the previous snapshot
+    if(concDirty||!concSnaps.length)concSnaps.push(conc.map(f=>f.slice()));
+    else concSnaps.push(concSnaps[concSnaps.length-1]);
+    concDirty=false;
+    stepEl.max=snaps.length-1;stepEl.value=snaps.length-1;stepEl.disabled=false;
+    show(snaps.length-1);
+  };
+
+  const zS=Math.round(NZ*0.30);
+  const win=[Math.round(NX*0.33),Math.round(NX*0.63)];
+
+  await step("1 기판 Si",()=>{opSubstrate(mat,phi,SI,zS);
+    return {note:`두께 ${zS}`};});
+
+  await step("2 산화 wet 1000",()=>{
+    const t0=surfaceZ(mat,2,2);
+    const r=opOxidize(mat,phi,conc,"wet1000",40);
+    const t1=surfaceZ(mat,2,2);
+    const siz=surfaceZ(mat,2,2,SI);
+    return {note:`두께 ${r.x.toFixed(2)} · 소비 ${r.c.toLocaleString()} · 성장 ${r.g.toLocaleString()}`,
+      chk:`표면 z${t0}→${t1}, Si 계면 z${siz} — 위아래로 동시에 이동`,
+      ok:t1>t0&&siz<t0};});
+
+  await step("3 증착 Nitride 컨포멀",()=>{
+    const r=opDeposit(mat,phi,NIT,Math.round(NZ*0.08),1.0);
+    return {note:`성장 ${r.n.toLocaleString()} · ${r.note}`,
+      chk:"컨포멀은 거리 지도 없이 뺄셈만",ok:true};});
+
+  await step("4 PR 코팅 평탄화 100%",()=>{
+    const vb=voidMask(mat);let nv=0;for(let i=0;i<N;i++)if(vb[i])nv++;
+    const n=opPRCoat(mat,phi,Math.round(NZ*0.10),1.0);
+    let leaked=0;for(let i=0;i<N;i++)if(vb[i]&&mat[i]!==EMPTY)leaked++;
+    const top=columnTop(mat);let lo=1e9,hi=0;
+    for(let k=0;k<NX*NY;k++){if(top[k]<lo)lo=top[k];if(top[k]>hi)hi=top[k];}
+    return {note:`PR ${n.toLocaleString()}`,
+      chk:`윗면 편차 ${hi-lo} · 봉인 보이드 유입 ${leaked}`,ok:leaked===0};});
+
+  await step("5 노광 + 현상 (positive)",()=>{
+    const e=opExpose(mat,stripeMask(win[0],win[1]),0,0);
+    const before=countOf(mat,PR)+countOf(mat,EPR);
+    const d=opDevelop(mat,phi,true);
+    const after=countOf(mat,PR);
+    return {note:`노광 ${e.toLocaleString()} · 현상 제거 ${d.toLocaleString()}`,
+      chk:`제거+잔존 = ${(d+after).toLocaleString()} / 원래 ${before.toLocaleString()}`,
+      ok:d+after===before};});
+
+  await step("6 식각 Nitride 선택비 · 이방성 0.8",()=>{
+    const sel={};sel[NIT]=1.0;sel[OX]=0.05;sel[SI]=0.05;sel[PR]=0.02;
+    const n0=countOf(mat,NIT);
+    const r=opEtch(mat,phi,sel,Math.round(NZ*0.16),0.8);
+    const n1=countOf(mat,NIT);
+    const ox=countOf(mat,OX);
+    return {note:`제거 ${r.removed.toLocaleString()} · FMM ${(r.touched/N*100).toFixed(1)}%`,
+      chk:`Nitride ${n0.toLocaleString()}→${n1.toLocaleString()}, 하부 산화막 ${ox.toLocaleString()} 잔존`,
+      ok:n1<n0&&ox>0};});
+
+  await step("7 PR 제거",()=>{
+    const n=opStrip(mat,phi);
+    return {note:`제거 ${n.toLocaleString()}`,chk:`PR 잔존 ${countOf(mat,PR)}`,
+      ok:countOf(mat,PR)===0};});
+
+  await step("8 산화 wet 1100 — 질화막이 마스크",()=>{
+    const w=win[1]-win[0];
+    let in0=0,out0=0;
+    for(let i=0;i<N;i++){if(mat[i]!==OX)continue;
+      const x=XOF(i);if(x>=win[0]&&x<win[1])in0++;else out0++;}
+    const r=opOxidize(mat,phi,conc,"wet1100",120);
+    let inWin=0,outWin=0;
+    for(let i=0;i<N;i++){
+      if(mat[i]!==OX)continue;
+      const x=XOF(i);
+      if(x>=win[0]&&x<win[1])inWin++;else outWin++;
+    }
+    const dIn=(inWin-in0)/w, dOut=(outWin-out0)/(NX-w);
+    return {note:`두께 ${r.x.toFixed(2)} · 소비 ${r.c.toLocaleString()} · 성장 ${r.g.toLocaleString()}`,
+      chk:`창 안 성장 ${dIn.toFixed(0)}/열 vs 마스크 밖 ${dOut.toFixed(0)}/열 — `+
+          `산화제 측면 확산을 두께(${Math.round(r.x)})로 제한하면 가장자리 침투가 bird's beak`,
+      ok:dIn>dOut*1.5};});
+
+  await step("9 질화막 제거",()=>{
+    const sel={};sel[NIT]=1.0;sel[OX]=0.02;sel[SI]=0.02;
+    const n0=countOf(mat,NIT);
+    const r=opEtch(mat,phi,sel,Math.round(NZ*0.20),0.0);
+    return {note:`제거 ${r.removed.toLocaleString()}`,
+      chk:`Nitride ${n0.toLocaleString()}→${countOf(mat,NIT).toLocaleString()}`,
+      ok:countOf(mat,NIT)*4<n0};});
+
+  await step("10 산화막 타이밍 식각 — 얇은 곳만 뚫림",()=>{
+    const sel={};sel[OX]=1.0;sel[SI]=0.03;
+    const r=opEtch(mat,phi,sel,Math.round(NZ*0.14),0.0);
+    // where is silicon now exposed to the ambient?
+    const reach=ambient(mat,new Uint8Array(N));
+    let bare=0;
+    for(let i=0;i<N;i++){
+      if(mat[i]!==SI)continue;
+      const x=XOF(i),y=YOF(i),z=ZOF(i);
+      if(z<NZ-1&&mat[i+NX*NY]===EMPTY&&reach[i+NX*NY]){bare++;}
+    }
+    return {note:`제거 ${r.removed.toLocaleString()} · 산화막 ${countOf(mat,OX).toLocaleString()} 잔존`,
+      chk:`Si 노출면 ${bare.toLocaleString()} — 얇은 패드 산화막은 뚫리고 두꺼운 필드 산화막은 남음`,
+      ok:bare>0&&countOf(mat,OX)>0};});
+
+  await step("11 이온 주입 B",()=>{
+    const d=opImplant(mat,conc,B,fullMask(),Math.round(NZ*0.10),2.0,1.0,0,0);
+    const cy=Math.floor(NY/2);
+    let cx=-1;
+    for(let x=0;x<NX&&cx<0;x++){
+      for(let z=NZ-1;z>=0;z--){
+        const m=mat[at(x,cy,z)];
+        if(m===EMPTY)continue;
+        if(m===SI)cx=x;
+        break;
+      }
+    }
+    if(cx<0)cx=Math.floor(NX/2);
+    let top=-1;for(let z=NZ-1;z>=0;z--)if(mat[at(cx,cy,z)]!==EMPTY){top=z;break;}
+    let pk=-1,pv=-1;
+    for(let z=top;z>=0;z--){const v=conc[B][at(cx,cy,z)];if(v>pv){pv=v;pk=top-z;}}
+    return {note:`도즈 ${d.toFixed(1)} 배치`,
+      chk:`노출 Si 컬럼 x=${cx}에서 피크 깊이 ${pk} (표면이 아님)`,ok:pk>0};});
+
+  await step("12 어닐 ADI",()=>{
+    const before=sumOf(conc[B]);
+    opAnneal(mat,conc,4,2.0);
+    const after=sumOf(conc[B]);
+    return {note:`4 스텝 × dt 2.0`,
+      chk:`도즈 보존 ${(after/before*100).toFixed(2)}%`,
+      ok:Math.abs(after/before-1)<0.02};});
+
+  await step("13 증착 Metal + 실리사이드",()=>{
+    opDeposit(mat,phi,MET,Math.round(NZ*0.06),1.0);
+    const r=opSilicide(mat,phi,3.0,0.62);
+    let onOx=0;
+    for(let i=0;i<N;i++){
+      if(mat[i]!==MSI)continue;
+      const z=ZOF(i);
+      if(z>0&&mat[i-NX*NY]===OX)onOx++;
+    }
+    return {note:`Si ${r.si.toLocaleString()} + 금속 ${r.me.toLocaleString()} → MetalSi`,
+      chk:`마스크 없이 Si가 노출된 곳에만 생성 (산화막 바로 위 ${onOx.toLocaleString()})`,
+      ok:r.si>0};});
+
+  await step("14 CMP — 산화막 정지",()=>{
+    const prot={};prot[OX]=1;
+    const before=countOf(mat,OX);
+    const r=opCMP(mat,phi,Math.round(NZ*0.12),prot);
+    const after=countOf(mat,OX);
+    return {note:`절단면 z${r.cut} · 제거 ${r.n.toLocaleString()}`,
+      chk:`산화막 ${before.toLocaleString()}→${after.toLocaleString()} 보존`,
+      ok:after===before};});
+
+  const total=performance.now()-T0;
+  const fails=log.filter(r=>!r.ok).length;
+  statEl.innerHTML=`${N.toLocaleString()} 복셀 · ${(total/1000).toFixed(2)}s · `+
+    `단계당 ${(total/log.length/1000).toFixed(2)}s<br>`+
+    `EDT ${edtCount}회 · 확인 ${log.length-fails}/${log.length} 통과`;
+  runEl.disabled=false;
+}
+
+stepEl.addEventListener("input",()=>{if(snaps.length)show(+stepEl.value);});
+cutEl.addEventListener("input",()=>{if(snaps.length)show(+stepEl.value);});
+syEl.addEventListener("input",()=>{if(snaps.length)show(+stepEl.value);});
+pxEl.addEventListener("input",()=>{if(snaps.length)
+  drawProfile(snaps[+stepEl.value],concSnaps[+stepEl.value],+pxEl.value,+syEl.value);});
+dopeEl.addEventListener("click",()=>{doping=!doping;
+  dopeEl.textContent=doping?"재질 보기":"도핑 보기";
+  if(snaps.length)show(+stepEl.value);});
+runEl.addEventListener("click",run);
+addEventListener("resize",()=>render());
+run();
+})();
+</script>
