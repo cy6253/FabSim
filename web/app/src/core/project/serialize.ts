@@ -22,13 +22,14 @@ import {
 /** 이 시뮬레이터의 버전. 프로젝트에 기록해 결과 재현성의 근거로 남긴다. */
 export const SIM_VERSION = "0.3.0";
 
-export const DEFAULT_GRID: GridSpec = { nx: 160, ny: 80, nz: 72 };
+export const DEFAULT_GRID: GridSpec = { nx: 176, ny: 64, nz: 96 };
 
 /** 격자 프리셋. 600만은 교실 기기에 위험해서 기본이 아니다 (메모리 300~400MB). */
 export const GRID_PRESETS: { label: string; grid: GridSpec }[] = [
-  { label: "작게 (0.28M)", grid: { nx: 96, ny: 48, nz: 60 } },
-  { label: "기본 (0.92M)", grid: { nx: 160, ny: 80, nz: 72 } },
+  { label: "빠르게 (0.28M)", grid: { nx: 96, ny: 48, nz: 60 } },
+  { label: "기본 (1.08M)", grid: { nx: 176, ny: 64, nz: 96 } },
   { label: "넓게 (1.54M)", grid: { nx: 240, ny: 100, nz: 64 } },
+  { label: "정밀 (2.15M)", grid: { nx: 224, ny: 80, nz: 120 } },
 ];
 
 export function newProject(name = "새 프로젝트", grid: GridSpec = DEFAULT_GRID): Project {

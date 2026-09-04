@@ -30,6 +30,27 @@ export function dealGrove(
   return 0.5 * A * (Math.sqrt(1 + (4 * Bc * (seconds + tau)) / (A * A)) - 1);
 }
 
+/**
+ * Deal-Grove의 역 — 이 두께를 얻으려면 몇 초가 필요한가.
+ *
+ * x² + A·x = B·t 를 t에 대해 풀면 끝이다. 레시피를 **해상도와 무관하게** 쓰기
+ * 위해 필요하다: 격자를 두 배로 키우면 같은 구조를 얻으려면 산화막도 두 배로
+ * 두꺼워야 하는데, 두께가 시간에 비례하지 않아 시간을 그냥 두 배 할 수 없다.
+ */
+export function dealGroveTime(
+  ambience: string,
+  thickness: number,
+  x0 = 0,
+  table: Record<string, [number, number]> = DG,
+): number {
+  const dg = table[ambience];
+  if (!dg) throw new Error(`알 수 없는 산화 조건: ${ambience}`);
+  const [A, Bc] = dg;
+  if (Bc <= 0) return 0;
+  const tau = (x0 * x0 + A * x0) / Bc;
+  return Math.max(0, (thickness * thickness + A * thickness) / Bc - tau);
+}
+
 /** 6-이웃 인덱스를 배열로. 핫루프가 아닌 곳에서만 쓴다. */
 function nb6(s: Sim, i: number): number[] {
   const { NX, NY, NZ } = s;

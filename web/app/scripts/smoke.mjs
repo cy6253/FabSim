@@ -75,23 +75,24 @@ console.log("   " + (await line(".stepbar")));
 console.log("   범례: " + (await line(".legend")));
 await shot("02-final-step");
 
+// 변경분 하이라이트 (단면 탭이 기본으로 열려 있다)
+await page.locator('.toggle:has-text("변경분") input').check();
+await page.waitForTimeout(1000);
+console.log("3) 변경분 하이라이트");
+await shot("03-diff");
+await page.locator('.toggle:has-text("변경분") input').uncheck();
+
 // 진단 탭
 await page.locator(".tabbar button", { hasText: "진단" }).click();
 await page.waitForTimeout(600);
 const diagCount = await page.locator(".diag").count();
-console.log(`3) 진단 ${diagCount}건`);
+console.log(`4) 진단 ${diagCount}건`);
 if (diagCount > 0)
   console.log(
     "   " +
       (await page.locator(".diag").first().innerText()).split(String.fromCharCode(10)).join(" | "),
   );
-await shot("03-diagnostics");
-
-// 변경분 하이라이트
-await page.locator('.toggle:has-text("변경분") input').check();
-await page.waitForTimeout(1000);
-console.log("4) 변경분 하이라이트");
-await shot("04-diff");
+await shot("04-diagnostics");
 
 // 프로브 탭
 await page.locator(".tabbar button", { hasText: "프로브" }).click();
@@ -99,23 +100,29 @@ await page.waitForTimeout(600);
 console.log("5) 프로브: " + (await line(".stack")));
 await shot("05-probe");
 
-// NMOS + 도핑
-await page.locator('.toggle:has-text("변경분") input').uncheck();
+// NMOS + 도핑 (단면 탭으로 돌아가서)
 await page.selectOption(".topbar select >> nth=0", "nmos");
 await page.waitForTimeout(1000);
 await gotoLast();
+await page.locator(".tabbar button", { hasText: "단면" }).click();
+await page.waitForTimeout(400);
 await page.locator('.toggle:has-text("도핑") input').check();
 await page.waitForTimeout(1500);
 console.log("6) NMOS 도핑 보기 — 게이트 아래 채널만 비어 있어야 한다");
 console.log("   " + (await line(".stepbar")));
 await shot("06-nmos-doping");
-
-// 3D 탭
 await page.locator('.toggle:has-text("도핑") input').uncheck();
-await page.locator(".tabbar button", { hasText: "3D" }).click();
-await page.waitForTimeout(1800);
-console.log("7) 3D");
-await shot("07-3d");
+
+// 표면 표현 바꾸기 — 등위면 vs 복셀
+await page.selectOption(".viewtools select", "voxel");
+await page.waitForTimeout(1500);
+console.log("7) 복셀 표현: " + (await line(".stepbar")).split("·").slice(-2).join("·").trim());
+await shot("07-voxel");
+await page.selectOption(".viewtools select", "smooth");
+await page.locator('.slider:has-text("완화") input').fill("5");
+await page.waitForTimeout(2000);
+console.log("   완화 5: " + (await line(".stepbar")).split("·").slice(-2).join("·").trim());
+await shot("07b-smooth5");
 
 // 모달 두 개
 await page.locator(".topbar .menuwrap button").click();

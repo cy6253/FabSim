@@ -21,7 +21,7 @@ import { dirname, resolve } from "node:path";
 
 import { createSim, newMat, newPhi, newConc, at, XOF, ZOF, type Sim } from "../grid";
 import { EMPTY, SI, OX, NIT, PR, MET, MSI, B, P_, AS, DG, DREL, SEG_M } from "../materials";
-import { dealGrove, opOxidize, opSilicide, opDeposit, opPRCoat, opExpose, opDevelop, opCMP, opImplant, opAnneal } from "../ops";
+import { dealGrove, dealGroveTime, opOxidize, opSilicide, opDeposit, opPRCoat, opExpose, opDevelop, opCMP, opImplant, opAnneal } from "../ops";
 import { columnTop, countOf, sumOf, surfaceZ } from "../measure";
 import { stripeMask, fullMask } from "../masks";
 import { adversarialOps } from "../sequences/opList";
@@ -378,5 +378,28 @@ describe("적대적 케이스 — 봉인 · 얼어붙음 · 되뚫기", () => {
     let stillSealed = 0;
     for (let i = 0; i < st.sim.N; i++) if (sealedA[i] && sealedC[i]) stillSealed++;
     expect(stillSealed, "(c) 식각이 봉인 보이드를 다시 열어야 한다").toBeLessThan(nA * 0.2);
+  });
+});
+
+describe("Deal-Grove 역함수", () => {
+  it("두께를 넣으면 그 두께가 나오는 시간을 준다", () => {
+    for (const key of ["dry1000", "wet1000", "wet1100"])
+      for (const x of [1, 2.5, 4, 8, 16]) {
+        const t = dealGroveTime(key, x);
+        expect(dealGrove(key, t), `${key} x=${x}`).toBeCloseTo(x, 6);
+      }
+  });
+
+  it("이미 산화막이 있으면 그만큼 시간이 덜 든다", () => {
+    const full = dealGroveTime("wet1000", 8);
+    const partial = dealGroveTime("wet1000", 8, 3);
+    expect(partial).toBeGreaterThan(0);
+    expect(partial).toBeLessThan(full);
+    // 3에서 시작해 partial초 더 하면 8이 된다.
+    expect(dealGrove("wet1000", partial, 3)).toBeCloseTo(8, 6);
+  });
+
+  it("두께 0이면 0초", () => {
+    expect(dealGroveTime("dry1000", 0)).toBe(0);
   });
 });

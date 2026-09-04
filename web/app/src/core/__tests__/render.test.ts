@@ -6,7 +6,8 @@
  * 않는지. 여기서는 그런 것만 본다.
  */
 import { describe, it, expect } from "vitest";
-import { buildMesh, smoothMesh } from "../render/mesh";
+import { buildMesh, smoothMesh, buildSmoothMesh } from "../render/mesh";
+import { surfaceNets, blurField } from "../render/surfaceNets";
 import { renderSlice, dopingProfile, junctionDepth } from "../render/slice";
 import { createSim, newMat, newConc, at } from "../grid";
 import { EMPTY, SI, OX, MATCOL, VOIDCOL, B, AS } from "../materials";
@@ -172,5 +173,124 @@ describe("표면 메시", () => {
     const m = buildMesh(newMat(s), { nx: 8, ny: 4, nz: 8 });
     expect(m.triangles).toBe(0);
     expect(EMPTY).toBe(0);
+  });
+});
+
+describe("등위면 표면 (Surface Nets)", () => {
+  /** 반지름 r인 구의 점유도 장. */
+  const sphere = (nx: number, ny: number, nz: number, r: number) => {
+    const f = new Float32Array(nx * ny * nz);
+    const cx = nx / 2, cy = ny / 2, cz = nz / 2;
+    for (let z = 0; z < nz; z++)
+      for (let y = 0; y < ny; y++)
+        for (let x = 0; x < nx; x++)
+          f[x + nx * (y + ny * z)] = Math.hypot(x - cx, y - cy, z - cz) < r ? 1 : 0;
+    return f;
+  };
+
+  it("구를 뽑으면 꼭짓점이 실제 반지름 위에 놓인다", () => {
+    const g = { nx: 32, ny: 32, nz: 32 };
+    const f = blurField(sphere(g.nx, g.ny, g.nz, 10), { ...g, passes: 2 });
+    const net = surfaceNets(f, { ...g });
+    expect(net.triangles).toBeGreaterThan(200);
+
+    let worst = 0, sum = 0, n = 0;
+    for (let i = 0; i < net.position.length; i += 3) {
+      const d = Math.hypot(
+        net.position[i] - 16, net.position[i + 1] - 16, net.position[i + 2] - 16,
+      );
+      worst = Math.max(worst, Math.abs(d - 10));
+      sum += Math.abs(d - 10);
+      n++;
+    }
+    // 복셀 면이라면 반 복셀씩 튀지만, 등위면은 격자 사이를 지나 훨씬 가깝다.
+    expect(sum / n, `평균 오차 ${(sum / n).toFixed(3)}`).toBeLessThan(0.35);
+    expect(worst).toBeLessThan(1.2);
+  });
+
+  it("법선이 단위 벡터이고 바깥을 향한다", () => {
+    const g = { nx: 24, ny: 24, nz: 24 };
+    const f = blurField(sphere(g.nx, g.ny, g.nz, 8), { ...g, passes: 1 });
+    const net = surfaceNets(f, { ...g });
+    let bad = 0;
+    for (let i = 0; i < net.normal.length; i += 3) {
+      const len = Math.hypot(net.normal[i], net.normal[i + 1], net.normal[i + 2]);
+      if (Math.abs(len - 1) > 1e-3) { bad++; continue; }
+      // 구의 바깥 방향은 중심에서 꼭짓점으로 가는 방향이다.
+      const rx = net.position[i] - 12, ry = net.position[i + 1] - 12, rz = net.position[i + 2] - 12;
+      const rl = Math.hypot(rx, ry, rz) || 1;
+      const dot = (net.normal[i] * rx + net.normal[i + 1] * ry + net.normal[i + 2] * rz) / rl;
+      if (dot < 0.5) bad++;
+    }
+    expect(bad).toBe(0);
+  });
+
+  it("흐리기를 늘려도 부피가 크게 줄지 않는다", () => {
+    // 라플라시안 완화의 문제가 수축이었다. 장을 흐리는 방식은 대칭이라 덜하다.
+    const g = { nx: 32, ny: 32, nz: 32 };
+    const radius = (passes: number) => {
+      const f = blurField(sphere(g.nx, g.ny, g.nz, 10), { ...g, passes });
+      const net = surfaceNets(f, { ...g });
+      let sum = 0, n = 0;
+      for (let i = 0; i < net.position.length; i += 3) {
+        sum += Math.hypot(net.position[i] - 16, net.position[i + 1] - 16, net.position[i + 2] - 16);
+        n++;
+      }
+      return sum / n;
+    };
+    const r1 = radius(1), r6 = radius(6);
+    expect(Math.abs(r6 - r1), `1회 ${r1.toFixed(2)} → 6회 ${r6.toFixed(2)}`).toBeLessThan(0.6);
+  });
+
+  it("빈 장이면 삼각형이 없다", () => {
+    const g = { nx: 16, ny: 16, nz: 16 };
+    expect(surfaceNets(new Float32Array(g.nx * g.ny * g.nz), { ...g }).triangles).toBe(0);
+  });
+
+  it("계단 지형에서 복셀 메시보다 법선 방향이 훨씬 다양하다", () => {
+    // 완전히 평평한 웨이퍼로는 확인이 안 된다 — 윗면 법선이 원래 하나뿐이라
+    // 부드럽게 만들어도 하나다. 계단이 있어야 차이가 보인다.
+    const s = createSim(24, 12, 24);
+    const mat = newMat(s);
+    const g = { nx: 24, ny: 12, nz: 24 };
+    for (let z = 0; z < 8; z++)
+      for (let y = 0; y < g.ny; y++) for (let x = 0; x < g.nx; x++) mat[at(s, x, y, z)] = SI;
+    for (let z = 8; z < 14; z++)
+      for (let y = 0; y < g.ny; y++) for (let x = 0; x < 12; x++) mat[at(s, x, y, z)] = OX;
+
+    const rough = buildMesh(mat, g);
+    const smooth = buildSmoothMesh(mat, { ...g, smooth: 2 });
+    expect(smooth.triangles).toBeGreaterThan(0);
+    expect(smooth.color.length).toBe(smooth.position.length);
+
+    // 계단 구조는 대부분 축에 나란한 면이라 "방향 가짓수"로는 차이가 잘 안 난다.
+    // 대신 **축에서 벗어난 법선이 있는가**를 본다 — 복셀 면에는 원리상 하나도 없다.
+    const offAxis = (m: Float32Array) => {
+      let n = 0, total = 0;
+      for (let i = 0; i < m.length; i += 3) {
+        total++;
+        const mx = Math.max(Math.abs(m[i]), Math.abs(m[i + 1]), Math.abs(m[i + 2]));
+        if (mx < 0.98) n++; // 어느 축과도 정확히 나란하지 않다
+      }
+      return total ? n / total : 0;
+    };
+    expect(offAxis(rough.normal), "복셀 면은 전부 축 방향이다").toBe(0);
+    expect(offAxis(smooth.normal), "등위면은 비스듬한 면을 만든다").toBeGreaterThan(0.05);
+  });
+
+  it("절단면을 주면 그 안쪽만 만든다", () => {
+    const { mat } = wafer();
+    const full = buildSmoothMesh(mat, { ...G, smooth: 1 });
+    const half = buildSmoothMesh(mat, { ...G, smooth: 1, cutX: 6 });
+    expect(half.triangles).toBeGreaterThan(0);
+    let maxX = 0;
+    for (let i = 0; i < half.position.length; i += 3) maxX = Math.max(maxX, half.position[i]);
+    expect(maxX).toBeLessThan(G.nx);
+    expect(half.triangles).toBeLessThan(full.triangles * 1.5);
+  });
+
+  it("빈 격자는 삼각형이 없다", () => {
+    const s = createSim(8, 4, 8);
+    expect(buildSmoothMesh(newMat(s), { nx: 8, ny: 4, nz: 8, smooth: 2 }).triangles).toBe(0);
   });
 });

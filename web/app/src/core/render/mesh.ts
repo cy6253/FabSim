@@ -10,6 +10,7 @@
  * 꼭짓점을 완화한다(마칭큐브를 쓰지 않은 이유는 그 옵션 설명에).
  */
 import { EMPTY, MATCOL, VOIDCOL } from "../materials";
+import { blurField, surfaceNets } from "./surfaceNets";
 
 export interface Mesh {
   position: Float32Array;
@@ -39,7 +40,8 @@ export interface MeshOptions {
   /** 이 재질은 숨긴다 (재질별 토글). */
   hidden?: Set<number>;
   /**
-   * 표면 완화 반복 횟수. 0이면 복셀 면 그대로.
+   * 표면 완화 정도. buildMesh에서는 꼭짓점 완화 횟수,
+   * buildSmoothMesh에서는 등위면을 뽑기 전 흐리기 횟수다.
    *
    * 원래 계획은 φ의 0-등고면에서 마칭큐브를 뽑는 것이었다. 그런데 스냅샷에서
    * φ를 뺀 결정(단계당 4N 바이트) 때문에 φ를 다시 만들려면 매번 EDT 두 번이
@@ -199,4 +201,97 @@ export function smoothMesh(m: Mesh, iterations: number, lambda = 0.5): Mesh {
   }
 
   return { position, normal, color: m.color, triangles: m.triangles };
+}
+
+/* ------------------------------------------------------- 부드러운 표면 */
+
+/**
+ * 등위면으로 뽑은 부드러운 표면.
+ *
+ * 복셀 점유도를 흐린 다음 0.5 등위면을 뽑는다. 표면이 격자 사이를 지나므로
+ * 같은 격자에서도 계단이 사라진다 — 복셀 면을 나중에 다듬는 것과는 다른
+ * 종류의 매끄러움이다.
+ *
+ * 표면은 **하나**만 만들고 재질 색은 꼭짓점마다 칠한다. 재질별로 등위면을
+ * 따로 뽑으면 계면에서 두 면이 정확히 겹쳐 z-파이팅이 난다. 어차피 3D에서
+ * 보이는 것은 바깥 껍데기와 절단면뿐이므로 하나로 충분하다.
+ */
+export function buildSmoothMesh(mat: Uint8Array, o: MeshOptions): Mesh {
+  const { nx, ny, nz } = o;
+  const cut = Math.min(o.cutX ?? nx, nx);
+  const voids = o.voids;
+  const hidden = o.hidden;
+  const passes = Math.max(0, o.smooth ?? 2);
+
+  // 격자를 **두 칸씩** 넓혀 테두리를 0으로 둔다.
+  //
+  // 한 칸으로는 부족하다. 안 붙이면 경계에서 장이 1로 유지돼 옆면과 바닥이 아예
+  // 안 만들어지고(웨이퍼가 판때기로 보인다), 한 칸만 붙이면 부호가 바뀌는 간선이
+  // 배열 맨 끝에 걸려 그 간선을 공유하는 셀 넷 중 일부가 없어서 **바닥에 구멍이
+  // 남는다**. 두 칸이면 기하가 배열 가장자리에서 떨어져 둘 다 해결된다.
+  const P = 2;
+  const px = nx + 2 * P, py = ny + 2 * P, pz = nz + 2 * P;
+  const field = new Float32Array(px * py * pz);
+  const pat = (x: number, y: number, z: number) => x + P + px * (y + P + py * (z + P));
+
+  let x0 = nx, x1 = -1, y0 = ny, y1 = -1, z0 = nz, z1 = -1;
+  for (let i = 0; i < nx * ny * nz; i++) {
+    const x = i % nx;
+    if (x >= cut) continue;
+    const m = mat[i];
+    const drawn = m !== EMPTY ? !hidden?.has(m) : voids ? voids[i] === 1 : false;
+    if (!drawn) continue;
+    const y = ((i / nx) | 0) % ny, z = (i / (nx * ny)) | 0;
+    field[pat(x, y, z)] = 1;
+    if (x < x0) x0 = x; if (x > x1) x1 = x;
+    if (y < y0) y0 = y; if (y > y1) y1 = y;
+    if (z < z0) z0 = z; if (z > z1) z1 = z;
+  }
+  const empty = { position: new Float32Array(0), normal: new Float32Array(0), color: new Float32Array(0), triangles: 0 };
+  if (x1 < 0) return empty;
+
+  const blurred = blurField(field, { nx: px, ny: py, nz: pz, passes });
+
+  // 흐린 만큼 경계가 번지므로 훑을 범위를 넓힌다. 좌표는 패딩 기준(+1)이다.
+  const pad = passes + 2;
+  const net = surfaceNets(blurred, {
+    nx: px, ny: py, nz: pz,
+    iso: 0.5,
+    bbox: {
+      x0: Math.max(0, x0 + P - pad), x1: Math.min(px - 1, x1 + P + pad),
+      y0: Math.max(0, y0 + P - pad), y1: Math.min(py - 1, y1 + P + pad),
+      z0: Math.max(0, z0 + P - pad), z1: Math.min(pz - 1, z1 + P + pad),
+    },
+  });
+  if (net.triangles === 0) return empty;
+
+  // 패딩 좌표를 원래 격자 좌표로 되돌린다.
+  const position = net.position;
+  for (let i = 0; i < position.length; i++) position[i] -= P;
+
+  // 꼭짓점 색 — 그 자리의 재질. 비어 있으면 이웃에서 찾는다(표면은 경계에 있다).
+  const n = nx * ny * nz;
+  const color = new Float32Array(position.length);
+  const nb = [1, -1, nx, -nx, nx * ny, -(nx * ny)];
+  for (let k = 0; k < net.voxel.length; k++) {
+    // 패딩 인덱스 → 원래 인덱스
+    const pi = net.voxel[k];
+    const vx = (pi % px) - P;
+    const vy = (((pi / px) | 0) % py) - P;
+    const vz = ((pi / (px * py)) | 0) - P;
+    let idx = Math.max(0, Math.min(n - 1, vx + nx * (vy + ny * vz)));
+    let m = vx < 0 || vy < 0 || vz < 0 || vx >= nx || vy >= ny || vz >= nz ? EMPTY : mat[idx];
+    if (m === EMPTY && !(voids && voids[idx])) {
+      for (const d of nb) {
+        const j = idx + d;
+        if (j >= 0 && j < n && mat[j] !== EMPTY && !hidden?.has(mat[j])) { idx = j; m = mat[j]; break; }
+      }
+    }
+    const c = m === EMPTY ? VOIDCOL : MATCOL[m] ?? [200, 200, 200];
+    color[k * 3] = c[0] / 255;
+    color[k * 3 + 1] = c[1] / 255;
+    color[k * 3 + 2] = c[2] / 255;
+  }
+
+  return { position, normal: net.normal, color, triangles: net.triangles };
 }

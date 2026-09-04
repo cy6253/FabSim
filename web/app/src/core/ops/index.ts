@@ -26,6 +26,7 @@ export {
   segregate,
   oxidantReach,
   dealGrove,
+  dealGroveTime,
   defaultSilicide,
   type OxidizeResult,
   type SilicideResult,

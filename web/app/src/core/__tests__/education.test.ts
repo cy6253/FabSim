@@ -250,7 +250,10 @@ describe("측정 도구", () => {
       }
       return x1 < 0 ? 0 : x1 - x0 + 1;
     };
-    const opening = Math.round(128 * 0.58) - Math.round(128 * 0.42); // 마스크 창 폭
+    // 마스크 창 폭은 격자에서 직접 잰다. 예전에는 128을 박아 뒀는데 격자를
+    // 키우자마자 어긋났다.
+    const g = exampleById("trench").grid;
+    const opening = Math.round(g.nx * 0.58) - Math.round(g.nx * 0.42);
     const steep = removedWidth(0.97);
     const shallow = removedWidth(0.2);
     expect(steep, "수직 식각은 창 폭을 크게 벗어나지 않는다").toBeLessThanOrEqual(opening + 2);

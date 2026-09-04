@@ -213,7 +213,11 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
 
 /* ------------------------------------------------------------- 세부 탭 */
 
-.details { border-top: 1px solid var(--line); background: var(--panel); flex: 0 0 auto; }
+/* 3D가 주인공이므로 세부는 화면의 절반을 넘지 않는다. */
+.details {
+  border-top: 1px solid var(--line); background: var(--panel);
+  flex: 0 0 auto; max-height: 46vh; overflow: auto;
+}
 .tabbar { display: flex; align-items: center; gap: 4px; padding: 5px 8px; }
 .tabbar button { background: none; border-color: transparent; color: var(--dim); }
 .tabbar button.on { color: var(--accent); border-color: var(--line); background: var(--panel2); }
@@ -230,7 +234,8 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
 .details .panel h3 { display: none; }
 .details .diagnostics { max-height: 240px; overflow: auto; }
 
-.view3d { height: 220px; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; }
+/* 3D가 주인공이므로 가운데를 다 쓴다. 세부 탭은 그 아래에 붙는다. */
+.view3d { flex: 1 1 auto; min-height: 300px; overflow: hidden; }
 .view3d canvas { display: block; }
 
 .profile-head { display: flex; gap: 8px; align-items: center; color: var(--dim); font-size: 12px; }

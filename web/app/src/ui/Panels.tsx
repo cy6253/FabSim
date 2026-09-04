@@ -154,6 +154,8 @@ export function StepBar(p: {
   onStep: (n: number) => void;
   busy: boolean;
   progress: { index: number; total: number } | null;
+  /** 3D 메시를 만든 결과 — 삼각형 수와 걸린 시간. */
+  mesh?: { triangles: number; ms: number } | null;
 }) {
   const m = p.meta[p.step];
   const node = p.chain[p.step];
@@ -173,7 +175,14 @@ export function StepBar(p: {
           계산 중{p.progress ? ` ${p.progress.index + 1}/${p.progress.total}` : ""}…
         </span>
       ) : (
-        m && <span className="ms">{(m.ms / 1000).toFixed(2)}s</span>
+        <>
+          {p.mesh && (
+            <span className="ms" title="3D 표면 삼각형 수와 만드는 데 걸린 시간">
+              △ {p.mesh.triangles.toLocaleString()} · {p.mesh.ms.toFixed(0)}ms
+            </span>
+          )}
+          {m && <span className="ms">{(m.ms / 1000).toFixed(2)}s</span>}
+        </>
       )}
     </div>
   );

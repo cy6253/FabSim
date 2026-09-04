@@ -5,11 +5,12 @@
  * 그래서 화면을 세 칸으로만 나눴다:
  *
  *   왼쪽   무엇을 하는가 (레시피 = 단계 목록)
- *   가운데 그 결과 (단면)
+ *   가운데 그 결과 (3D 형상)
  *   오른쪽 무엇을 만질 수 있는가 (지금 단계의 노브)
  *
- * 세부(3D·도핑 그래프·프로브·진단)는 단면 아래 탭으로 접어 뒀다. 예전 화면은
- * 패널을 여덟 개 동시에 띄워서 "여기서 시작하세요"가 없었다.
+ * 3D 아래 탭에 단면·진단·도핑 그래프·프로브가 있고, 단면은 기본으로 열려 있다 —
+ * 3D는 형상을, 단면은 층 구조를 보여 주므로 둘 다 필요하다. 예전 화면은 패널을
+ * 여덟 개 동시에 띄워서 "여기서 시작하세요"가 없었다.
  *
  * 가장 큰 정리는 **선택과 시점을 하나로 합친 것**이다. 예전에는 "선택한 노드"와
  * "보고 있는 단계"가 따로 놀아 사용자가 둘을 각각 조작해야 했다. 지금은 목록에서
@@ -24,7 +25,7 @@ import { insertStep, removeStep, moveStepDown, moveStepUp } from "../core/projec
 import type { Project } from "../core/project/types";
 import { EMPTY } from "../core/materials";
 import { useSimulation } from "./useSimulation";
-import { CrossSection } from "./CrossSection";
+import { View3D } from "./View3D";
 import { RecipeList } from "./RecipeList";
 import { StepInspector } from "./StepInspector";
 import { Details } from "./Details";
@@ -46,6 +47,10 @@ export function App() {
   const [hidden, setHidden] = useState<Set<number>>(new Set());
   const [sliceY, setSliceY] = useState(-1);
   const [probeX, setProbeX] = useState(-1);
+  const [cutX, setCutX] = useState(-1);
+  const [smooth, setSmooth] = useState(2);
+  const [mode, setMode] = useState<"smooth" | "voxel">("smooth");
+  const [meshStats, setMeshStats] = useState<{ triangles: number; ms: number } | null>(null);
   const [modal, setModal] = useState<null | "mask" | "library" | "graph">(null);
   const [menu, setMenu] = useState(false);
   const [restored, setRestored] = useState(false);
@@ -57,6 +62,9 @@ export function App() {
 
   const y = sliceY >= 0 ? sliceY : Math.floor(project.grid.ny / 2);
   const px = probeX >= 0 ? probeX : Math.floor(project.grid.nx / 2);
+  // 절단면 기본값은 격자의 62% — 처음부터 층 구조가 보이게 한다. 꽉 채워 두면
+  // 마지막에 증착한 재질 하나만 보여서 3D가 아무것도 안 알려 준다.
+  const cut = cutX >= 0 ? cutX : Math.round(project.grid.nx * 0.62);
 
   /** 지금 보고 있는 단계 = 지금 선택된 노드. 둘은 같은 것이다. */
   const currentId = sim.chain[sim.step]?.id;
@@ -335,41 +343,45 @@ export function App() {
               }
             />
             <span className="spacer" />
-            <label className="toggle" title="재질 대신 도펀트 농도를 색으로">
-              <input type="checkbox" checked={doping} onChange={(e) => setDoping(e.target.checked)} />
-              도핑
-            </label>
-            <label className="toggle" title="이번 단계가 더한 곳(초록)과 없앤 곳(자홍)">
-              <input type="checkbox" checked={showDiff} onChange={(e) => setShowDiff(e.target.checked)} />
-              변경분
-            </label>
             <label className="toggle" title="바깥과 끊긴 빈 공간을 붉게">
               <input type="checkbox" checked={showVoids} onChange={(e) => setShowVoids(e.target.checked)} />
               보이드
             </label>
-            <label className="slider" title="어느 y 평면을 자를지">
-              단면 {y}
+            <select
+              value={mode}
+              onChange={(e) => setMode(e.target.value as "smooth" | "voxel")}
+              title="부드럽게는 등위면을, 복셀은 면을 그대로 그립니다"
+            >
+              <option value="smooth">부드럽게</option>
+              <option value="voxel">복셀</option>
+            </select>
+            {mode === "smooth" && (
+              <label className="slider" title="클수록 매끄럽지만, 너무 크면 얇은 층이 뭉개집니다">
+                완화 {smooth}
+                <input
+                  type="range" min={0} max={6} value={smooth}
+                  onChange={(e) => setSmooth(Number(e.target.value))}
+                />
+              </label>
+            )}
+            <label className="slider" title="이 x보다 오른쪽을 잘라 내부를 봅니다">
+              절단 {cut}
               <input
-                type="range"
-                min={0}
-                max={project.grid.ny - 1}
-                value={y}
-                onChange={(e) => setSliceY(Number(e.target.value))}
+                type="range" min={1} max={project.grid.nx} value={cut}
+                onChange={(e) => setCutX(Number(e.target.value))}
               />
             </label>
           </div>
 
           {sim.view ? (
-            <CrossSection
+            <View3D
               view={sim.view}
-              sliceY={y}
-              doping={doping}
-              donors={donors}
-              acceptors={acceptors}
+              cutX={cut}
+              showVoids={showVoids}
               hidden={hidden}
-              showDiff={showDiff}
-              probeX={px}
-              onProbeX={setProbeX}
+              smooth={smooth}
+              mode={mode}
+              onStats={setMeshStats}
             />
           ) : (
             <div className="placeholder">
@@ -386,6 +398,7 @@ export function App() {
             onStep={sim.setStep}
             busy={sim.busy}
             progress={sim.progress}
+            mesh={meshStats}
           />
 
           {sim.chain[sim.step]?.note && <div className="nodenote">{sim.chain[sim.step].note}</div>}
@@ -398,12 +411,17 @@ export function App() {
               step={sim.step}
               onGoTo={sim.setStep}
               probeX={px}
+              onProbeX={setProbeX}
               sliceY={y}
+              onSliceY={setSliceY}
               donors={donors}
               acceptors={acceptors}
               hidden={hidden}
-              showVoids={showVoids}
-              gridNx={project.grid.nx}
+              doping={doping}
+              onDoping={setDoping}
+              showDiff={showDiff}
+              onShowDiff={setShowDiff}
+              gridNy={project.grid.ny}
             />
           )}
         </section>
