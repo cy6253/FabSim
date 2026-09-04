@@ -43,3 +43,6 @@ node_modules/
 dist/
 .vite/
 *.tsbuildinfo
+
+# 브라우저 스모크 스크린샷
+web/app/shots/

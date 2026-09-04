@@ -82,7 +82,7 @@
       "id": "MetalSi",
       "name": "MetalSi",
       "kind": "silicide",
-      "color": [168, 134, 86],
+      "color": [200, 110, 140],
       "diffusionFactor": 1,
       "exposure": "opaque"
     },
@@ -90,7 +90,7 @@
       "id": "polySi",
       "name": "폴리실리콘",
       "kind": "semiconductor",
-      "color": [148, 106, 190],
+      "color": [128, 168, 118],
       "diffusionFactor": 1,
       "exposure": "opaque",
       "oxidizesTo": "SiO2",
@@ -100,7 +100,7 @@
       "id": "W",
       "name": "W",
       "kind": "metal",
-      "color": [120, 92, 150],
+      "color": [112, 84, 100],
       "diffusionFactor": 1,
       "exposure": "opaque"
     },
@@ -116,7 +116,7 @@
       "id": "Ti",
       "name": "Ti",
       "kind": "metal",
-      "color": [255, 165, 0],
+      "color": [138, 170, 194],
       "diffusionFactor": 1,
       "exposure": "opaque"
     },
@@ -124,7 +124,7 @@
       "id": "TiSi2",
       "name": "TiSi2",
       "kind": "silicide",
-      "color": [255, 69, 0],
+      "color": [180, 80, 120],
       "diffusionFactor": 1,
       "exposure": "opaque"
     },
@@ -132,7 +132,7 @@
       "id": "Co",
       "name": "Co",
       "kind": "metal",
-      "color": [32, 178, 170],
+      "color": [86, 156, 148],
       "diffusionFactor": 1,
       "exposure": "opaque"
     },
@@ -140,7 +140,7 @@
       "id": "CoSi2",
       "name": "CoSi2",
       "kind": "silicide",
-      "color": [0, 139, 139],
+      "color": [150, 70, 110],
       "diffusionFactor": 1,
       "exposure": "opaque"
     },
@@ -148,7 +148,7 @@
       "id": "Al",
       "name": "Al",
       "kind": "metal",
-      "color": [200, 205, 212],
+      "color": [222, 226, 232],
       "diffusionFactor": 1,
       "exposure": "opaque"
     },
@@ -156,7 +156,7 @@
       "id": "Cu",
       "name": "Cu",
       "kind": "metal",
-      "color": [184, 115, 51],
+      "color": [198, 112, 62],
       "diffusionFactor": 1,
       "exposure": "opaque"
     }
