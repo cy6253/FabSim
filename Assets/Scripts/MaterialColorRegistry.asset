@@ -1,0 +1,47 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 05eca444f2f752c409780bfdea6ec9e5, type: 3}
+  m_Name: MaterialColorRegistry
+  m_EditorClassIdentifier: 
+  materialColors:
+  - name: Si
+    color: {r: 0.18431373, g: 0.30980393, b: 0.30980393, a: 1}
+  - name: PR
+    color: {r: 0.5411765, g: 0.16862746, b: 0.8862745, a: 1}
+  - name: Exposed_PR
+    color: {r: 1, g: 1, b: 0, a: 1}
+  - name: SiO2
+    color: {r: 0, g: 1, b: 1, a: 1}
+  - name: SiN
+    color: {r: 1, g: 0.84313726, b: 0, a: 1}
+  - name: Boron++
+    color: {r: 0.54509807, g: 0, b: 0, a: 1}
+  - name: Boron
+    color: {r: 0.73333335, g: 0.13333334, b: 0.13333334, a: 1}
+  - name: Phosphorus++
+    color: {r: 0.25490198, g: 0.4117647, b: 0.88235295, a: 1}
+  - name: Phosphorus
+    color: {r: 0.39215687, g: 0.58431375, b: 0.92941177, a: 1}
+  - name: W
+    color: {r: 0.29411766, g: 0, b: 0.50980395, a: 1}
+  - name: TiN
+    color: {r: 0.4117647, g: 0.4117647, b: 0.4117647, a: 1}
+  - name: Poly_Si
+    color: {r: 0.5803922, g: 0, b: 0.827451, a: 1}
+  - name: Ti
+    color: {r: 1, g: 0.64705884, b: 0, a: 1}
+  - name: TiSi
+    color: {r: 1, g: 0.27058825, b: 0, a: 1}
+  - name: Co
+    color: {r: 0.1254902, g: 0.69803923, b: 0.6666667, a: 1}
+  - name: CoSi
+    color: {r: 0, g: 0.54509807, b: 0.54509807, a: 1}
