@@ -13,6 +13,8 @@
  * 할당하면 600만 격자에서 GC가 프레임을 잡아먹는다.
  */
 
+import { DEFAULT_LIBRARY, type Library } from "./library";
+
 export const INF = 1e20;
 
 /** 연산자들이 공유하는 작업용 버퍼. 이름은 프로토타입과 동일하게 뒀다. */
@@ -72,9 +74,22 @@ export interface Sim {
   concDirty: boolean;
   /** EDT 호출 횟수. 성능 회귀를 눈으로 잡기 위한 계수기. */
   edtCount: number;
+  /**
+   * 재질·공정 라이브러리.
+   *
+   * 연산자가 재질을 이름이 아니라 **속성**으로 판정하게 하는 표다 —
+   * "산화막인가"가 아니라 "확산을 막는가", "PR인가"가 아니라 "노광되는가".
+   * 사용자가 표를 편집하면 이 사본만 갈아끼우면 되고 연산자 코드는 그대로다.
+   */
+  readonly lib: Library;
 }
 
-export function createSim(NX: number, NY: number, NZ: number): Sim {
+export function createSim(
+  NX: number,
+  NY: number,
+  NZ: number,
+  lib: Library = DEFAULT_LIBRARY,
+): Sim {
   const N = NX * NY * NZ;
   const m = Math.max(NX, NY, NZ);
   const S: Scratch = {
@@ -106,15 +121,15 @@ export function createSim(NX: number, NY: number, NZ: number): Sim {
     dp: new Float64Array(m),
     top: new Int32Array(NX * NY),
   };
-  return { NX, NY, NZ, N, S, phiDirty: false, concDirty: false, edtCount: 0 };
+  return { NX, NY, NZ, N, S, phiDirty: false, concDirty: false, edtCount: 0, lib };
 }
 
 /** 격자 하나 분량의 재질 배열. */
 export const newMat = (s: Sim) => new Uint8Array(s.N);
 /** 부호거리장 φ. 고체가 φ ≤ 0 (결정 O). */
 export const newPhi = (s: Sim) => new Float32Array(s.N);
-/** 종별 도펀트 농도 필드 3개. */
-export const newConc = (s: Sim, nsp = 3) =>
+/** 종별 도펀트 농도 필드. 개수는 라이브러리가 정한다. */
+export const newConc = (s: Sim, nsp = s.lib.sp.count) =>
   Array.from({ length: nsp }, () => new Float32Array(s.N));
 
 export const at = (s: Sim, x: number, y: number, z: number) =>

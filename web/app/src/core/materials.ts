@@ -1,45 +1,46 @@
 /**
- * 재질 정의와 물성 표.
+ * 재질 상수 — 전부 라이브러리에서 파생된다.
  *
- * 설계 로그(fabsim3d-project-review)는 재질·공정을 "코드가 아니라 데이터"로 두기로
- * 했다. 이 파일은 그 데이터의 첫 판이며, M3 후반에 JSON 라이브러리로 빠진다.
- * 지금은 프로토타입(web/prototype/m2-ops.html)과 값이 정확히 같아야 하므로
- * 상수를 그대로 옮겼다 — 골든 테스트가 이 동일성에 기댄다.
+ * 예전에는 이 파일이 값을 직접 들고 있었다. 지금은 data/materials.json 과
+ * data/processes.json 이 유일한 출처이고([[library.ts]]), 여기 있는 것은
+ * 코드에서 짧게 쓰기 위한 이름표다. 값을 고치려면 JSON을 고친다.
+ *
+ * 숫자 ID는 JSON의 배열 순서다. 0~7의 순서를 바꾸면 프로토타입과의 동일성이
+ * 깨지고 parity 테스트가 잡는다.
  */
+import { DEFAULT_LIBRARY, type Library } from "./library";
+
+const M = DEFAULT_LIBRARY.mat;
+const S = DEFAULT_LIBRARY.sp;
 
 /** 재질 ID. 0은 반드시 빈 공간이어야 한다(연결성 검사가 `=== EMPTY`로 판정). */
-export const EMPTY = 0;
-export const SI = 1;
-export const OX = 2;
-export const NIT = 3;
-export const PR = 4;
-export const EPR = 5; // 노광된 PR
-export const MET = 6;
-export const MSI = 7; // 실리사이드
+export const EMPTY = M.index.vacuum;
+export const SI = M.index.Si;
+export const OX = M.index.SiO2;
+export const NIT = M.index.Si3N4;
+export const PR = M.index.PR;
+export const EPR = M.index.PR_exposed;
+export const MET = M.index.Metal;
+export const MSI = M.index.MetalSi;
 
-export type MaterialId = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+/** 라이브러리에 있지만 기본 시퀀스가 안 쓰는 재질들. */
+export const POLY = M.index.polySi;
+export const W = M.index.W;
+export const TIN = M.index.TiN;
+export const TI = M.index.Ti;
+export const AL = M.index.Al;
+export const CU = M.index.Cu;
 
-export const MATNAME: Record<number, string> = {
-  [EMPTY]: "-",
-  [SI]: "Si",
-  [OX]: "SiO2",
-  [NIT]: "Nitride",
-  [PR]: "PR",
-  [EPR]: "노광 PR",
-  [MET]: "Metal",
-  [MSI]: "MetalSi",
-};
+export type MaterialId = number;
 
-/** 단면·3D 뷰의 재질 색 (RGB 0~255). */
-export const MATCOL: Record<number, [number, number, number]> = {
-  [SI]: [100, 116, 143],
-  [OX]: [232, 163, 61],
-  [NIT]: [63, 154, 140],
-  [PR]: [185, 138, 212],
-  [EPR]: [124, 95, 168],
-  [MET]: [185, 190, 201],
-  [MSI]: [168, 134, 86],
-};
+export const MATNAME: Record<number, string> = Object.fromEntries(
+  M.name.map((n, i) => [i, n]),
+);
+
+/** 단면·3D 뷰의 재질 색 (RGB 0~255). 빈 공간은 칠하지 않으므로 뺀다. */
+export const MATCOL: Record<number, [number, number, number]> = Object.fromEntries(
+  M.color.map((c, i) => [i, c]).filter(([i]) => i !== EMPTY),
+);
 
 /** 봉인된 보이드를 칠하는 색. 재질이 아니라 진단 표시다. */
 export const VOIDCOL: [number, number, number] = [227, 90, 77];
@@ -47,21 +48,24 @@ export const VOIDCOL: [number, number, number] = [227, 90, 77];
 /* ---------------- 도펀트 ---------------- */
 
 /** 종별 인덱스. 화면에는 net doping을 쓰지만 필드는 종별로 따로 든다(결정 A). */
-export const NSP = 3;
-export const B = 0;
-export const P_ = 1;
-export const AS = 2;
+export const NSP = S.count;
+export const B = S.index.B;
+export const P_ = S.index.P;
+export const AS = S.index.As;
 
-export const SPNAME = ["B", "P", "As"] as const;
+export const SPNAME: readonly string[] = S.key;
 
 /** 상대 확산계수. As가 거의 안 움직이는 것이 얕은 접합의 이유다. */
-export const DREL = [1.0, 0.6, 0.18] as const;
+export const DREL: readonly number[] = Array.from(S.relD);
 
 /** 계면 편석 계수 m = C_Si / C_oxide (결정 N). m<1은 고갈, m>1은 파일업. */
-export const SEG_M = [0.3, 4.0, 10.0] as const;
+export const SEG_M: readonly number[] = Array.from(S.segregation);
 
-/** 산화막·질화막을 통과하는 확산의 감쇠. 0이 아니어야 계면이 수치적으로 안정하다. */
-export const D_BLOCK = 0.004;
+/**
+ * 산화막·질화막을 통과하는 확산의 감쇠.
+ * 재질별 값은 라이브러리에 있고, 이 상수는 문서·테스트용 대표값이다.
+ */
+export const D_BLOCK = M.diffusionFactor[OX];
 
 /* ---------------- 산화 ---------------- */
 
@@ -69,23 +73,18 @@ export const D_BLOCK = 0.004;
  * 부피비 2.17 — 실리콘 1을 먹으면 산화막 2.17이 나온다.
  * 그중 1/2.17이 원래 Si 자리(소비), 나머지가 위로 자란다(성장).
  */
-export const CONSUME = 1 / 2.17;
-export const GROW = 1 - 1 / 2.17;
+export const EXPANSION = M.expansion[SI];
+export const CONSUME = 1 / EXPANSION;
+export const GROW = 1 - 1 / EXPANSION;
 
-/**
- * Deal-Grove 계수 [A, B] — 복셀 단위. 키는 `${분위기}${온도}`.
- *
- * 파이썬 참조 구현(web/reference/m2_thermal.py)의 표를 그대로 옮겼다.
- * 프로토타입 JS는 이 중 셋(dry1000·wet1000·wet1100)만 갖고 있었다.
- * 온도 노브가 의미를 가지려면 이 표가 있어야 한다(결정 U).
- */
-export const DG: Record<string, [number, number]> = {
-  dry900: [0.3, 0.03],
-  dry1000: [0.22, 0.075],
-  dry1100: [0.16, 0.17],
-  wet900: [0.55, 0.55],
-  wet1000: [0.35, 1.1],
-  wet1100: [0.24, 2.2],
-};
+/** Deal-Grove 계수 [A, B]. 키는 공정 라이브러리의 산화 조건 id. */
+export const DG: Record<string, [number, number]> = Object.fromEntries(
+  DEFAULT_LIBRARY.proc.oxidations.map((o) => [o.id, [o.A, o.B] as [number, number]]),
+);
 
-export type OxideAmbience = keyof typeof DG;
+export type OxideAmbience = string;
+
+/** 임의의 라이브러리에서 같은 표를 뽑는다 — 사용자 편집본을 쓸 때. */
+export function dgTableOf(lib: Library): Record<string, [number, number]> {
+  return Object.fromEntries(lib.proc.oxidations.map((o) => [o.id, [o.A, o.B]]));
+}

@@ -1,0 +1,194 @@
+{
+  "_comment": [
+    "재질 라이브러리 기본값. 사용자가 편집할 수 있고 편집본은 프로젝트에 함께 저장된다.",
+    "",
+    "id 순서가 곧 코어의 숫자 재질 ID다. 0~7은 기존 시퀀스·프로토타입과 호환을 위해",
+    "고정이며 순서를 바꾸면 안 된다 (parity 테스트가 잡는다). 8번부터는 자유롭게 추가한다.",
+    "",
+    "kind: vacuum | semiconductor | insulator | resist | metal | silicide",
+    "diffusionFactor: 도펀트 확산계수에 곱하는 배수. 0이면 확산 없음(빈 공간),",
+    "  0.004면 장벽(산화막·질화막), 1이면 그대로 통과.",
+    "exposure: transparent(광선이 지나감) | resist(노광됨) | opaque(막음)",
+    "carriesOxidant: 산화제가 이 재질을 통해 이동할 수 있는가. 진공과 산화막만.",
+    "oxidizesTo: 산화되면 무엇이 되는가. null이면 산화 안 됨.",
+    "expansion: 산화 부피비. 실리콘 1이 산화막 2.17이 된다."
+  ],
+  "version": 1,
+  "materials": [
+    {
+      "id": "vacuum",
+      "name": "-",
+      "kind": "vacuum",
+      "color": [0, 0, 0],
+      "diffusionFactor": 0,
+      "exposure": "transparent",
+      "carriesOxidant": true
+    },
+    {
+      "id": "Si",
+      "name": "Si",
+      "kind": "semiconductor",
+      "color": [100, 116, 143],
+      "diffusionFactor": 1,
+      "exposure": "opaque",
+      "oxidizesTo": "SiO2",
+      "expansion": 2.17
+    },
+    {
+      "id": "SiO2",
+      "name": "SiO2",
+      "kind": "insulator",
+      "color": [232, 163, 61],
+      "diffusionFactor": 0.004,
+      "exposure": "opaque",
+      "carriesOxidant": true,
+      "oxidantPermeable": true
+    },
+    {
+      "id": "Si3N4",
+      "name": "Nitride",
+      "kind": "insulator",
+      "color": [63, 154, 140],
+      "diffusionFactor": 0.004,
+      "exposure": "opaque"
+    },
+    {
+      "id": "PR",
+      "name": "PR",
+      "kind": "resist",
+      "color": [185, 138, 212],
+      "diffusionFactor": 1,
+      "exposure": "resist",
+      "exposedForm": "PR_exposed"
+    },
+    {
+      "id": "PR_exposed",
+      "name": "노광 PR",
+      "kind": "resist",
+      "color": [124, 95, 168],
+      "diffusionFactor": 1,
+      "exposure": "transparent",
+      "unexposedForm": "PR"
+    },
+    {
+      "id": "Metal",
+      "name": "Metal",
+      "kind": "metal",
+      "color": [185, 190, 201],
+      "diffusionFactor": 1,
+      "exposure": "opaque"
+    },
+    {
+      "id": "MetalSi",
+      "name": "MetalSi",
+      "kind": "silicide",
+      "color": [168, 134, 86],
+      "diffusionFactor": 1,
+      "exposure": "opaque"
+    },
+    {
+      "id": "polySi",
+      "name": "폴리실리콘",
+      "kind": "semiconductor",
+      "color": [148, 106, 190],
+      "diffusionFactor": 1,
+      "exposure": "opaque",
+      "oxidizesTo": "SiO2",
+      "expansion": 2.17
+    },
+    {
+      "id": "W",
+      "name": "W",
+      "kind": "metal",
+      "color": [120, 92, 150],
+      "diffusionFactor": 1,
+      "exposure": "opaque"
+    },
+    {
+      "id": "TiN",
+      "name": "TiN",
+      "kind": "metal",
+      "color": [105, 105, 105],
+      "diffusionFactor": 1,
+      "exposure": "opaque"
+    },
+    {
+      "id": "Ti",
+      "name": "Ti",
+      "kind": "metal",
+      "color": [255, 165, 0],
+      "diffusionFactor": 1,
+      "exposure": "opaque"
+    },
+    {
+      "id": "TiSi2",
+      "name": "TiSi2",
+      "kind": "silicide",
+      "color": [255, 69, 0],
+      "diffusionFactor": 1,
+      "exposure": "opaque"
+    },
+    {
+      "id": "Co",
+      "name": "Co",
+      "kind": "metal",
+      "color": [32, 178, 170],
+      "diffusionFactor": 1,
+      "exposure": "opaque"
+    },
+    {
+      "id": "CoSi2",
+      "name": "CoSi2",
+      "kind": "silicide",
+      "color": [0, 139, 139],
+      "diffusionFactor": 1,
+      "exposure": "opaque"
+    },
+    {
+      "id": "Al",
+      "name": "Al",
+      "kind": "metal",
+      "color": [200, 205, 212],
+      "diffusionFactor": 1,
+      "exposure": "opaque"
+    },
+    {
+      "id": "Cu",
+      "name": "Cu",
+      "kind": "metal",
+      "color": [184, 115, 51],
+      "diffusionFactor": 1,
+      "exposure": "opaque"
+    }
+  ],
+  "species": [
+    {
+      "id": "B",
+      "name": "붕소",
+      "type": "acceptor",
+      "relD": 1.0,
+      "segregation": 0.3,
+      "D0": 0.76,
+      "Ea": 3.46,
+      "_dopingNote": "D0[cm^2/s]·Ea[eV]는 온도 노브를 붙일 때 쓴다. 지금 코어는 relD만 쓴다."
+    },
+    {
+      "id": "P",
+      "name": "인",
+      "type": "donor",
+      "relD": 0.6,
+      "segregation": 4.0,
+      "D0": 3.85,
+      "Ea": 3.66
+    },
+    {
+      "id": "As",
+      "name": "비소",
+      "type": "donor",
+      "relD": 0.18,
+      "segregation": 10.0,
+      "D0": 0.066,
+      "Ea": 3.44
+    }
+  ]
+}

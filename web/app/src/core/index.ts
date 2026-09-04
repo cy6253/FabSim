@@ -8,6 +8,7 @@
  * 알고리즘은 web/reference/*.py 에서 수치로 검증됐고, 이식의 동일성은
  * src/core/__tests__/parity.test.ts 가 단계마다 해시로 지킨다.
  */
+export * from "./library";
 export * from "./materials";
 export * from "./grid";
 export * from "./edt";

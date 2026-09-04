@@ -1,0 +1,203 @@
+{
+  "_comment": [
+    "공정 라이브러리 기본값. 재질 라이브러리와 마찬가지로 사용자 편집 대상이고",
+    "프로젝트에 함께 저장된다.",
+    "",
+    "출처: Unity 원본(EtchantConfig / CmpRateConfig)에서 **이름과 구조만** 가져왔다.",
+    "그쪽 선택비는 전부 1.0인 자리표시자라 수치로 쓸 수 없었다. 여기 값은 실제 공정의",
+    "대략적인 비율이며, 정확한 물리값이 아니라 거동을 재현하는 노브다(교육용 샌드박스).",
+    "",
+    "selectivity: 재질 id -> 상대 식각 속도. 표에 없는 재질은 0(안 깎임).",
+    "anisotropy: 1.0 = 수직 RIE, 0.0 = 등방 습식. 노드를 dry/wet 둘로 나누지 않고",
+    "  이 노브 하나로 통합한다 — 노브 하나가 가르치는 개념 하나."
+  ],
+  "version": 1,
+
+  "etchants": [
+    {
+      "id": "RIE_oxide",
+      "name": "산화막 RIE (CHF3/CF4)",
+      "phase": "dry",
+      "anisotropy": 0.9,
+      "baseRate": 1.0,
+      "selectivity": { "SiO2": 1.0, "Si3N4": 0.3, "Si": 0.1, "polySi": 0.1, "PR": 0.25 },
+      "teaches": "콘택 홀 — 이방성이 높아야 수직 벽이 선다"
+    },
+    {
+      "id": "RIE_nitride",
+      "name": "질화막 RIE (CF4/O2)",
+      "phase": "dry",
+      "anisotropy": 0.85,
+      "baseRate": 1.0,
+      "selectivity": { "Si3N4": 1.0, "SiO2": 0.1, "Si": 0.15, "polySi": 0.15, "PR": 0.2 },
+      "teaches": "하부 산화막을 남기고 질화막만 여는 패턴 전사"
+    },
+    {
+      "id": "RIE_poly",
+      "name": "폴리 RIE (HBr/Cl2)",
+      "phase": "dry",
+      "anisotropy": 0.95,
+      "baseRate": 1.0,
+      "selectivity": { "polySi": 1.0, "Si": 0.9, "SiO2": 0.01, "Si3N4": 0.05, "PR": 0.3 },
+      "teaches": "게이트 식각 — 얇은 게이트 산화막에서 멈춰야 한다 (선택비 100:1)"
+    },
+    {
+      "id": "RIE_silicon",
+      "name": "실리콘 RIE (Bosch 계열)",
+      "phase": "dry",
+      "anisotropy": 0.97,
+      "baseRate": 1.0,
+      "selectivity": { "Si": 1.0, "polySi": 1.0, "SiO2": 0.02, "Si3N4": 0.05, "PR": 0.25 },
+      "teaches": "STI 트렌치 — 깊은 수직 식각"
+    },
+    {
+      "id": "RIE_metal",
+      "name": "금속 RIE (Cl2/BCl3)",
+      "phase": "dry",
+      "anisotropy": 0.8,
+      "baseRate": 1.0,
+      "selectivity": { "Al": 1.0, "Ti": 0.8, "TiN": 0.7, "W": 0.6, "Metal": 1.0, "SiO2": 0.05, "PR": 0.4 },
+      "teaches": "배선 패터닝"
+    },
+    {
+      "id": "BOE",
+      "name": "BOE (완충 HF, 습식)",
+      "phase": "wet",
+      "anisotropy": 0.0,
+      "baseRate": 3.0,
+      "selectivity": { "SiO2": 1.0, "Si3N4": 0.01, "Si": 0.001, "polySi": 0.001, "PR": 0.05 },
+      "teaches": "등방이라 마스크 아래로 파고든다 — 언더컷"
+    },
+    {
+      "id": "hot_phosphoric",
+      "name": "인산 (질화막 습식 제거)",
+      "phase": "wet",
+      "anisotropy": 0.0,
+      "baseRate": 2.0,
+      "selectivity": { "Si3N4": 1.0, "SiO2": 0.025, "Si": 0.01, "polySi": 0.01 },
+      "teaches": "LOCOS에서 필드 산화막을 남기고 질화막만 벗긴다"
+    },
+    {
+      "id": "KOH",
+      "name": "KOH (실리콘 습식)",
+      "phase": "wet",
+      "anisotropy": 0.0,
+      "baseRate": 2.0,
+      "selectivity": { "Si": 1.0, "polySi": 1.0, "SiO2": 0.005, "Si3N4": 0.001 },
+      "teaches": "실리콘 등방 습식. 결정 방향 의존성은 아직 넣지 않았다 (결정 B, 훅만)"
+    },
+    {
+      "id": "piranha_strip",
+      "name": "PR 제거 (애싱/피라냐)",
+      "phase": "wet",
+      "anisotropy": 0.0,
+      "baseRate": 5.0,
+      "selectivity": { "PR": 1.0, "PR_exposed": 1.0 },
+      "teaches": "다른 재질을 건드리지 않고 레지스트만 제거"
+    }
+  ],
+
+  "depositions": [
+    {
+      "id": "ALD",
+      "name": "ALD",
+      "coverage": 1.0,
+      "teaches": "완전 컨포멀 — 보이드가 안 생긴다. 대신 느리다"
+    },
+    {
+      "id": "LPCVD",
+      "name": "LPCVD",
+      "coverage": 0.85,
+      "teaches": "거의 컨포멀. 종횡비가 아주 크면 그때 보이드"
+    },
+    {
+      "id": "PECVD",
+      "name": "PECVD",
+      "coverage": 0.55,
+      "teaches": "입구가 먼저 좁아진다 — 중간 정도의 오버행"
+    },
+    {
+      "id": "sputter",
+      "name": "스퍼터 (PVD)",
+      "coverage": 0.3,
+      "teaches": "지향성이 강해 트렌치 입구가 먼저 막히고 보이드가 갇힌다"
+    },
+    {
+      "id": "evaporation",
+      "name": "증발 (PVD)",
+      "coverage": 0.12,
+      "teaches": "거의 직진. 측벽에 거의 안 붙어 리프트오프에 쓴다"
+    }
+  ],
+
+  "slurries": [
+    {
+      "id": "slurry_oxide",
+      "name": "산화막 슬러리",
+      "baseRate": 1.0,
+      "removal": { "SiO2": 1.0, "Si3N4": 0.15, "polySi": 0.5, "W": 0.3 },
+      "stopOn": ["Si3N4"],
+      "teaches": "STI — 질화막에서 멈춘다"
+    },
+    {
+      "id": "slurry_tungsten",
+      "name": "텅스텐 슬러리",
+      "baseRate": 1.0,
+      "removal": { "W": 1.0, "TiN": 0.8, "SiO2": 0.1 },
+      "stopOn": ["SiO2"],
+      "teaches": "플러그 — 산화막 위 금속만 걷어내 콘택만 남긴다"
+    },
+    {
+      "id": "slurry_poly",
+      "name": "폴리 슬러리",
+      "baseRate": 1.0,
+      "removal": { "polySi": 1.0, "Si": 1.0, "SiO2": 0.05 },
+      "stopOn": ["SiO2"],
+      "teaches": "다마신 계열"
+    }
+  ],
+
+  "oxidations": [
+    { "id": "dry900", "name": "건식 900도", "ambience": "dry", "temperature": 900, "A": 0.3, "B": 0.03 },
+    { "id": "dry1000", "name": "건식 1000도", "ambience": "dry", "temperature": 1000, "A": 0.22, "B": 0.075 },
+    { "id": "dry1100", "name": "건식 1100도", "ambience": "dry", "temperature": 1100, "A": 0.16, "B": 0.17 },
+    { "id": "wet900", "name": "습식 900도", "ambience": "wet", "temperature": 900, "A": 0.55, "B": 0.55 },
+    { "id": "wet1000", "name": "습식 1000도", "ambience": "wet", "temperature": 1000, "A": 0.35, "B": 1.1 },
+    { "id": "wet1100", "name": "습식 1100도", "ambience": "wet", "temperature": 1100, "A": 0.24, "B": 2.2 }
+  ],
+
+  "silicides": [
+    {
+      "id": "generic",
+      "name": "실리사이드 (일반)",
+      "semiconductor": "Si",
+      "metal": "Metal",
+      "product": "MetalSi",
+      "siFraction": 0.62
+    },
+    {
+      "id": "TiSi2",
+      "name": "티타늄 실리사이드",
+      "semiconductor": "Si",
+      "metal": "Ti",
+      "product": "TiSi2",
+      "siFraction": 0.62,
+      "teaches": "마스크 없이 산화막 패턴만으로 배치된다 — 자기정렬(salicide)"
+    },
+    {
+      "id": "CoSi2",
+      "name": "코발트 실리사이드",
+      "semiconductor": "Si",
+      "metal": "Co",
+      "product": "CoSi2",
+      "siFraction": 0.64
+    }
+  ],
+
+  "implants": [
+    { "id": "B_low", "name": "붕소 저에너지", "species": "B", "rp": 4, "drp": 2.0 },
+    { "id": "B_high", "name": "붕소 고에너지", "species": "B", "rp": 12, "drp": 3.5 },
+    { "id": "P_low", "name": "인 저에너지", "species": "P", "rp": 5, "drp": 2.2 },
+    { "id": "As_shallow", "name": "비소 얕은 접합", "species": "As", "rp": 3, "drp": 1.4 }
+  ]
+}

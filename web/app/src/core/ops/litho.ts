@@ -6,10 +6,21 @@
  * 현상 결과가 달라지는 것 자체가 "왜 CMP가 필요한가"를 보여주는 교육 지점이라
  * 별도 처리를 하지 않는다(결정 ⑧).
  */
-import { EMPTY, PR, EPR } from "../materials";
+import { EMPTY } from "../materials";
+import { EXP_TRANSPARENT, EXP_RESIST } from "../library";
 import { at, type Sim } from "../grid";
 import { ambient } from "../connectivity";
 import { columnTop } from "../measure";
+
+/**
+ * 라이브러리에서 코팅에 쓸 레지스트를 고른다 — 노광되는 형태가 있는 첫 레지스트.
+ * 레지스트가 여러 개인 라이브러리라면 호출자가 명시적으로 넘긴다.
+ */
+export function defaultResist(s: Sim): number {
+  const { isResist, exposedForm, count } = s.lib.mat;
+  for (let i = 0; i < count; i++) if (isResist[i] && exposedForm[i] >= 0) return i;
+  throw new Error("라이브러리에 노광 가능한 레지스트가 없습니다");
+}
 
 /**
  * PR 코팅 — 액체라서 트렌치를 채우고, 평탄화 정도만큼 윗면이 평평해진다.
@@ -24,6 +35,7 @@ export function opPRCoat(
   _phi: Float32Array,
   thick: number,
   planar: number,
+  resist = defaultResist(s),
 ): number {
   const { NX, NY, NZ } = s;
   const reach = ambient(s, mat, new Uint8Array(s.N));
@@ -37,7 +49,7 @@ export function opPRCoat(
       const h = (1 - planar) * top[k] + planar * gmax + thick;
       for (let z = 0; z < NZ && z < h; z++) {
         const i = at(s, x, y, z);
-        if (mat[i] === EMPTY && reach[i]) { mat[i] = PR; n++; }
+        if (mat[i] === EMPTY && reach[i]) { mat[i] = resist; n++; }
       }
     }
   s.phiDirty = true;
@@ -58,6 +70,7 @@ export function opExpose(
   dy: number,
 ): number {
   const { NX, NY, NZ } = s;
+  const { exposure, exposedForm } = s.lib.mat;
   let n = 0;
   for (let y = 0; y < NY; y++)
     for (let x = 0; x < NX; x++) {
@@ -67,9 +80,10 @@ export function opExpose(
       for (let z = NZ - 1; z >= 0; z--) {
         const i = at(s, x, y, z),
           m = mat[i];
-        if (m === EMPTY || m === EPR) continue;
-        if (m === PR) { mat[i] = EPR; n++; }
-        else break; // 불투명
+        const beh = exposure[m];
+        if (beh === EXP_TRANSPARENT) continue; // 진공, 이미 노광된 레지스트
+        if (beh === EXP_RESIST) { mat[i] = exposedForm[m]; n++; }
+        else break; // 불투명 — 오버행 그림자가 여기서 생긴다
       }
     }
   return n;
@@ -82,22 +96,29 @@ export function opDevelop(
   _phi: Float32Array,
   positive: boolean,
 ): number {
+  const { exposedForm, unexposedForm } = s.lib.mat;
   let n = 0;
   for (let i = 0; i < s.N; i++) {
-    if (positive && mat[i] === EPR) { mat[i] = EMPTY; n++; }
-    else if (!positive && mat[i] === PR) { mat[i] = EMPTY; n++; }
+    const m = mat[i];
+    // 노광된 형태 = unexposedForm이 있는 재질. 안 된 형태 = exposedForm이 있는 재질.
+    if (positive && unexposedForm[m] >= 0) { mat[i] = EMPTY; n++; }
+    else if (!positive && exposedForm[m] >= 0) { mat[i] = EMPTY; n++; }
   }
-  // 남은 노광 PR은 보통 PR로 되돌린다 — 이후 공정에서 구분할 이유가 없다.
-  for (let i = 0; i < s.N; i++) if (mat[i] === EPR) mat[i] = PR;
+  // 남은 노광 레지스트는 원래 형태로 되돌린다 — 이후 공정에서 구분할 이유가 없다.
+  for (let i = 0; i < s.N; i++) {
+    const back = unexposedForm[mat[i]];
+    if (back >= 0) mat[i] = back;
+  }
   s.phiDirty = true;
   return n;
 }
 
 /** PR 제거 — 노광 여부와 무관하게 전부. */
 export function opStrip(s: Sim, mat: Uint8Array, _phi: Float32Array): number {
+  const { isResist } = s.lib.mat;
   let n = 0;
   for (let i = 0; i < s.N; i++)
-    if (mat[i] === PR || mat[i] === EPR) { mat[i] = EMPTY; n++; }
+    if (isResist[mat[i]]) { mat[i] = EMPTY; n++; }
   s.phiDirty = true;
   return n;
 }

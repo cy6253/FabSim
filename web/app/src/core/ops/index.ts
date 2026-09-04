@@ -10,7 +10,15 @@
 export { opSubstrate } from "./basic";
 export { opDeposit, type DepositResult } from "./deposit";
 export { opEtch, type EtchResult, type Selectivity } from "./etch";
-export { opPRCoat, opExpose, opDevelop, opStrip, opCMP, type CMPResult } from "./litho";
+export {
+  opPRCoat,
+  opExpose,
+  opDevelop,
+  opStrip,
+  opCMP,
+  defaultResist,
+  type CMPResult,
+} from "./litho";
 export { opImplant, opAnneal, diffusivityMap } from "./dope";
 export {
   opOxidize,
@@ -18,6 +26,8 @@ export {
   segregate,
   oxidantReach,
   dealGrove,
+  defaultSilicide,
   type OxidizeResult,
   type SilicideResult,
+  type SilicideRecipe,
 } from "./thermal";

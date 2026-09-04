@@ -28,7 +28,9 @@ npm run build      # 프로덕션 빌드
 
 ```
 src/core/          시뮬레이션 코어 — 프레임워크 무관한 순수 TypeScript
-  materials.ts       재질 ID·색·물성 표 (Deal-Grove, 확산계수, 편석계수)
+  data/              재질·공정 라이브러리 (JSON, 사용자 편집 대상)
+  library.ts         JSON → 숫자 ID로 색인되는 조회표
+  materials.ts       라이브러리에서 파생된 짧은 이름표 (SI, OX, …)
   grid.ts            Sim 컨텍스트와 스크래치 버퍼
   edt.ts             P1a 정확한 EDT + feature transform
   fmm.ts             P1b Fast Marching
@@ -54,6 +56,7 @@ Worker도 이 모듈만 import 합니다.
 | `primitives.test.ts` | 원시연산이 **애초에 맞는가**. EDT는 브루트포스와, FMM은 평면 소스에서 EDT와, union-find 봉인은 훑기 방식과 대조한다. |
 | `golden.test.ts` | 파이썬 참조가 검증한 **물리 주장**을 TS가 재현하는가. Deal-Grove 54건은 자릿수까지, 나머지는 관계로 검사한다. |
 | `sequence.test.ts` | 14단계 단언이 전부 통과하는가, 결정적인가, 지연 재거리화가 살아 있는가. |
+| `library.test.ts` | 라이브러리가 제대로 해석·검증되는가, 그리고 **연산자를 안 고치고** 다른 재질로 동작하는가. |
 
 `parity`와 `primitives`의 역할이 다릅니다. 프로토타입이 틀렸다면 parity는 통과하고
 primitives가 깨집니다.
@@ -66,6 +69,25 @@ cd ../reference && python golden_dump.py     # golden.json 다시 만들기
 
 파이썬 참조 구현(`web/reference/`)이 정본입니다. 새 연산자는 거기 먼저 넣어
 수치로 검증한 뒤 여기로 옮깁니다.
+
+## 재질과 공정은 데이터다
+
+`src/core/data/materials.json` 과 `processes.json` 이 유일한 출처입니다. 연산자는
+재질을 이름이 아니라 **속성**으로 판정합니다 — "산화막인가"가 아니라 "확산을
+막는가", "PR인가"가 아니라 "노광되는가".
+
+```
+mat[i] === SI              →  oxidizesTo[mat[i]] >= 0
+m === OX || m === NIT      →  diffusionFactor[m]
+m === PR                   →  exposure[m] === EXP_RESIST
+```
+
+그래서 폴리실리콘 산화나 사용자가 편집한 장벽 계수가 연산자 코드를 건드리지 않고
+동작합니다(`library.test.ts`가 그 둘을 실제로 확인합니다). 숫자 재질 ID는 JSON의
+배열 순서이고, 0~7은 프로토타입 호환을 위해 고정입니다.
+
+Unity 원본의 `EtchantConfig`/`CmpRateConfig`에서는 **이름과 구조만** 가져왔습니다 —
+그쪽 선택비는 전부 1.0인 자리표시자였습니다.
 
 ## 알려진 특성
 
@@ -80,5 +102,5 @@ cd ../reference && python golden_dump.py     # golden.json 다시 만들기
 
 ## 다음
 
-M3의 나머지 — 재질·공정 JSON 데이터 모델, 프로젝트/레시피 저장, React Flow
-노드 에디터, 단면 뷰가 주인공인 화면, Worker와 지연 평가.
+M3의 나머지 — 프로젝트 = JSON 하나(마스크 PNG 내장), React Flow 노드 에디터,
+단면 뷰가 주인공인 화면, Worker와 지연 평가, IndexedDB 저장.

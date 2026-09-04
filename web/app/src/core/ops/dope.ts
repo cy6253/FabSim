@@ -4,7 +4,7 @@
  * 도핑은 종별 농도 필드 2~3개로 든다(결정 A). 화면엔 net doping을 보이지만
  * 종마다 확산계수와 편석 계수가 달라서 합쳐 들면 안 된다.
  */
-import { EMPTY, OX, NIT, NSP, DREL, D_BLOCK } from "../materials";
+import { EMPTY } from "../materials";
 import { at, type Sim } from "../grid";
 
 /**
@@ -101,15 +101,18 @@ export function opAnneal(
   s.concDirty = true;
   const a = S.ta, b = S.tb, c = S.tc, d = S.td, x = S.tx, cp = S.cp, dp = S.dp;
   const dm = S.fa;
+  const { relD } = s.lib.sp;
+  const dfac = s.lib.mat.diffusionFactor;
+  // 호출자가 준 필드만큼만 돈다. 종 표보다 많이 주면 relD가 없으므로 거부한다.
+  if (conc.length > s.lib.sp.count)
+    throw new Error(`도핑 필드가 종 표보다 많습니다: ${conc.length} > ${s.lib.sp.count}`);
 
-  for (let sp = 0; sp < NSP; sp++) {
+  for (let sp = 0; sp < conc.length; sp++) {
     const f = conc[sp],
-      dr = DREL[sp];
-    // 빈 공간은 확산 없음, 산화막·질화막은 장벽.
-    for (let i = 0; i < N; i++) {
-      const m = mat[i];
-      dm[i] = m === EMPTY ? 0 : m === OX || m === NIT ? D_BLOCK * dr : dr;
-    }
+      dr = relD[sp];
+    // 재질마다 얼마나 통과시키는지는 라이브러리가 정한다 — 빈 공간 0,
+    // 산화막·질화막은 장벽(0.004), 나머지는 그대로.
+    for (let i = 0; i < N; i++) dm[i] = dfac[mat[i]] * dr;
     // 면 확산계수는 조화평균 — 한쪽이 0이면 흐름이 0이라 계면이 정확히 막힌다.
     const face = (i: number, j: number) => {
       const di = dm[i],
@@ -151,10 +154,8 @@ export function opAnneal(
 /** 종별 확산계수 지도. 진단·시각화용. */
 export function diffusivityMap(s: Sim, mat: Uint8Array, species: number): Float32Array {
   const out = new Float32Array(s.N);
-  const dr = DREL[species];
-  for (let i = 0; i < s.N; i++) {
-    const m = mat[i];
-    out[i] = m === EMPTY ? 0 : m === OX || m === NIT ? D_BLOCK * dr : dr;
-  }
+  const dr = s.lib.sp.relD[species];
+  const dfac = s.lib.mat.diffusionFactor;
+  for (let i = 0; i < s.N; i++) out[i] = dfac[mat[i]] * dr;
   return out;
 }
