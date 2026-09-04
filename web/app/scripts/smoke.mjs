@@ -1,10 +1,13 @@
 /**
  * 브라우저 스모크 — 앱을 실제로 띄워 몰아 보고 스크린샷을 남긴다.
  *
- * vitest는 코어가 맞는지만 본다. 이 스크립트는 그 위의 것들 — Worker가 뜨는지,
- * 캔버스에 뭔가 그려지는지, 타임라인을 눌렀을 때 다음 단계가 계산되는지 — 을 본다.
+ * vitest는 코어가 맞는지만 본다. 이 스크립트는 그 위를 본다: Worker가 뜨는지,
+ * 캔버스에 뭔가 그려지는지, 단계를 누르면 다시 계산되는지, 노드를 넣고 빼고
+ * 옮겨도 화면이 살아 있는지.
+ *
  * 실제로 이걸로 무한 렌더 루프를 잡았다(React Flow의 dimensions 변경을 프로젝트
- * 변경으로 취급해 디바운스 타이머가 영영 취소되던 버그).
+ * 변경으로 취급해 디바운스 타이머가 영영 취소되던 버그). 타입 검사도 단위 테스트도
+ * 그건 못 잡는다.
  *
  *   npm run dev            # 다른 터미널에서
  *   npm run smoke          # 기본 http://localhost:5173, ./shots 에 저장
@@ -26,139 +29,156 @@ page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
 
 await page.goto(URL, { waitUntil: "domcontentloaded" });
 
-/** 계산이 끝날 때까지 — "계산 중" 표시가 사라지면 끝난 것. */
+/** 계산이 끝날 때까지. 단계 바에서 "계산 중" 표시가 사라지면 끝난 것. */
 const settle = (ms = 120000) =>
   page
     .waitForFunction(
       () => {
-        const t = document.querySelector(".stepinfo");
+        const t = document.querySelector(".stepbar");
         return t && !t.textContent.includes("계산 중");
       },
       { timeout: ms },
     )
     .catch(() => {});
 
-await page.waitForSelector(".xsec canvas", { timeout: 60000 });
-await settle();
-await page.waitForTimeout(1500);
-
 const shot = async (name) => {
   await page.screenshot({ path: `${OUT}/${name}.png` });
   console.log(`  → ${name}.png`);
 };
+const line = (sel) =>
+  page.locator(sel).innerText().then((t) => t.split(String.fromCharCode(10)).join(" · "));
+
+await page.waitForSelector(".xsec canvas", { timeout: 60000 });
+await settle();
+await page.waitForTimeout(1200);
+
+// 첫 방문 안내를 닫는다 — 나머지 화면을 가리므로.
+const hint = page.locator(".hintbar button");
+if (await hint.count()) await hint.click();
 
 console.log("1) 첫 화면 (트렌치 예제, 1단계)");
 await shot("01-initial");
 
-const toLastStep = async () => {
-  const ticks = page.locator(".tick");
-  const n = await ticks.count();
-  await ticks.nth(n - 1).click();
+/** 레시피 목록의 마지막 단계로 간다. */
+const gotoLast = async () => {
+  const steps = page.locator(".step");
+  const n = await steps.count();
+  await steps.nth(n - 1).click();
   await settle();
-  await page.waitForTimeout(2500);
+  await page.waitForTimeout(2200);
   return n;
 };
 
-const n = await toLastStep();
+const n = await gotoLast();
 console.log(`2) 마지막 단계 (${n}단계) — 스퍼터 증착 후, 보이드가 보여야 함`);
-console.log("   " + (await page.locator(".stepinfo").innerText()).replace(/\n/g, " · "));
-console.log("   범례: " + (await page.locator(".legend").innerText()).replace(/\n/g, " · "));
+console.log("   " + (await line(".stepbar")));
+console.log("   범례: " + (await line(".legend")));
 await shot("02-final-step");
 
-await page.locator(".fabnode").last().click();
-await page.waitForTimeout(400);
-console.log("3) 노드 선택 → 속성 패널");
-await shot("03-inspector");
+// 진단 탭
+await page.locator(".tabbar button", { hasText: "진단" }).click();
+await page.waitForTimeout(600);
+const diagCount = await page.locator(".diag").count();
+console.log(`3) 진단 ${diagCount}건`);
+if (diagCount > 0)
+  console.log(
+    "   " +
+      (await page.locator(".diag").first().innerText()).split(String.fromCharCode(10)).join(" | "),
+  );
+await shot("03-diagnostics");
 
+// 변경분 하이라이트
+await page.locator('.toggle:has-text("변경분") input').check();
+await page.waitForTimeout(1000);
+console.log("4) 변경분 하이라이트");
+await shot("04-diff");
+
+// 프로브 탭
+await page.locator(".tabbar button", { hasText: "프로브" }).click();
+await page.waitForTimeout(600);
+console.log("5) 프로브: " + (await line(".stack")));
+await shot("05-probe");
+
+// NMOS + 도핑
+await page.locator('.toggle:has-text("변경분") input').uncheck();
 await page.selectOption(".topbar select >> nth=0", "nmos");
 await page.waitForTimeout(1000);
-await toLastStep();
-console.log("4) NMOS 예제 마지막 단계");
-console.log("   " + (await page.locator(".stepinfo").innerText()).replace(/\n/g, " · "));
-await shot("04-nmos");
+await gotoLast();
+await page.locator('.toggle:has-text("도핑") input').check();
+await page.waitForTimeout(1500);
+console.log("6) NMOS 도핑 보기 — 게이트 아래 채널만 비어 있어야 한다");
+console.log("   " + (await line(".stepbar")));
+await shot("06-nmos-doping");
 
-await page.locator('.toggle:has-text("도핑 보기") input').check();
-await page.waitForTimeout(1200);
-console.log("5) 도핑 보기 — 게이트 아래 채널만 비어 있어야 한다");
-await shot("05-nmos-doping");
+// 3D 탭
+await page.locator('.toggle:has-text("도핑") input').uncheck();
+await page.locator(".tabbar button", { hasText: "3D" }).click();
+await page.waitForTimeout(1800);
+console.log("7) 3D");
+await shot("07-3d");
 
-console.log("6) 진단 패널");
-const diagText = await page.locator(".diagnostics").innerText();
-console.log("   " + diagText.split(String.fromCharCode(10)).slice(0, 6).join(" | "));
-const diagCount = await page.locator(".diag").count();
-console.log(`   진단 ${diagCount}건`);
-
-// 변경분 하이라이트 — 트렌치 예제로 돌아가 마지막 단계에서 켠다
-await page.locator('.toggle:has-text("도핑 보기") input').uncheck();
-await page.selectOption(".topbar select >> nth=0", "trench");
-await page.waitForTimeout(1000);
-await toLastStep();
-await page.locator('.toggle:has-text("변경분") input').check();
-await page.waitForTimeout(1200);
-console.log("7) 변경분 하이라이트 — 이번 단계가 더한 곳이 초록으로");
-await shot("06-diff");
-console.log("   프로브: " + (await page.locator(".stack").innerText()).split(String.fromCharCode(10)).join(" · "));
-
-// 모달 두 개가 열리는지 — 마스크 디자이너와 표 편집기
-await page.locator(".topbar button", { hasText: "마스크" }).click();
+// 모달 두 개
+await page.locator(".topbar .menuwrap button").click();
+await page.locator(".menu button", { hasText: "마스크 편집" }).click();
 await page.waitForSelector(".maskcanvas canvas", { timeout: 10000 });
 console.log("8) 마스크 디자이너");
-await shot("07-mask");
+await shot("08-mask");
 await page.locator(".modal-box header button", { hasText: "닫기" }).click();
 
-await page.locator(".topbar button", { hasText: "재질·공정 표" }).click();
+await page.locator(".topbar .menuwrap button").click();
+await page.locator(".menu button", { hasText: "재질·공정 표" }).click();
 await page.waitForSelector("table.lib", { timeout: 10000 });
-const matRows = await page.locator("table.lib tbody tr").count();
-console.log(`9) 재질·공정 표 — 재질 ${matRows}종`);
-await shot("08-library");
+console.log(`9) 재질·공정 표 — ${await page.locator("table.lib tbody tr").count()}행`);
+await shot("09-library");
+await page.locator(".modal-box header button", { hasText: "닫기" }).click();
+
+// 그래프 화면 (분기 편집용)
+await page.locator(".recipe header button", { hasText: "그래프" }).click();
+await page.waitForSelector(".fabnode", { timeout: 10000 });
+console.log(`10) 그래프 — 노드 ${await page.locator(".fabnode").count()}개`);
+await shot("10-graph");
 await page.locator(".modal-box header button", { hasText: "닫기" }).click();
 await page.waitForTimeout(400);
-
-// 표면 완화
-await page.locator('.slider:has-text("표면 완화") input').fill("2");
-await page.waitForTimeout(1500);
-console.log("10) 3D 표면 완화");
-await shot("09-smooth");
 
 // ---- 학생처럼 험하게 다뤄 본다 ----
 console.log("11) UI 스트레스");
-
-// 노드 클릭 → 팔레트에서 노드 추가
-await page.locator(".fabnode").first().click();
-await page.waitForTimeout(300);
-await page.locator(".palette button", { hasText: "산화" }).click();
+await page.locator(".step").first().click();
 await settle();
-await page.waitForTimeout(1200);
-let ticks2 = await page.locator(".tick").count();
-console.log(`   노드 추가 후 단계 ${ticks2}개`);
+await page.locator(".addwrap .add").click();
+await page.locator(".addmenu button", { hasText: "산화" }).click();
+await settle();
+await page.waitForTimeout(1500);
+const steps2 = await page.locator(".step").count();
+console.log(`   단계 추가 후 ${steps2}개 · ${await line(".stepbar")}`);
 
-// 속성 슬라이더를 끝까지 밀어 본다
-const sliders = page.locator(".inspector .field input[type=range]");
+// 노브를 끝까지 밀어 본다
+const sliders = page.locator(".stepinspector .field input[type=range]");
 if (await sliders.count()) {
   const first = sliders.first();
   await first.fill(await first.getAttribute("max"));
   await settle();
-  await page.waitForTimeout(1200);
-  console.log("   파라미터 최대값으로 밀었음");
+  await page.waitForTimeout(1500);
+  console.log("   노브 최대값으로 밀었음");
 }
 
-// 선택한 노드를 삭제
-await page.locator(".inspector button.danger", { hasText: "삭제" }).click();
-await settle();
-await page.waitForTimeout(1200);
-const ticks3 = await page.locator(".tick").count();
-console.log(`   노드 삭제 후 단계 ${ticks3}개`);
-if (ticks3 !== ticks2 - 1) console.log(`   ⚠ 삭제 후 단계 수가 예상과 다름 (${ticks2} → ${ticks3})`);
+// 순서 바꾸기
+const down = page.locator(".step.on .rowtools button", { hasText: "↓" });
+if (await down.count()) {
+  await down.click();
+  await settle();
+  await page.waitForTimeout(1200);
+  console.log("   순서 아래로 옮김");
+}
 
-// 격자 프리셋 변경 — 마스크가 늘어나야 하고 재계산이 돌아야 한다
-await page.selectOption(".topbar select >> nth=1", { label: "작게 (0.28M)" });
+// 삭제
+await page.locator(".step.on .rowtools .del").click();
 await settle();
-await page.waitForTimeout(2000);
-console.log("   격자 변경: " + (await page.locator(".stepinfo").innerText()).split(String.fromCharCode(10))[0]);
-await shot("10-stress");
-
-const stillDrawn = await page.locator(".xsec canvas").count();
-if (stillDrawn === 0) console.log("   ⚠ 스트레스 후 단면이 사라졌습니다");
+await page.waitForTimeout(1500);
+const steps3 = await page.locator(".step").count();
+console.log(`   삭제 후 ${steps3}개`);
+if (steps3 !== steps2 - 1)
+  console.log(`   ⚠ 삭제 후 단계 수가 예상과 다름 (${steps2} → ${steps3})`);
+await shot("11-stress");
 
 // 빈 화면을 통과시키지 않는다 — 색이 몇 종류밖에 없으면 아무것도 안 그려진 것이다.
 const painted = await page.evaluate(() => {

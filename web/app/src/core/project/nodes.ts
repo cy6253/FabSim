@@ -10,6 +10,7 @@
  * 각 노드에 `teaches`를 붙여 교육 계층이 나중에 그대로 쓸 수 있게 했다.
  */
 import type { Library } from "../library";
+import type { ParamValue } from "./types";
 
 export type ParamSpec =
   | {
@@ -22,6 +23,16 @@ export type ParamSpec =
       default: number;
       unit?: string;
       help?: string;
+      /**
+       * 이 값이면 "직접 정하지 않음"을 뜻한다 (증착 커버리지, 식각 이방성).
+       *
+       * 슬라이더로는 표현할 수 없는 값이라 화면이 따로 다뤄야 한다. 예전에는
+       * 커버리지 노브에 "-1"이 그대로 찍혀 나와서, 그게 값이 아니라 "방식이
+       * 정한 대로"라는 뜻인 걸 알 방법이 없었다.
+       */
+      autoValue?: number;
+      /** 자동일 때 대신 보여 줄 말. */
+      autoLabel?: string;
     }
   | {
       kind: "select";
@@ -71,8 +82,9 @@ export const NODE_SPECS: NodeSpec[] = [
         help: "방식이 스텝 커버리지를 정한다. 커버리지를 직접 만지려면 아래 값을 쓴다",
       },
       {
-        kind: "number", key: "coverage", label: "스텝 커버리지", min: 0, max: 1, step: 0.05, default: -1,
-        help: "-1이면 방식의 기본값을 쓴다. 0에 가까울수록 입구가 먼저 막혀 보이드가 갇힌다",
+        kind: "number", key: "coverage", label: "스텝 커버리지", min: 0, max: 1, step: 0.05,
+        default: -1, autoValue: -1, autoLabel: "방식이 정한 값",
+        help: "0에 가까울수록 입구가 먼저 막혀 보이드가 갇힌다",
       },
     ],
     teaches: "스텝 커버리지 — 깊은 곳일수록 하늘이 덜 보여 느리게 자라고, 입구가 바닥보다 먼저 막힌다",
@@ -85,8 +97,9 @@ export const NODE_SPECS: NodeSpec[] = [
       { kind: "select", key: "etchant", label: "식각액", source: "etchant", default: "RIE_oxide" },
       { kind: "number", key: "seconds", label: "시간", min: 0, max: 120, step: 1, default: 10, unit: "s" },
       {
-        kind: "number", key: "anisotropy", label: "이방성", min: 0, max: 1, step: 0.05, default: -1,
-        help: "-1이면 식각액의 기본값. 1.0 = 수직 RIE, 0.0 = 등방 습식(마스크 아래로 파고든다)",
+        kind: "number", key: "anisotropy", label: "이방성", min: 0, max: 1, step: 0.05,
+        default: -1, autoValue: -1, autoLabel: "식각액이 정한 값",
+        help: "1.0 = 수직 RIE, 0.0 = 등방 습식(마스크 아래로 파고든다)",
       },
     ],
     teaches: "선택비와 이방성 — 노드를 dry/wet으로 나누지 않고 노브 하나로 잇는다",
@@ -239,6 +252,23 @@ export function optionsFor(
     default:
       return maskNames.map((m) => ({ value: m.id, label: m.name }));
   }
+}
+
+/**
+ * 목록 한 줄에 보여 줄 요약. 숫자보다 이름이 읽힌다 —
+ * 노광의 첫 파라미터는 정렬 오차라 "0"만 찍혀서 아무 뜻도 없었다.
+ */
+export function summarize(type: string, params: Record<string, ParamValue>): string {
+  const spec = NODE_SPEC_BY_TYPE[type];
+  if (!spec) return "";
+  const pick =
+    spec.params.find((p) => p.kind === "select" && p.key !== "maskId") ??
+    spec.params.find((p) => p.kind === "number" && p.key !== "dx" && p.key !== "dy");
+  if (!pick) return "";
+  const v = params[pick.key];
+  if (v === undefined || v === "") return "";
+  if (pick.kind === "number" && pick.autoValue !== undefined && v === pick.autoValue) return "";
+  return String(v);
 }
 
 /** 카탈로그의 기본값으로 파라미터 한 벌을 만든다. */

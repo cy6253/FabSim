@@ -139,9 +139,15 @@ export function Profile(p: {
   );
 }
 
-/* --------------------------------------------------------------- 타임라인 */
+/* --------------------------------------------------------------- 단계 바 */
 
-export function Timeline(p: {
+/**
+ * 단면 바로 아래 얇은 줄 — 지금 몇 단계이고 무슨 일이 있었는지.
+ *
+ * 예전 타임라인은 슬라이더 + 번호 버튼 + 상태 줄이었다. 이제 순서는 왼쪽
+ * 레시피 목록이 보여 주므로 여기는 **앞뒤 이동과 결과 한 줄**만 남긴다.
+ */
+export function StepBar(p: {
   chain: { id: string; label: string; note?: string }[];
   meta: (StepMeta | undefined)[];
   step: number;
@@ -151,40 +157,24 @@ export function Timeline(p: {
 }) {
   const m = p.meta[p.step];
   const node = p.chain[p.step];
+  const last = p.chain.length - 1;
   return (
-    <div className="timeline">
-      <input
-        type="range"
-        min={0}
-        max={Math.max(0, p.chain.length - 1)}
-        value={p.step}
-        onChange={(e) => p.onStep(Number(e.target.value))}
-      />
-      <div className="ticks">
-        {p.chain.map((c, i) => (
-          <button
-            key={c.id}
-            className={`tick${i === p.step ? " on" : ""}${p.meta[i] ? " done" : ""}`}
-            onClick={() => p.onStep(i)}
-            title={c.label}
-          >
-            {i + 1}
-          </button>
-        ))}
-      </div>
-      <div className="stepinfo">
-        <b>
-          {p.step + 1}/{p.chain.length} · {node?.label ?? "-"}
-        </b>
-        {m && <span className="note">{m.note}</span>}
-        {m && <span className="ms">{(m.ms / 1000).toFixed(2)}s</span>}
-        {p.busy && (
-          <span className="busy">
-            계산 중{p.progress ? ` ${p.progress.index + 1}/${p.progress.total}` : ""}…
-          </span>
-        )}
-      </div>
-      {node?.note && <div className="nodenote">{node.note}</div>}
+    <div className="stepbar">
+      <button onClick={() => p.onStep(Math.max(0, p.step - 1))} disabled={p.step <= 0}>◀</button>
+      <b className="pos">
+        {p.chain.length === 0 ? "—" : `${p.step + 1} / ${p.chain.length}`}
+      </b>
+      <button onClick={() => p.onStep(Math.min(last, p.step + 1))} disabled={p.step >= last}>▶</button>
+      <b className="label">{node?.label ?? ""}</b>
+      {m && <span className="note">{m.note}</span>}
+      <span className="spacer" />
+      {p.busy ? (
+        <span className="busy">
+          계산 중{p.progress ? ` ${p.progress.index + 1}/${p.progress.total}` : ""}…
+        </span>
+      ) : (
+        m && <span className="ms">{(m.ms / 1000).toFixed(2)}s</span>
+      )}
     </div>
   );
 }
