@@ -33,3 +33,13 @@ Thumbs.db
 # Python
 __pycache__/
 *.pyc
+
+# OMC / Claude Code 세션 상태
+.omc/
+**/.omc/
+
+# Node / web 앱
+node_modules/
+dist/
+.vite/
+*.tsbuildinfo

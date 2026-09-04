@@ -34,6 +34,17 @@ python m1a_core.py [식각시간]     # 기본 45
 | `anneal_check.py` | 가변-D 확산이 얌전한가 | σ 오차 0%, 도즈 보존, 산화막 100% 차단. 명시적은 261 패스 → ADI (결정 M) |
 | `phi_and_seal_check.py` | φ를 진리의 원천으로 쓸 수 있는가 | 0.46×5 = 2.3 한 번과 차이 0. union-find 봉인 20배 빠름 (결정 O·P) |
 
+## 골든 값 다리
+
+| 파일 | 내용 |
+|---|---|
+| `golden_dump.py` | 참조 구현의 값을 `golden.json` 으로 뽑아 TypeScript 코어의 오라클로 넘긴다. `python golden_dump.py` 로 갱신. |
+| `golden.json` | 생성물이므로 손으로 고치지 않는다. `web/app/src/core/__tests__/golden.test.ts` 가 읽는다. |
+
+순수 수식(Deal-Grove)과 물성 상수는 자릿수까지 비교할 수 있지만 격자 결과는
+못 한다 — 파이썬은 float64, JS는 Float32Array 다. 그래서 여기서 검증한 *주장*을
+적어 두고 TS가 자기 격자에서 재현하는지 본다.
+
 ## 핵심 규칙
 
 **EDT 근사는 표면점의 속도가 그 광선 전체에 유지될 때만 유효합니다.**
