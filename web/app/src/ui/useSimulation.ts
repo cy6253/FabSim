@@ -11,7 +11,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Project } from "../core/project/types";
 import { chainTo, defaultLeaf, indexGraph } from "../core/project/graph";
 import { NODE_SPEC_BY_TYPE } from "../core/project/nodes";
+import { sortDiagnostics } from "../core/education/diagnostics";
 import type { FromWorker, StepMeta, ToWorker } from "../worker/protocol";
+import type { Diagnostic } from "../core/education/diagnostics";
 
 export interface ViewData {
   step: number;
@@ -21,6 +23,8 @@ export interface ViewData {
   mat: Uint8Array;
   voids: Uint8Array;
   conc: Float32Array[];
+  /** 직전 단계 대비 변경분. 1 = 추가, 2 = 제거. */
+  diff?: Uint8Array;
 }
 
 export interface SimState {
@@ -37,6 +41,8 @@ export interface SimState {
   progress: { index: number; total: number } | null;
   error: string | null;
   cacheBytes: number;
+  /** 계산된 구간의 진단. 심각도 순으로 정렬돼 있다. */
+  diagnostics: Diagnostic[];
 }
 
 const EDIT_DEBOUNCE_MS = 140;
@@ -54,6 +60,7 @@ export function useSimulation(project: Project): SimState {
   const [progress, setProgress] = useState<{ index: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cacheBytes, setCacheBytes] = useState(0);
+  const [diagnostics, setDiagnostics] = useState<Diagnostic[]>([]);
 
   // 그래프에서 바로 뽑는 것 — 실행을 기다리지 않고 타임라인을 그릴 수 있다.
   const graph = useMemo(() => indexGraph(project), [project]);
@@ -92,11 +99,12 @@ export function useSimulation(project: Project): SimState {
           setBusy(false);
           setProgress(null);
           setCacheBytes(m.cacheBytes);
+          setDiagnostics(sortDiagnostics(m.diagnostics));
           break;
         case "viewData":
           setView({
             step: m.step, nx: m.nx, ny: m.ny, nz: m.nz,
-            mat: m.mat, voids: m.voids, conc: m.conc,
+            mat: m.mat, voids: m.voids, conc: m.conc, diff: m.diff,
           });
           setBusy(false);
           break;
@@ -121,6 +129,7 @@ export function useSimulation(project: Project): SimState {
       const token = ++tokenRef.current;
       setError(null);
       setBusy(true);
+      setDiagnostics([]);
       send({ type: "setProject", project });
       send({ type: "run", leaf: activeLeaf, upTo: target, token });
       send({ type: "view", leaf: activeLeaf, step: target, token });
@@ -145,5 +154,6 @@ export function useSimulation(project: Project): SimState {
     progress,
     error,
     cacheBytes,
+    diagnostics,
   };
 }

@@ -16,6 +16,8 @@ export interface CrossSectionProps {
   donors: number[];
   acceptors: number[];
   hidden: Set<number>;
+  /** 변경분 하이라이트를 켤 것인가. */
+  showDiff: boolean;
   /** 프로브 위치 (x). 세로선으로 표시한다. */
   probeX: number;
   onProbeX: (x: number) => void;
@@ -34,6 +36,7 @@ export function CrossSection(p: CrossSectionProps) {
       y: Math.min(ny - 1, Math.max(0, p.sliceY)),
       voids: p.view.voids,
       hidden: p.hidden,
+      diff: p.showDiff ? p.view.diff : undefined,
       doping: p.doping
         ? { conc: p.view.conc, donors: p.donors, acceptors: p.acceptors }
         : undefined,
@@ -67,7 +70,7 @@ export function CrossSection(p: CrossSectionProps) {
     ctx.moveTo(p.probeX * scale + scale / 2, 0);
     ctx.lineTo(p.probeX * scale + scale / 2, cv.height);
     ctx.stroke();
-  }, [p.view, p.sliceY, p.doping, p.hidden, p.probeX, p.donors, p.acceptors]);
+  }, [p.view, p.sliceY, p.doping, p.hidden, p.probeX, p.donors, p.acceptors, p.showDiff]);
 
   return (
     <div className="xsec" ref={wrapRef}>

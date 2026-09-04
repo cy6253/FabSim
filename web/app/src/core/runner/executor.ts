@@ -49,6 +49,24 @@ export interface Frame {
   conc: Float32Array[];
   /** 이 단계에서 도핑이 바뀌었는가. */
   concChanged: boolean;
+  /**
+   * 재질별 셀 수와 봉인 보이드 수.
+   *
+   * 진단과 범례가 이걸 읽는다. 프레임을 만들 때 한 번 재 두면 이후로는 공짜다 —
+   * 사용자가 진단 패널을 열 때마다 92만 격자를 다시 훑을 이유가 없다.
+   */
+  counts: Record<number, number>;
+  voidCount: number;
+  /**
+   * 이 단계가 실제로 바꾼 셀 수.
+   *
+   * `mutated`가 따로 있는 이유: 노광(PR→노광PR)이나 산화(Si→SiO2)는 빈 칸이
+   * 되지도 채워지지도 않고 **재질만** 바뀐다. 그걸 안 세면 "아무 일도 안 한
+   * 단계"로 잘못 진단해 진짜 경고를 묻는다.
+   */
+  changed: { added: number; removed: number; mutated: number };
+  /** 컬럼별로 이 단계가 더한 두께. 증착의 실측 커버리지를 여기서 낸다. */
+  addedPerColumn?: { top: number; min: number; median: number };
 }
 
 export interface RunOptions {
@@ -225,12 +243,16 @@ export class Executor {
       if (opt.cancelled?.()) throw new Cancelled();
       const node = chain[i];
       const cached = this.frames.get(sigs[i]);
+      // 이 단계가 무엇을 바꿨는지 재려면 직전 상태가 필요하다. 캐시가 있으면
+      // 다시 계산할 일이 없으므로 그때는 뜨지 않는다.
+      const before = cached ? null : mat.slice();
       const t0 = Date.now();
       const note = this.apply(node, mat, phi, conc);
       const ms = Date.now() - t0;
 
       const concChanged = s.concDirty;
       const prev = out[out.length - 1];
+      const stats = cached ? null : this.frameStats(mat, before);
       const frame: Frame = cached ?? {
         nodeId: node.id,
         label: this.labelOf(node),
@@ -241,6 +263,7 @@ export class Executor {
         // 도핑이 안 바뀐 단계는 이전 배열을 그대로 가리킨다 — 3×4N을 아낀다.
         conc: concChanged || !prev ? conc.map((c) => c.slice()) : prev.conc,
         concChanged,
+        ...stats!,
       };
       s.concDirty = false;
       this.frames.set(sigs[i], frame);
@@ -254,6 +277,42 @@ export class Executor {
   }
 
   /* ------------------------------------------------------------------ 내부 */
+
+  /** 프레임에 붙일 통계. 한 단계에 한 번만 돈다. */
+  private frameStats(mat: Uint8Array, before: Uint8Array | null) {
+    const s = this.sim;
+    const counts: Record<number, number> = {};
+    for (let i = 0; i < s.N; i++) counts[mat[i]] = (counts[mat[i]] ?? 0) + 1;
+
+    const reach = ambient(s, mat, new Uint8Array(s.N));
+    let voidCount = 0;
+    for (let i = 0; i < s.N; i++) if (mat[i] === EMPTY && !reach[i]) voidCount++;
+
+    let added = 0, removed = 0, mutated = 0;
+    const perCol: number[] = [];
+    if (before) {
+      const col = new Int32Array(s.NX * s.NY);
+      for (let i = 0; i < s.N; i++) {
+        if (before[i] === mat[i]) continue;
+        const was = before[i] !== EMPTY, now = mat[i] !== EMPTY;
+        if (was === now) { mutated++; continue; }
+        const k = (i % s.NX) + s.NX * (((i / s.NX) | 0) % s.NY);
+        if (now) { added++; col[k]++; } else { removed++; col[k]--; }
+      }
+      for (let k = 0; k < col.length; k++) if (col[k] > 0) perCol.push(col[k]);
+    }
+
+    let addedPerColumn: Frame["addedPerColumn"];
+    if (perCol.length > 0) {
+      perCol.sort((a, b) => a - b);
+      addedPerColumn = {
+        top: perCol[perCol.length - 1],
+        min: perCol[0],
+        median: perCol[perCol.length >> 1],
+      };
+    }
+    return { counts, voidCount, changed: { added, removed, mutated }, addedPerColumn };
+  }
 
   private touchPhi(sig: string) {
     const i = this.phiHolders.indexOf(sig);

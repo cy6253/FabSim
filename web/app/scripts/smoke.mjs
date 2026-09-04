@@ -82,6 +82,44 @@ await page.waitForTimeout(1200);
 console.log("5) 도핑 보기 — 게이트 아래 채널만 비어 있어야 한다");
 await shot("05-nmos-doping");
 
+console.log("6) 진단 패널");
+const diagText = await page.locator(".diagnostics").innerText();
+console.log("   " + diagText.split(String.fromCharCode(10)).slice(0, 6).join(" | "));
+const diagCount = await page.locator(".diag").count();
+console.log(`   진단 ${diagCount}건`);
+
+// 변경분 하이라이트 — 트렌치 예제로 돌아가 마지막 단계에서 켠다
+await page.locator('.toggle:has-text("도핑 보기") input').uncheck();
+await page.selectOption(".topbar select >> nth=0", "trench");
+await page.waitForTimeout(1000);
+await toLastStep();
+await page.locator('.toggle:has-text("변경분") input').check();
+await page.waitForTimeout(1200);
+console.log("7) 변경분 하이라이트 — 이번 단계가 더한 곳이 초록으로");
+await shot("06-diff");
+console.log("   프로브: " + (await page.locator(".stack").innerText()).split(String.fromCharCode(10)).join(" · "));
+
+// 모달 두 개가 열리는지 — 마스크 디자이너와 표 편집기
+await page.locator(".topbar button", { hasText: "마스크" }).click();
+await page.waitForSelector(".maskcanvas canvas", { timeout: 10000 });
+console.log("8) 마스크 디자이너");
+await shot("07-mask");
+await page.locator(".modal-box header button", { hasText: "닫기" }).click();
+
+await page.locator(".topbar button", { hasText: "재질·공정 표" }).click();
+await page.waitForSelector("table.lib", { timeout: 10000 });
+const matRows = await page.locator("table.lib tbody tr").count();
+console.log(`9) 재질·공정 표 — 재질 ${matRows}종`);
+await shot("08-library");
+await page.locator(".modal-box header button", { hasText: "닫기" }).click();
+await page.waitForTimeout(400);
+
+// 표면 완화
+await page.locator('.slider:has-text("표면 완화") input').fill("2");
+await page.waitForTimeout(1500);
+console.log("10) 3D 표면 완화");
+await shot("09-smooth");
+
 // 빈 화면을 통과시키지 않는다 — 색이 몇 종류밖에 없으면 아무것도 안 그려진 것이다.
 const painted = await page.evaluate(() => {
   const cv = document.querySelector(".xsec canvas");
@@ -94,8 +132,9 @@ const painted = await page.evaluate(() => {
 });
 console.log(`\n캔버스 검사: ${painted.size}, 서로 다른 색 ${painted.colors}개 → ${painted.ok ? "그려짐" : "빈 화면!"}`);
 
+if (diagCount === 0) console.log("⚠ 진단이 하나도 없습니다 — 트렌치 예제는 보이드 경고가 나와야 합니다");
 console.log(`콘솔 오류 ${errors.length}건`);
 for (const e of errors.slice(0, 10)) console.log("  ! " + e);
 
 await browser.close();
-process.exit(errors.length === 0 && painted.ok ? 0 : 1);
+process.exit(errors.length === 0 && painted.ok && diagCount > 0 ? 0 : 1);

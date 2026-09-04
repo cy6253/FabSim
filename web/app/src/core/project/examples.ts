@@ -137,14 +137,27 @@ function sti(): Project {
   const m = twoWindows("sti", "STI 트렌치", g.nx, g.ny, 10, 22);
   return chain("STI — CMP가 정지층에서 멈춘다", g, [
     { type: "substrate", params: { material: "Si", thickness: 26 } },
-    { type: "oxidize", params: { condition: "dry1000", seconds: 30 } },
+    {
+      type: "oxidize",
+      params: { condition: "dry1000", seconds: 150 },
+      note: "패드 산화막 — 질화막의 응력을 실리콘에서 떼어 놓는다. 30초로 줄이면 1복셀 미만이라 아예 안 생긴다",
+    },
     { type: "deposit", params: { material: "Si3N4", thickness: 5, method: "LPCVD", coverage: 1 } },
     { type: "prCoat", params: { thickness: 7, planarization: 1 } },
     { type: "expose", mask: "sti" },
     { type: "develop", params: { tone: "positive" } },
-    { type: "etch", params: { etchant: "RIE_nitride", seconds: 10, anisotropy: 0.9 } },
+    {
+      type: "etch",
+      params: { etchant: "RIE_nitride", seconds: 10, anisotropy: 0.9 },
+      note: "PR로 질화막에 패턴을 옮긴다. 여기까지가 PR이 할 일이다",
+    },
+    {
+      type: "strip",
+      note:
+        "실리콘 식각 전에 PR을 벗긴다 — 이제 질화막이 하드마스크다. " +
+        "PR을 남기면 긴 실리콘 식각을 못 견디고 도중에 소모된다",
+    },
     { type: "etch", params: { etchant: "RIE_silicon", seconds: 20, anisotropy: 0.95 }, note: "트렌치" },
-    { type: "strip" },
     {
       type: "deposit",
       params: { material: "SiO2", thickness: 22, method: "PECVD", coverage: -1 },

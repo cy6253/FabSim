@@ -15,6 +15,8 @@ export interface View3DProps {
   cutX: number;
   showVoids: boolean;
   hidden: Set<number>;
+  /** 표면 완화 반복 횟수. 0이면 복셀 면 그대로. */
+  smooth: number;
 }
 
 export function View3D(p: View3DProps) {
@@ -124,6 +126,7 @@ export function View3D(p: View3DProps) {
       cutX: p.cutX,
       voids: p.showVoids ? p.view.voids : undefined,
       hidden: p.hidden,
+      smooth: p.smooth,
     });
     if (s.mesh) {
       s.scene.remove(s.mesh);
@@ -147,7 +150,7 @@ export function View3D(p: View3DProps) {
     s.target.set(0, 0, 0);
     s.target.setLength(Math.max(nx, ny, nz) * 0.5);
     (s as unknown as { place?: () => void }).place?.();
-  }, [p.view, p.cutX, p.showVoids, p.hidden]);
+  }, [p.view, p.cutX, p.showVoids, p.hidden, p.smooth]);
 
   return <div className="view3d" ref={hostRef} />;
 }

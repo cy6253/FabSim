@@ -12,6 +12,8 @@
  */
 import { Executor } from "../core/runner/executor";
 import { chainTo, indexGraph } from "../core/project/graph";
+import { analyze } from "../core/education/diagnostics";
+import { diffMask } from "../core/education/measure";
 import { NODE_SPEC_BY_TYPE } from "../core/project/nodes";
 import type { Project } from "../core/project/types";
 import type { FromWorker, StepMeta, ToWorker } from "./protocol";
@@ -41,7 +43,7 @@ async function run(leaf: string, upTo: number | undefined, token: number) {
   if (!executor || !project) return;
   const total = stepCount(project, leaf);
   if (total === 0) {
-    post({ type: "done", token, steps: [], cacheBytes: 0 });
+    post({ type: "done", token, steps: [], cacheBytes: 0, diagnostics: [] });
     return;
   }
   const last = upTo === undefined ? total - 1 : Math.min(upTo, total - 1);
@@ -65,7 +67,18 @@ async function run(leaf: string, upTo: number | undefined, token: number) {
     await yieldToQueue();
   }
   if (token !== current) return;
-  post({ type: "done", token, steps, cacheBytes: executor.cacheBytes() });
+
+  // 진단은 계산이 끝난 뒤 한 번만 낸다. 프레임에 붙은 통계만 읽으므로 싸다.
+  let diagnostics: ReturnType<typeof analyze> = [];
+  try {
+    const chain = chainTo(project, leaf, indexGraph(project)).filter(
+      (n) => !NODE_SPEC_BY_TYPE[n.type]?.asset,
+    );
+    diagnostics = analyze(executor.run(leaf, { upTo: last }), chain, executor.library);
+  } catch {
+    // 진단이 실패해도 시뮬레이션 결과는 살린다.
+  }
+  post({ type: "done", token, steps, cacheBytes: executor.cacheBytes(), diagnostics });
 }
 
 function view(leaf: string, step: number, token: number) {
@@ -83,16 +96,19 @@ function view(leaf: string, step: number, token: number) {
   const voids = executor.voidsOf(f);
   const conc = f.conc.map((c) => c.slice());
   const g = executor.grid;
+  // 변경분은 직전 프레임과 비교해서 낸다. 첫 단계는 비교 대상이 없다.
+  const prev = step > 0 ? frames[step - 1] : undefined;
+  const diff = prev ? diffMask(executor.materialOf(prev), mat) : undefined;
   post(
     {
       type: "viewData",
       token,
       step,
       nx: g.nx, ny: g.ny, nz: g.nz,
-      mat, voids, conc,
+      mat, voids, conc, diff,
     },
     // 전송해 복사를 피한다. Worker 쪽 사본은 여기서 만든 것이라 캐시에 영향이 없다.
-    [mat.buffer, voids.buffer, ...conc.map((c) => c.buffer)],
+    [mat.buffer, voids.buffer, ...conc.map((c) => c.buffer), ...(diff ? [diff.buffer] : [])],
   );
 }
 

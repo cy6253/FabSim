@@ -20,9 +20,28 @@ export interface SliceOptions {
   /** 도핑 보기 — 재질 대신 net doping을 칠한다. */
   doping?: { conc: Float32Array[]; donors: number[]; acceptors: number[] };
   hidden?: Set<number>;
+  /**
+   * 변경분 하이라이트 — 1은 이번 단계가 더한 곳, 2는 없앤 곳.
+   * 열네 단계짜리 레시피에서 "이 노드가 뭘 했지"를 눈으로 찾는 것이
+   * 의외로 어렵다. 색을 덮지 않고 섞어서 재질도 같이 읽히게 한다.
+   */
+  diff?: Uint8Array;
 }
 
 const BG: [number, number, number] = [16, 21, 29];
+/** 변경분 하이라이트 색. 추가는 초록, 제거는 자홍 — 재질 색과 겹치지 않게 골랐다. */
+const ADDED: [number, number, number] = [90, 230, 140];
+const REMOVED: [number, number, number] = [235, 90, 200];
+
+const mix = (
+  a: [number, number, number],
+  b: [number, number, number],
+  t: number,
+): [number, number, number] => [
+  a[0] + (b[0] - a[0]) * t,
+  a[1] + (b[1] - a[1]) * t,
+  a[2] + (b[2] - a[2]) * t,
+];
 
 /**
  * (nx × nz) RGBA. z는 위가 하늘이므로 뒤집어서 담는다 — 그대로 캔버스에 올리면
@@ -69,6 +88,12 @@ export function renderSlice(mat: Uint8Array, o: SliceOptions): ImageDataLike {
         c = BG;
       } else {
         c = MATCOL[m] ?? [200, 200, 200];
+      }
+
+      if (o.diff) {
+        const d = o.diff[i];
+        if (d === 1) c = mix(c, ADDED, 0.55);
+        else if (d === 2) c = mix(c, REMOVED, 0.45);
       }
 
       // z를 뒤집어 화면 위쪽이 웨이퍼 위쪽이 되게 한다.

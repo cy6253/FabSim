@@ -6,6 +6,8 @@
  */
 import { useEffect, useRef } from "react";
 import { MATNAME, MATCOL, EMPTY, VOIDCOL } from "../core/materials";
+import { countBySeverity, type Diagnostic, type Severity } from "../core/education/diagnostics";
+import { columnStack, voidStats } from "../core/education/measure";
 import type { Library } from "../core/library";
 import { dopingProfile, junctionDepth } from "../core/render/slice";
 import type { ViewData } from "./useSimulation";
@@ -183,6 +185,114 @@ export function Timeline(p: {
         )}
       </div>
       {node?.note && <div className="nodenote">{node.note}</div>}
+    </div>
+  );
+}
+
+/* --------------------------------------------------------------- 진단 패널 */
+
+/**
+ * 진단 목록.
+ *
+ * 교육 계층의 핵심 화면이다. 학생은 결과가 그럴듯해 보이면 맞다고 생각한다 —
+ * "보이드가 갇혔다", "정지층이 뚫렸다", "레지스트가 먼저 사라졌다"를 말로
+ * 짚어 주지 않으면 배울 계기가 없다.
+ */
+export function Diagnostics(p: {
+  items: Diagnostic[];
+  step: number;
+  onGoTo: (step: number) => void;
+}) {
+  const c = countBySeverity(p.items);
+  const icon: Record<Severity, string> = { error: "✕", warn: "!", info: "i" };
+  return (
+    <div className="panel diagnostics">
+      <h3>
+        진단
+        <span className="counts">
+          {c.error > 0 && <b className="sev-error">{c.error}</b>}
+          {c.warn > 0 && <b className="sev-warn">{c.warn}</b>}
+          {c.info > 0 && <b className="sev-info">{c.info}</b>}
+        </span>
+      </h3>
+      {p.items.length === 0 && <p className="hint">지적할 것이 없습니다.</p>}
+      <ul>
+        {p.items.map((d, i) => (
+          <li
+            key={i}
+            className={`diag sev-${d.severity}${d.step === p.step ? " here" : ""}`}
+            onClick={() => p.onGoTo(d.step)}
+            title="클릭하면 그 단계로 이동합니다"
+          >
+            <span className={`badge sev-${d.severity}`}>{icon[d.severity]}</span>
+            <div>
+              <b>
+                {d.step + 1}단계 · {d.title}
+              </b>
+              <span className="detail">{d.detail}</span>
+              {d.advice && <span className="advice">{d.advice}</span>}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/* --------------------------------------------------------------- 지점 프로브 */
+
+/** 컬럼 하나를 찍어 층 두께를 읽는다. 단면을 클릭하면 여기가 갱신된다. */
+export function Probe(p: { view: ViewData; lib: Library; x: number; y: number }) {
+  const stack = columnStack(
+    p.view.mat,
+    { nx: p.view.nx, ny: p.view.ny, nz: p.view.nz },
+    p.x,
+    p.y,
+    p.lib,
+  );
+  const vs = voidStats(p.view.voids, { nx: p.view.nx, ny: p.view.ny, nz: p.view.nz });
+  return (
+    <div className="panel tight">
+      <h3>
+        프로브
+        <span className="counts">
+          x={p.x} y={p.y}
+        </span>
+      </h3>
+      {stack.length === 0 ? (
+        <p className="hint">이 컬럼은 비어 있습니다.</p>
+      ) : (
+        <table className="stack">
+          <tbody>
+            {stack.map((l, i) => (
+              <tr key={i}>
+                <td>
+                  <i
+                    style={{
+                      background:
+                        l.material === EMPTY
+                          ? "transparent"
+                          : `rgb(${(MATCOL[l.material] ?? [200, 200, 200]).join(",")})`,
+                      borderColor: l.material === EMPTY ? "#55607080" : "transparent",
+                    }}
+                  />
+                  {l.name}
+                </td>
+                <td className="num">{l.thickness}</td>
+                <td className="num dim">
+                  z{l.from}–{l.to}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {vs.cells > 0 && (
+        <p className="voidline">
+          보이드 {vs.cells.toLocaleString()}셀 · 덩어리 {vs.components}개 · 최대{" "}
+          {vs.largest.toLocaleString()}셀
+        </p>
+      )}
     </div>
   );
 }

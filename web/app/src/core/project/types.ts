@@ -9,7 +9,16 @@
  * 읽고 쓸 수 있어서 Worker와 테스트에서 곤란하다. PNG는 UI의 가져오기/내보내기
  * 형식으로만 쓴다.
  */
-import type { MaterialDef, SpeciesDef } from "../library";
+import type {
+  MaterialDef,
+  SpeciesDef,
+  EtchantDef,
+  DepositionDef,
+  SlurryDef,
+  OxidationDef,
+  SilicideDef,
+  ImplantDef,
+} from "../library";
 
 export const PROJECT_FORMAT = "fabsim3d-project";
 export const PROJECT_VERSION = 1;
@@ -50,10 +59,22 @@ export interface RecipeEdge {
   port: EdgePort;
 }
 
-/** 사용자가 표를 편집했을 때만 채워진다. 비면 기본 라이브러리를 쓴다. */
+/**
+ * 사용자가 표를 편집했을 때만 채워진다. 비면 기본 라이브러리를 쓴다.
+ *
+ * 통째로 갈아끼우는 방식이다 — 부분 병합을 하면 기본 표가 바뀌었을 때
+ * 프로젝트가 조용히 다른 결과를 내게 된다. 결정성이 요구사항이므로
+ * 편집한 표는 전부 파일에 들어간다.
+ */
 export interface LibraryOverride {
   materials?: MaterialDef[];
   species?: SpeciesDef[];
+  etchants?: EtchantDef[];
+  depositions?: DepositionDef[];
+  slurries?: SlurryDef[];
+  oxidations?: OxidationDef[];
+  silicides?: SilicideDef[];
+  implants?: ImplantDef[];
 }
 
 export interface Project {

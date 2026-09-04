@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="10" fill="#0b0f15"/>
+  <!-- 웨이퍼 단면을 그대로 아이콘으로 — 층과 트렌치 안 보이드 -->
+  <rect x="8" y="40" width="48" height="16" fill="#64748f"/>
+  <path d="M8 40h18v-8h12v8h18v-9H8z" fill="#e8a33d"/>
+  <rect x="26" y="34" width="12" height="8" rx="2" fill="#e35a4d"/>
+  <rect x="8" y="24" width="48" height="7" fill="#3f9a8c"/>
+</svg>

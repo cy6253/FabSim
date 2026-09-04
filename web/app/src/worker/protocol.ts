@@ -10,6 +10,7 @@
  * 오면 토큰이 올라가고 이전 계산은 다음 양보 지점에서 스스로 멈춘다.
  */
 import type { Project } from "../core/project/types";
+import type { Diagnostic } from "../core/education/diagnostics";
 
 export interface StepMeta {
   nodeId: string;
@@ -26,7 +27,14 @@ export type ToWorker =
 export type FromWorker =
   | { type: "ready" }
   | { type: "progress"; token: number; index: number; total: number; meta: StepMeta }
-  | { type: "done"; token: number; steps: StepMeta[]; cacheBytes: number }
+  | {
+      type: "done";
+      token: number;
+      steps: StepMeta[];
+      cacheBytes: number;
+      /** 계산된 구간에 대한 진단. 아직 안 돈 단계는 포함되지 않는다. */
+      diagnostics: Diagnostic[];
+    }
   | { type: "error"; token: number; message: string }
   | {
       type: "viewData";
@@ -38,4 +46,6 @@ export type FromWorker =
       mat: Uint8Array;
       voids: Uint8Array;
       conc: Float32Array[];
+      /** 직전 단계 대비 변경분. 1 = 추가, 2 = 제거. 첫 단계면 없다. */
+      diff?: Uint8Array;
     };

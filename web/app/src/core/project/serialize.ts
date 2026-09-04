@@ -149,13 +149,38 @@ export function serializeProject(p: Project): string {
  * (사본을 만들지 않아야 스냅샷 캐시의 동일성 판정이 싸다).
  */
 export function libraryOf(p: Project): Library {
-  if (!p.library?.materials && !p.library?.species) return DEFAULT_LIBRARY;
+  const ov = p.library;
+  if (!ov || Object.keys(ov).length === 0) return DEFAULT_LIBRARY;
   const base = materialsJson as unknown as { materials: MaterialDef[]; species: SpeciesDef[] };
+  const proc = processesJson as unknown as Parameters<typeof buildLibrary>[1];
   return buildLibrary(
     {
-      materials: p.library.materials ?? base.materials,
-      species: p.library.species ?? base.species,
+      materials: ov.materials ?? base.materials,
+      species: ov.species ?? base.species,
     },
-    processesJson as unknown as Parameters<typeof buildLibrary>[1],
+    {
+      etchants: ov.etchants ?? proc.etchants,
+      depositions: ov.depositions ?? proc.depositions,
+      slurries: ov.slurries ?? proc.slurries,
+      oxidations: ov.oxidations ?? proc.oxidations,
+      silicides: ov.silicides ?? proc.silicides,
+      implants: ov.implants ?? proc.implants,
+    },
   );
+}
+
+/** 기본 라이브러리의 원본 정의 — 편집 UI가 출발점으로 쓴다. */
+export function baseLibraryData() {
+  const base = materialsJson as unknown as { materials: MaterialDef[]; species: SpeciesDef[] };
+  const proc = processesJson as unknown as Parameters<typeof buildLibrary>[1];
+  return {
+    materials: base.materials,
+    species: base.species,
+    etchants: proc.etchants,
+    depositions: proc.depositions,
+    slurries: proc.slurries,
+    oxidations: proc.oxidations,
+    silicides: proc.silicides,
+    implants: proc.implants,
+  };
 }

@@ -188,3 +188,92 @@ button.danger { background: #3a1f26; border-color: #5b2b35; color: #ffb3ba; padd
 .react-flow__handle.h-state { background: #7b8aa0; width: 8px; height: 8px; }
 .react-flow__handle.h-mask { background: #8f6bbf; width: 8px; height: 8px; }
 .react-flow__controls button { background: var(--panel2); border-color: var(--line); fill: var(--text); }
+
+/* --------------------------------------------------------------- 진단 */
+
+.panel h3 .counts { display: flex; gap: 4px; font-size: 11px; }
+.panel h3 .counts b {
+  min-width: 18px; text-align: center; padding: 0 5px;
+  border-radius: 999px; color: #0b0f15;
+}
+.sev-error { background: #e5675f; }
+.sev-warn { background: #dfa544; }
+.sev-info { background: #5b93c4; }
+
+.diagnostics ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.diag {
+  display: flex; gap: 8px; align-items: flex-start;
+  padding: 7px 8px; border-radius: 5px; cursor: pointer;
+  background: var(--panel2); border: 1px solid transparent;
+}
+.diag:hover { border-color: var(--line); }
+.diag.here { border-color: var(--accent); }
+.diag > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.diag b { font-weight: 600; }
+.diag .detail { color: var(--dim); font-variant-numeric: tabular-nums; }
+.diag .advice { color: #a9c4d8; line-height: 1.45; }
+.diag .badge {
+  flex: 0 0 auto; width: 17px; height: 17px; border-radius: 999px;
+  display: grid; place-items: center; font-size: 11px; font-weight: 700;
+  color: #0b0f15; margin-top: 1px;
+}
+.diag.sev-error { background: #2a1a1e; }
+.diag.sev-warn { background: #2a2418; }
+
+/* ----------------------------------------------------------- 프로브 */
+
+.stack { width: 100%; border-collapse: collapse; }
+.stack td { padding: 2px 0; }
+.stack td:first-child { display: flex; align-items: center; gap: 6px; }
+.stack td i {
+  width: 10px; height: 10px; border-radius: 2px;
+  display: inline-block; border: 1px solid transparent;
+}
+.stack .num { text-align: right; font-variant-numeric: tabular-nums; }
+.stack .dim { color: var(--dim); padding-left: 8px; }
+.voidline { margin: 8px 0 0; color: #ffb3ba; }
+
+/* --------------------------------------------------------------- 모달 */
+
+.modal {
+  position: fixed; inset: 0; z-index: 50;
+  background: rgba(6, 9, 13, 0.72);
+  display: grid; place-items: center; padding: 24px;
+}
+.modal-box {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+  padding: 14px; max-height: 90vh; overflow: auto;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+}
+.modal-box.wide { width: min(1100px, 96vw); }
+.modal-box header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.modal-box h2 { margin: 0; font-size: 15px; }
+
+.masktools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.masktools .name { width: 200px; }
+.filebtn {
+  background: var(--panel2); border: 1px solid var(--line); border-radius: 5px;
+  padding: 4px 8px; cursor: pointer;
+}
+.filebtn:hover { border-color: var(--accent); }
+.maskcanvas {
+  border: 1px solid var(--line); border-radius: 5px; overflow: auto;
+  background: #0d1219; display: flex; justify-content: center; padding: 8px;
+}
+.maskcanvas canvas { image-rendering: pixelated; cursor: crosshair; }
+
+/* --------------------------------------------------------- 표 편집 */
+
+.tabs { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; }
+.tabs button.on { border-color: var(--accent); color: var(--accent); }
+.tablewrap { overflow: auto; max-height: 62vh; border: 1px solid var(--line); border-radius: 6px; }
+table.lib { width: 100%; border-collapse: collapse; font-size: 12px; }
+table.lib th, table.lib td { padding: 5px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+table.lib th { position: sticky; top: 0; background: var(--panel2); color: var(--dim); z-index: 1; }
+table.lib input[type="number"] { width: 78px; }
+table.lib input[type="color"] { width: 42px; height: 24px; padding: 1px; }
+table.lib .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+table.lib .dim { color: var(--dim); }
+.teachrow { color: #a9c4d8; margin-top: 3px; max-width: 320px; line-height: 1.4; }
+.selgrid { display: flex; flex-wrap: wrap; gap: 6px; }
+.selgrid label { display: flex; align-items: center; gap: 4px; color: var(--dim); }
