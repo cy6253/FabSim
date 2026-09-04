@@ -1,0 +1,101 @@
+# FabSim3D — 테스트하고, 통과하면 GitHub Pages에 배포한다.
+#
+# 순서가 중요하다: 테스트가 깨지면 배포하지 않는다. 교실에서 쓰는 링크가
+# 깨진 채로 올라가면 수업이 멈춘다.
+#
+# 처음 한 번은 저장소 설정에서 Pages의 Source를 "GitHub Actions"로 바꿔야 한다
+# (Settings → Pages → Build and deployment → Source).
+
+name: 배포
+
+on:
+  push:
+    branches: [main]
+  # 필요할 때 손으로도 돌린다
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 배포가 겹치면 나중 것만 살린다. 진행 중인 것은 끝까지 두고(취소하면 Pages가
+# 어중간한 상태로 남는다) 대기 중인 것만 버린다.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: web/app
+
+jobs:
+  test:
+    name: 테스트
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/app/package-lock.json
+
+      - run: npm ci
+
+      - name: 타입 검사
+        run: npx tsc --noEmit -p tsconfig.json
+
+      - name: 코어 테스트
+        run: npm test
+
+      - name: 파이썬 참조 구현
+        working-directory: web/reference
+        run: |
+          python m2_litho.py
+          python m2_dope.py
+          python m2_thermal.py
+
+      - name: 골든 값이 참조와 맞는가
+        working-directory: web/reference
+        run: |
+          python golden_dump.py
+          git diff --exit-code golden.json \
+            || (echo "golden.json이 파이썬 참조와 어긋납니다. golden_dump.py를 돌려 커밋하세요." && exit 1)
+
+      - name: 빌드
+        run: npm run build
+
+      - name: 브라우저 스모크 (하위 경로에 올린 것처럼)
+        run: |
+          npx playwright install --with-deps chromium
+          node scripts/serve-dist.mjs dist 5200 FabSim &
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:5200/FabSim/ > /dev/null && break
+            sleep 1
+          done
+          npm run smoke -- ./shots http://localhost:5200/FabSim/
+
+      - name: 스크린샷 남기기
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: web/app/shots/
+          if-no-files-found: ignore
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/app/dist
+
+  deploy:
+    name: 배포
+    needs: test
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

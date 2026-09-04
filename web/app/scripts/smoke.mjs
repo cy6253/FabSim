@@ -120,6 +120,46 @@ await page.waitForTimeout(1500);
 console.log("10) 3D 표면 완화");
 await shot("09-smooth");
 
+// ---- 학생처럼 험하게 다뤄 본다 ----
+console.log("11) UI 스트레스");
+
+// 노드 클릭 → 팔레트에서 노드 추가
+await page.locator(".fabnode").first().click();
+await page.waitForTimeout(300);
+await page.locator(".palette button", { hasText: "산화" }).click();
+await settle();
+await page.waitForTimeout(1200);
+let ticks2 = await page.locator(".tick").count();
+console.log(`   노드 추가 후 단계 ${ticks2}개`);
+
+// 속성 슬라이더를 끝까지 밀어 본다
+const sliders = page.locator(".inspector .field input[type=range]");
+if (await sliders.count()) {
+  const first = sliders.first();
+  await first.fill(await first.getAttribute("max"));
+  await settle();
+  await page.waitForTimeout(1200);
+  console.log("   파라미터 최대값으로 밀었음");
+}
+
+// 선택한 노드를 삭제
+await page.locator(".inspector button.danger", { hasText: "삭제" }).click();
+await settle();
+await page.waitForTimeout(1200);
+const ticks3 = await page.locator(".tick").count();
+console.log(`   노드 삭제 후 단계 ${ticks3}개`);
+if (ticks3 !== ticks2 - 1) console.log(`   ⚠ 삭제 후 단계 수가 예상과 다름 (${ticks2} → ${ticks3})`);
+
+// 격자 프리셋 변경 — 마스크가 늘어나야 하고 재계산이 돌아야 한다
+await page.selectOption(".topbar select >> nth=1", { label: "작게 (0.28M)" });
+await settle();
+await page.waitForTimeout(2000);
+console.log("   격자 변경: " + (await page.locator(".stepinfo").innerText()).split(String.fromCharCode(10))[0]);
+await shot("10-stress");
+
+const stillDrawn = await page.locator(".xsec canvas").count();
+if (stillDrawn === 0) console.log("   ⚠ 스트레스 후 단면이 사라졌습니다");
+
 // 빈 화면을 통과시키지 않는다 — 색이 몇 종류밖에 없으면 아무것도 안 그려진 것이다.
 const painted = await page.evaluate(() => {
   const cv = document.querySelector(".xsec canvas");

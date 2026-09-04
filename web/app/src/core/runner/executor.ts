@@ -58,6 +58,15 @@ export interface Frame {
   counts: Record<number, number>;
   voidCount: number;
   /**
+   * 격자 꼭대기 층(z = nz-1)을 채우고 있는 셀 수.
+   *
+   * 0이 아니면 구조가 천장에 닿은 것이다. 그러면 바깥(ambient)으로 나가는 길이
+   * 막혀 **이후 증착·산화가 조용히 아무 일도 하지 않는다** — 봉인 판정이
+   * 모든 빈 칸을 "시작 전부터 갇힘"으로 보기 때문이다. 물리적으로는 맞지만
+   * 사용자에게는 원인 모를 정지로 보이므로 진단이 짚어 준다.
+   */
+  topOccupied: number;
+  /**
    * 이 단계가 실제로 바꾼 셀 수.
    *
    * `mutated`가 따로 있는 이유: 노광(PR→노광PR)이나 산화(Si→SiO2)는 빈 칸이
@@ -288,6 +297,10 @@ export class Executor {
     let voidCount = 0;
     for (let i = 0; i < s.N; i++) if (mat[i] === EMPTY && !reach[i]) voidCount++;
 
+    let topOccupied = 0;
+    const topBase = s.NX * s.NY * (s.NZ - 1);
+    for (let k = 0; k < s.NX * s.NY; k++) if (mat[topBase + k] !== EMPTY) topOccupied++;
+
     let added = 0, removed = 0, mutated = 0;
     const perCol: number[] = [];
     if (before) {
@@ -311,7 +324,7 @@ export class Executor {
         median: perCol[perCol.length >> 1],
       };
     }
-    return { counts, voidCount, changed: { added, removed, mutated }, addedPerColumn };
+    return { counts, voidCount, topOccupied, changed: { added, removed, mutated }, addedPerColumn };
   }
 
   private touchPhi(sig: string) {

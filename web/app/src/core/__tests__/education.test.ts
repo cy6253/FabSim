@@ -92,6 +92,26 @@ describe("진단 — 문제를 잡아낸다", () => {
     expect(diags.some((d) => d.kind === "dose-not-conserved")).toBe(false);
   });
 
+  it("구조가 격자 천장에 닿으면 오류로 짚는다", () => {
+    // 퍼즈가 찾아낸 실제 함정이다. 천장에 닿으면 바깥으로 나가는 길이 막혀
+    // 이후 증착·산화가 조용히 아무 일도 안 한다 — 원인을 모르면 버그로 보인다.
+    const { diags, frames } = runWithDiagnostics("trench", (p) => {
+      const dep = p.nodes.find((n) => n.type === "deposit")!;
+      dep.params = { ...dep.params, thickness: 60, coverage: 1 };
+    });
+    const d = diags.find((k) => k.kind === "grid-full");
+    expect(d?.severity).toBe("error");
+    expect(d!.advice).toMatch(/격자 프리셋/);
+    expect(frames[frames.length - 1].topOccupied).toBeGreaterThan(0);
+  });
+
+  it("정상 레시피에서는 천장 경고가 안 나온다", () => {
+    for (const id of ["trench", "locos", "sti", "nmos", "allops"]) {
+      const { diags } = runWithDiagnostics(id);
+      expect(diags.filter((d) => d.kind === "grid-full").map(() => id), id).toEqual([]);
+    }
+  });
+
   it("정상 레시피에서는 오류가 하나도 안 나온다", () => {
     for (const id of ["locos", "sti", "nmos"]) {
       const { diags } = runWithDiagnostics(id);
