@@ -21,11 +21,11 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EXAMPLES, exampleById } from "../core/project/examples";
-import { parseProject, serializeProject, libraryOf, newProject, GRID_PRESETS } from "../core/project/serialize";
+import { parseProject, serializeProject, libraryOf, newProject } from "../core/project/serialize";
 import { insertStep, removeStep, moveStepDown, moveStepUp } from "../core/project/edit";
 import type { Project } from "../core/project/types";
 import { EMPTY } from "../core/materials";
-import { lengthLabel, nmPerVoxelOf, fieldLabel, nmForGrid } from "../core/project/types";
+import { lengthLabel, nmPerVoxelOf } from "../core/project/types";
 import { useSimulation } from "./useSimulation";
 import { View3D } from "./View3D";
 import { RecipeList } from "./RecipeList";
@@ -36,6 +36,7 @@ import { Legend, StepBar } from "./Panels";
 import { exportSlicePNG, exportStepsCSV } from "./exports";
 import { MaskDesigner } from "./MaskDesigner";
 import { LibraryEditor } from "./LibraryEditor";
+import { GridFields } from "./GridFields";
 import { loadState, saveState } from "./persist";
 import "./styles.css";
 
@@ -281,36 +282,7 @@ export function App() {
                 />
                 µm
               </label>
-              <div className="menurow dim">
-                {fieldLabel(project.grid, nmPerVoxel)} · {nmPerVoxel.toFixed(1)} nm/칸
-              </div>
-              <label className="menurow">
-                격자
-                <select
-                  value={`${project.grid.nx}x${project.grid.ny}x${project.grid.nz}`}
-                  onChange={(e) => {
-                    const g = GRID_PRESETS.find(
-                      (q) => `${q.grid.nx}x${q.grid.ny}x${q.grid.nz}` === e.target.value,
-                    );
-                    // 다이 폭을 붙들어 둔다 — 칸을 늘린 만큼 칸이 잘아진다.
-                    if (g)
-                      setProject({
-                        ...project,
-                        grid: g.grid,
-                        nmPerVoxel: nmForGrid(project.grid, g.grid, nmPerVoxel),
-                      });
-                  }}
-                >
-                  <option value={`${project.grid.nx}x${project.grid.ny}x${project.grid.nz}`}>
-                    {((project.grid.nx * project.grid.ny * project.grid.nz) / 1e6).toFixed(2)}M 복셀
-                  </option>
-                  {GRID_PRESETS.map((q) => (
-                    <option key={q.label} value={`${q.grid.nx}x${q.grid.ny}x${q.grid.nz}`}>
-                      {q.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <GridFields project={project} onChange={setProject} showZ />
             </div>
           )}
         </div>

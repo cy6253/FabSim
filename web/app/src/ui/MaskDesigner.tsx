@@ -8,11 +8,8 @@
  * 마스크는 프로젝트에 함께 저장되므로 여기서 만든 것이 파일 하나로 배포된다.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  packMask, unpackMask, nmPerVoxelOf, nmForGrid, fieldSize,
-  type MaskAsset, type Project,
-} from "../core/project/types";
-import { GRID_PRESETS } from "../core/project/serialize";
+import { packMask, unpackMask, type MaskAsset, type Project } from "../core/project/types";
+import { GridFields } from "./GridFields";
 
 type Tool = "rect" | "poly";
 
@@ -284,40 +281,11 @@ export function MaskDesigner({ project, onChange, onClose }: MaskDesignerProps) 
 
         <div className="masktools">
           {/* 마스크 한 칸 = 격자 한 칸이다. 더 잘게 그리려면 격자를 늘리는 수밖에
-              없는데, 그 설정이 다른 메뉴에 있으면 여기서 막힌 사람은 못 찾는다. */}
-          <label className="slider" title="마스크 한 칸이 곧 격자 한 칸입니다">
-            격자
-            <select
-              value={`${project.grid.nx}x${project.grid.ny}x${project.grid.nz}`}
-              onChange={(e) => {
-                const g = GRID_PRESETS.find(
-                  (q) => `${q.grid.nx}x${q.grid.ny}x${q.grid.nz}` === e.target.value,
-                );
-                if (!g) return;
-                // 다이 폭은 그대로 두고 칸만 잘게 나눈다.
-                onChange({
-                  ...project,
-                  grid: g.grid,
-                  nmPerVoxel: nmForGrid(project.grid, g.grid, nmPerVoxelOf(project)),
-                });
-                setZoom(null);
-              }}
-            >
-              <option value={`${project.grid.nx}x${project.grid.ny}x${project.grid.nz}`}>
-                {project.grid.nx}×{project.grid.ny} (마스크 칸)
-              </option>
-              {GRID_PRESETS.map((q) => (
-                <option key={q.label} value={`${q.grid.nx}x${q.grid.ny}x${q.grid.nz}`}>
-                  {q.grid.nx}×{q.grid.ny} — {q.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <span className="hint">
-            {fieldSize(project.grid, nmPerVoxelOf(project)).w.toFixed(2)} ×{" "}
-            {fieldSize(project.grid, nmPerVoxelOf(project)).d.toFixed(2)} µm ·{" "}
-            {nmPerVoxelOf(project).toFixed(1)} nm/칸
-          </span>
+              없는데, 그 설정이 다른 메뉴에 있으면 여기서 막힌 사람은 못 찾는다.
+              평면만 만진다 — 높이는 그리는 것과 상관이 없다. */}
+          <div className="gridwrap">
+            <GridFields project={project} onChange={onChange} />
+          </div>
           <span className="spacer" />
           <select value={selId ?? ""} onChange={(e) => setSelId(e.target.value || null)}>
             {project.masks.length === 0 && <option value="">(마스크 없음)</option>}

@@ -70,6 +70,16 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
 .menu hr { border: none; border-top: 1px solid var(--line); margin: 4px 0; }
 .menurow { display: flex; align-items: center; gap: 8px; padding: 4px 9px; color: var(--dim); }
 .menurow select { flex: 1; }
+.menurow.dim { color: var(--dim); font-size: 12px; }
+.menurow.dim.heavy { color: var(--warn); }
+/* 격자 세 축 — 좁은 칸 셋이 이름표를 이고 나란히 선다. */
+.gridfields { gap: 6px; }
+.gridfields label { display: flex; align-items: center; gap: 4px; }
+.gridfields label span { font-size: 11px; }
+.gridfields input { width: 58px; padding: 2px 4px; }
+/* 마스크 디자이너 안에서는 메뉴가 아니라 도구줄이므로 가로로 편다. */
+.gridwrap { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.gridwrap .menurow { padding: 0; }
 
 .hintbar {
   display: flex; align-items: center; gap: 12px;
