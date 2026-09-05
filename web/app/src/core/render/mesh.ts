@@ -218,43 +218,60 @@ export function smoothMesh(m: Mesh, iterations: number, lambda = 0.5): Mesh {
  */
 export function buildSmoothMesh(mat: Uint8Array, o: MeshOptions): Mesh {
   const { nx, ny, nz } = o;
+  const n = nx * ny * nz;
   const cut = Math.min(o.cutX ?? nx, nx);
   const voids = o.voids;
   const hidden = o.hidden;
   const passes = Math.max(0, o.smooth ?? 2);
 
-  // 격자를 **두 칸씩** 넓혀 테두리를 0으로 둔다.
-  //
-  // 한 칸으로는 부족하다. 안 붙이면 경계에서 장이 1로 유지돼 옆면과 바닥이 아예
-  // 안 만들어지고(웨이퍼가 판때기로 보인다), 한 칸만 붙이면 부호가 바뀌는 간선이
-  // 배열 맨 끝에 걸려 그 간선을 공유하는 셀 넷 중 일부가 없어서 **바닥에 구멍이
-  // 남는다**. 두 칸이면 기하가 배열 가장자리에서 떨어져 둘 다 해결된다.
-  const P = 2;
-  const px = nx + 2 * P, py = ny + 2 * P, pz = nz + 2 * P;
-  const field = new Float32Array(px * py * pz);
-  const pat = (x: number, y: number, z: number) => x + P + px * (y + P + py * (z + P));
-
+  /**
+   * 1) 점유도를 **절단면을 무시하고** 만든다.
+   *
+   * 절단면을 여기서 반영하면 흐리기가 그 면을 뭉개서 잘린 단면이 둥글어진다.
+   * 절단면은 물리적 표면이 아니라 "여기서 잘라 보겠다"는 시선이므로 날카로워야 한다.
+   */
+  const field = new Float32Array(n);
   let x0 = nx, x1 = -1, y0 = ny, y1 = -1, z0 = nz, z1 = -1;
-  for (let i = 0; i < nx * ny * nz; i++) {
-    const x = i % nx;
-    if (x >= cut) continue;
+  for (let i = 0; i < n; i++) {
     const m = mat[i];
     const drawn = m !== EMPTY ? !hidden?.has(m) : voids ? voids[i] === 1 : false;
     if (!drawn) continue;
+    field[i] = 1;
+    const x = i % nx;
+    if (x >= cut) continue; // 경계 상자는 보이는 부분만으로 잡는다
     const y = ((i / nx) | 0) % ny, z = (i / (nx * ny)) | 0;
-    field[pat(x, y, z)] = 1;
     if (x < x0) x0 = x; if (x > x1) x1 = x;
     if (y < y0) y0 = y; if (y > y1) y1 = y;
     if (z < z0) z0 = z; if (z > z1) z1 = z;
   }
-  const empty = { position: new Float32Array(0), normal: new Float32Array(0), color: new Float32Array(0), triangles: 0 };
+  const empty: Mesh = {
+    position: new Float32Array(0), normal: new Float32Array(0),
+    color: new Float32Array(0), triangles: 0,
+  };
   if (x1 < 0) return empty;
 
-  const blurred = blurField(field, { nx: px, ny: py, nz: pz, passes });
+  /**
+   * 2) 격자 안에서만 흐린다. blurField의 경계 조건이 **가장자리 값 복제**라
+   *    격자 옆면·바닥에서는 값이 1로 유지된다 — 그래서 상자 면이 안 말려든다.
+   *    예전에는 0으로 채운 테두리까지 포함해 흐려서 웨이퍼 전체가 조약돌처럼 됐다.
+   */
+  const blurred = blurField(field, { nx, ny, nz, passes });
 
-  // 흐린 만큼 경계가 번지므로 훑을 범위를 넓힌다. 좌표는 패딩 기준(+1)이다.
+  /**
+   * 3) 흐린 뒤에 **날카로운 경계**를 씌운다 — 절단면 바깥은 0.
+   *    이러면 상자 면과 절단면은 한 칸 만에 1→0으로 떨어져 평평하게 닫히고,
+   *    안쪽 지형만 매끄럽게 남는다.
+   */
+  const P = 2;
+  const px = nx + 2 * P, py = ny + 2 * P, pz = nz + 2 * P;
+  const padded = new Float32Array(px * py * pz);
+  for (let z = 0; z < nz; z++)
+    for (let y = 0; y < ny; y++)
+      for (let x = 0; x < cut; x++)
+        padded[x + P + px * (y + P + py * (z + P))] = blurred[x + nx * (y + ny * z)];
+
   const pad = passes + 2;
-  const net = surfaceNets(blurred, {
+  const net = surfaceNets(padded, {
     nx: px, ny: py, nz: pz,
     iso: 0.5,
     bbox: {
@@ -265,32 +282,47 @@ export function buildSmoothMesh(mat: Uint8Array, o: MeshOptions): Mesh {
   });
   if (net.triangles === 0) return empty;
 
-  // 패딩 좌표를 원래 격자 좌표로 되돌린다.
   const position = net.position;
   for (let i = 0; i < position.length; i++) position[i] -= P;
 
-  // 꼭짓점 색 — 그 자리의 재질. 비어 있으면 이웃에서 찾는다(표면은 경계에 있다).
-  const n = nx * ny * nz;
+  /**
+   * 4) 색은 **삼각형마다 하나**로 칠한다.
+   *
+   * 꼭짓점마다 칠하면 삼각형 안에서 보간돼 Si/SiO2 경계가 그라데이션으로 번진다.
+   * 잘린 단면에서 층이 어디까지인지 읽을 수 없게 되는데, 그게 이 화면의 요점이다.
+   * 세 꼭짓점에 같은 색을 넣으면 경계가 삼각형 변에 딱 떨어진다.
+   *
+   * 표본은 무게중심에서 법선 반대쪽으로 반 칸 들어간 자리에서 뜬다 — 표면
+   * 자리에서 그냥 뜨면 절반은 진공이 잡힌다.
+   */
   const color = new Float32Array(position.length);
   const nb = [1, -1, nx, -nx, nx * ny, -(nx * ny)];
-  for (let k = 0; k < net.voxel.length; k++) {
-    // 패딩 인덱스 → 원래 인덱스
-    const pi = net.voxel[k];
-    const vx = (pi % px) - P;
-    const vy = (((pi / px) | 0) % py) - P;
-    const vz = ((pi / (px * py)) | 0) - P;
-    let idx = Math.max(0, Math.min(n - 1, vx + nx * (vy + ny * vz)));
-    let m = vx < 0 || vy < 0 || vz < 0 || vx >= nx || vy >= ny || vz >= nz ? EMPTY : mat[idx];
-    if (m === EMPTY && !(voids && voids[idx])) {
+  for (let t = 0; t < position.length; t += 9) {
+    const cxp = (position[t] + position[t + 3] + position[t + 6]) / 3;
+    const cyp = (position[t + 1] + position[t + 4] + position[t + 7]) / 3;
+    const czp = (position[t + 2] + position[t + 5] + position[t + 8]) / 3;
+    const k = t / 3;
+    const sx = cxp - net.normal[k * 3] * 0.6;
+    const sy = cyp - net.normal[k * 3 + 1] * 0.6;
+    const sz = czp - net.normal[k * 3 + 2] * 0.6;
+    const vx = Math.max(0, Math.min(cut - 1, Math.round(sx)));
+    const vy = Math.max(0, Math.min(ny - 1, Math.round(sy)));
+    const vz = Math.max(0, Math.min(nz - 1, Math.round(sz)));
+
+    let idx = vx + nx * (vy + ny * vz);
+    let m = mat[idx];
+    if ((m === EMPTY && !(voids && voids[idx])) || (m !== EMPTY && hidden?.has(m))) {
       for (const d of nb) {
         const j = idx + d;
         if (j >= 0 && j < n && mat[j] !== EMPTY && !hidden?.has(mat[j])) { idx = j; m = mat[j]; break; }
       }
     }
     const c = m === EMPTY ? VOIDCOL : MATCOL[m] ?? [200, 200, 200];
-    color[k * 3] = c[0] / 255;
-    color[k * 3 + 1] = c[1] / 255;
-    color[k * 3 + 2] = c[2] / 255;
+    for (let v = 0; v < 3; v++) {
+      color[t + v * 3] = c[0] / 255;
+      color[t + v * 3 + 1] = c[1] / 255;
+      color[t + v * 3 + 2] = c[2] / 255;
+    }
   }
 
   return { position, normal: net.normal, color, triangles: net.triangles };

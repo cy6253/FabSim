@@ -48,17 +48,32 @@ export function View3D(p: View3DProps) {
     if (!host) return;
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
+    // 톤 매핑을 켜야 밝은 면이 뭉개지지 않고 계조가 남는다.
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 0.95;
     host.appendChild(renderer.domElement);
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x10151d);
     const camera = new THREE.PerspectiveCamera(42, 4 / 3, 1, 20000);
-    scene.add(new THREE.AmbientLight(0xffffff, 0.55));
-    const d1 = new THREE.DirectionalLight(0xffffff, 0.75);
-    d1.position.set(1, 1.4, 0.8);
-    scene.add(d1);
-    const d2 = new THREE.DirectionalLight(0xffffff, 0.3);
-    d2.position.set(-1, 0.4, -0.7);
-    scene.add(d2);
+
+    /**
+     * 조명이 형태를 읽히게 하는 가장 큰 요인이다.
+     *
+     * 예전에는 주변광 0.55에 방향광 둘이라 면 사이 명암 차이가 거의 없었다 —
+     * 기하는 멀쩡한데 화면이 흐릿해 보였다. 주변광을 낮추고 3점 조명으로 바꾸면
+     * 같은 메시가 훨씬 또렷해진다.
+     */
+    scene.add(new THREE.HemisphereLight(0xb8d0e8, 0x20262e, 0.34));
+    const key = new THREE.DirectionalLight(0xffffff, 0.85);
+    key.position.set(1, 1.5, 0.9);
+    scene.add(key);
+    const fill = new THREE.DirectionalLight(0xc8dcf0, 0.24);
+    fill.position.set(-1.1, 0.35, 0.55);
+    scene.add(fill);
+    // 뒤에서 오는 빛이 윤곽을 살려 준다 — 어두운 배경에서 형태가 떠오른다.
+    const rim = new THREE.DirectionalLight(0xffffff, 0.4);
+    rim.position.set(-0.4, 0.8, -1.2);
+    scene.add(rim);
     stateRef.current = {
       renderer, scene, camera,
       yaw: -0.7, pitch: 0.42, dist: 1,
@@ -157,8 +172,13 @@ export function View3D(p: View3DProps) {
     geo.setAttribute("color", new THREE.BufferAttribute(m.color, 3));
     const mesh = new THREE.Mesh(
       geo,
-      new THREE.MeshLambertMaterial({
+      // 약한 반사가 있어야 곡면의 방향이 읽힌다. 완전 무광이면 어디가 꺾인
+      // 자리인지 눈이 못 잡는다.
+      new THREE.MeshStandardMaterial({
         vertexColors: true,
+        roughness: 0.62,
+        metalness: 0.06,
+        flatShading: false,
         // 등위면은 절단면에서 안쪽을 보게 되므로 양면을 칠한다.
         side: p.mode === "smooth" ? THREE.DoubleSide : THREE.FrontSide,
       }),

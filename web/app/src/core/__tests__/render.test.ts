@@ -168,6 +168,26 @@ describe("표면 메시", () => {
     expect(worst).toBeLessThan(1.0);
   });
 
+  it("삼각형 감김이 법선과 같은 쪽을 본다", () => {
+    // three.js는 감김으로 앞뒤를 판정한다. 반대로 감기면 DoubleSide에서 음영용
+    // 법선이 뒤집혀, 위를 보는 면이 캄캄해진다. 실제로 그 버그를 겪었다.
+    const { mat } = wafer();
+    const m = buildSmoothMesh(mat, { ...G, smooth: 2 });
+    expect(m.triangles).toBeGreaterThan(0);
+    let disagree = 0;
+    for (let t = 0; t < m.position.length; t += 9) {
+      const P = m.position;
+      const ux = P[t + 3] - P[t], uy = P[t + 4] - P[t + 1], uz = P[t + 5] - P[t + 2];
+      const vx = P[t + 6] - P[t], vy = P[t + 7] - P[t + 1], vz = P[t + 8] - P[t + 2];
+      const gx = uy * vz - uz * vy, gy = uz * vx - ux * vz, gz = ux * vy - uy * vx;
+      if (Math.hypot(gx, gy, gz) < 1e-9) continue; // 퇴화 삼각형은 방향이 없다
+      const k = t / 3;
+      const d = gx * m.normal[k * 3] + gy * m.normal[k * 3 + 1] + gz * m.normal[k * 3 + 2];
+      if (d <= 0) disagree++;
+    }
+    expect(disagree, "감김과 법선이 어긋난 삼각형").toBe(0);
+  });
+
   it("빈 격자는 삼각형이 없다", () => {
     const s = createSim(8, 4, 8);
     const m = buildMesh(newMat(s), { nx: 8, ny: 4, nz: 8 });

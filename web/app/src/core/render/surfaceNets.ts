@@ -110,8 +110,11 @@ export function surfaceNets(field: Float32Array, o: NetOptions): NetGeometry {
   const tri: number[] = [];
   const quad = (a: number, b2: number, c: number, d: number, flip: boolean) => {
     if (a < 0 || b2 < 0 || c < 0 || d < 0) return;
-    if (flip) tri.push(a, c, b2, a, d, c);
-    else tri.push(a, b2, c, a, c, d);
+    // 감김은 법선과 같은 쪽을 봐야 한다. 반대로 감기면 three.js가 이 면을 뒷면으로
+    // 판정하고 — DoubleSide에서는 그리기는 그리되 **음영용 법선을 뒤집는다**.
+    // 그래서 위를 보는 면이 아래를 보는 것처럼 캄캄해졌다.
+    if (flip) tri.push(a, b2, c, a, c, d);
+    else tri.push(a, c, b2, a, d, c);
   };
 
   for (let z = Math.max(z0, 1); z <= z1; z++)
