@@ -134,11 +134,14 @@ def fmm3(sources, speed, hx=1.0, hy=1.0, hz=1.0, tmax=INF):
 
     Cost tracks the volume the front reaches, not the grid -- that is the whole
     reason this is affordable next to a full-grid EDT.
+
+    hz may be a per-cell list. Ions arrive from above, so a cell in shadow has to
+    lose its vertical component; a scalar reproduces the old uniform metric.
     """
+    hz_arr = hz if isinstance(hz, (list, tuple)) else None
     T = [INF] * N
     st = bytearray(N)                    # 0 far, 1 trial, 2 known
     heap = []
-    H = (hx, hy, hz)
 
     def solve(i):
         sp = speed[i]
@@ -152,6 +155,8 @@ def fmm3(sources, speed, hx=1.0, hy=1.0, hz=1.0, tmax=INF):
         if y < NY - 1 and st[i + NX] == 2: a[1] = min(a[1], T[i + NX])
         if z > 0 and st[i - NX * NY] == 2: a[2] = min(a[2], T[i - NX * NY])
         if z < NZ - 1 and st[i + NX * NY] == 2: a[2] = min(a[2], T[i + NX * NY])
+        hzi = hz_arr[i] if hz_arr is not None else hz
+        H = (hx, hy, hzi)
         dims = sorted([(a[k], H[k]) for k in range(3) if a[k] < INF])
         if not dims:
             return INF

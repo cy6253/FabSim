@@ -377,7 +377,10 @@ function fmm3(src,speed,hx,hy,hz,tmax,T){
         if(s===c)break;
         const a=hi[s];hi[s]=hi[c];hi[c]=a;const b=ht[s];ht[s]=ht[c];ht[c]=b;c=s;}}
     return top;};
-  const H=[hx,hy,hz],av=[0,0,0],ah=[0,0,0];
+  /* hz may be per-cell: ions arrive from above, so a cell in shadow has to lose
+     its vertical component. A scalar reproduces the old uniform metric. */
+  const hzArr=(typeof hz==="number")?null:hz, hzNum=(typeof hz==="number")?hz:0;
+  const av=[0,0,0],ah=[0,0,0];
   function solve(i){
     const sp=speed[i];
     if(sp<=1e-9)return Infinity;
@@ -390,9 +393,9 @@ function fmm3(src,speed,hx,hy,hz,tmax,T){
     if(zz>0){j=i-NX*NY;if(st[j]===2&&T[j]<a2)a2=T[j];}
     if(zz<NZ-1){j=i+NX*NY;if(st[j]===2&&T[j]<a2)a2=T[j];}
     let n=0;
-    if(a0<Infinity){av[n]=a0;ah[n]=H[0];n++;}
-    if(a1<Infinity){av[n]=a1;ah[n]=H[1];n++;}
-    if(a2<Infinity){av[n]=a2;ah[n]=H[2];n++;}
+    if(a0<Infinity){av[n]=a0;ah[n]=hx;n++;}
+    if(a1<Infinity){av[n]=a1;ah[n]=hy;n++;}
+    if(a2<Infinity){av[n]=a2;ah[n]=hzArr?hzArr[i]:hzNum;n++;}
     if(n===0)return Infinity;
     for(let p=1;p<n;p++){const kv=av[p],kh=ah[p];let q=p-1;
       while(q>=0&&av[q]>kv){av[q+1]=av[q];ah[q+1]=ah[q];q--;}
@@ -519,9 +522,31 @@ function opDeposit(mat,phi,material,thick,coverage){
   return {n,note};
 }
 
+/* Ions arrive from ABOVE. The axis spacings (1/lat,1/lat,1) forget that: they
+   are symmetric in +-z, so the UNDERSIDE of an overhang was cut upward at the
+   full vertical rate -- 3 layers at anisotropy 0.97, exactly as many as a wet
+   etch. And with no aspect-ratio dependence a narrow trench went as deep as a
+   wide one (ratio 1.00 at every anisotropy).
+   Both are the same omission, and slowing only the vertical spacing by the sky
+   visibility fixes both without adding a knob (decision R):
+     V=1 (open)     hz = 1      -> unchanged
+     V=0 (shadowed) hz = 1/lat  -> lateral speed only, i.e. chemistry alone
+   Wet (anisotropy 0, lat 1) gives hz=1 for any V, so it is skipped entirely.
+   Visibility is measured on the front and carried to solid cells by the feature
+   transform, the same approximation deposition makes for its growth rate. */
 function opEtch(mat,phi,sel,seconds,anisotropy){
   const lat=Math.max(1e-3,1-anisotropy);
   const T=S.fb,speed=S.fa;
+  const isotropic=lat>=1;
+  const verticalSpacing=front=>{
+    if(isotropic)return 1;
+    const vis=S.d1;
+    visibility(mat,front,12,26,vis,0);
+    edt3(S.u8a,true,S.d2);
+    const hz=S.d2,feat=S.feat;
+    for(let i=0;i<N;i++)hz[i]=1/(lat+(1-lat)*vis[feat[i]]);
+    return hz;
+  };
   let removed=0,touched=0,rounds=0,tLeft=seconds;
   const reach=new Uint8Array(N);
   // A sealed void carries no etchant, so the front cannot cross it. When the
@@ -532,7 +557,7 @@ function opEtch(mat,phi,sel,seconds,anisotropy){
     rounds++;
     ambient(mat,reach);
     const src=S.u8a;src.fill(0);
-    const sealedReps=[];
+    const sealedReps=[],front=[];
     let any=false;
     for(let i=0;i<N;i++){
       if(mat[i]!==EMPTY)continue;
@@ -546,11 +571,11 @@ function opEtch(mat,phi,sel,seconds,anisotropy){
       else if(y<NY-1&&ok(i+NX))hit=true;
       else if(z>0&&ok(i-NX*NY))hit=true;
       else if(z<NZ-1&&ok(i+NX*NY))hit=true;
-      if(hit){src[i]=1;any=true;}
+      if(hit){src[i]=1;front.push(i);any=true;}
     }
     if(!any)break;
     for(let i=0;i<N;i++)speed[i]=mat[i]!==EMPTY?(sel[mat[i]]||0):0;
-    touched+=fmm3(src,speed,1/lat,1/lat,1,tLeft,T);
+    touched+=fmm3(src,speed,1/lat,1/lat,verticalSpacing(front),tLeft,T);
     const tb=breakthroughTime(mat,T,tLeft,sealedReps);
     const cut=tb!==null?tb:tLeft;
     for(let i=0;i<N;i++)if(mat[i]!==EMPTY&&T[i]<=cut){mat[i]=EMPTY;removed++;}

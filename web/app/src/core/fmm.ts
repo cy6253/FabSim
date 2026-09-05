@@ -15,6 +15,10 @@ import { XOF, YOF, ZOF, type Sim } from "./grid";
  * src에서 출발해 speed로 전파하는 도달시각 T를 푼다. tmax를 넘으면 멈춘다.
  * hx/hy/hz는 축별 격자 간격 — 이방성 식각이 이 값만 바꿔서 표현된다.
  * 반환값은 확정(frozen)된 칸 수, 즉 실제로 든 비용.
+ *
+ * hz는 **칸마다 달라도 된다**. 이온은 위에서 오므로 그림자에 든 자리에서는
+ * 수직 성분이 죽어야 하는데, 그게 hz 하나로 표현된다(결정 R). 스칼라를 주면
+ * 예전과 똑같이 균일한 타원 계량이다.
  */
 export function fmm3(
   s: Sim,
@@ -22,7 +26,7 @@ export function fmm3(
   speed: Float32Array,
   hx: number,
   hy: number,
-  hz: number,
+  hz: number | Float32Array,
   tmax: number,
   T: Float32Array,
 ): number {
@@ -72,7 +76,8 @@ export function fmm3(
     return top;
   };
 
-  const H = [hx, hy, hz];
+  const hzArr = typeof hz === "number" ? null : hz;
+  const hzNum = typeof hz === "number" ? hz : 0;
   const av = [0, 0, 0],
     ah = [0, 0, 0];
 
@@ -89,9 +94,9 @@ export function fmm3(
     if (zz > 0) { j = i - NX * NY; if (st[j] === 2 && T[j] < a2) a2 = T[j]; }
     if (zz < NZ - 1) { j = i + NX * NY; if (st[j] === 2 && T[j] < a2) a2 = T[j]; }
     let n = 0;
-    if (a0 < Infinity) { av[n] = a0; ah[n] = H[0]; n++; }
-    if (a1 < Infinity) { av[n] = a1; ah[n] = H[1]; n++; }
-    if (a2 < Infinity) { av[n] = a2; ah[n] = H[2]; n++; }
+    if (a0 < Infinity) { av[n] = a0; ah[n] = hx; n++; }
+    if (a1 < Infinity) { av[n] = a1; ah[n] = hy; n++; }
+    if (a2 < Infinity) { av[n] = a2; ah[n] = hzArr ? hzArr[i] : hzNum; n++; }
     if (n === 0) return Infinity;
     // 삽입 정렬 — 항목이 최대 3개다.
     for (let p = 1; p < n; p++) {

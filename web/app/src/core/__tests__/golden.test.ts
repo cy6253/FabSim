@@ -24,7 +24,7 @@ import { newProject } from "../project/serialize";
 import { defaultParams } from "../project/nodes";
 import { Executor } from "../runner/executor";
 import { EMPTY, SI, OX, NIT, PR, MET, MSI, B, P_, AS, DG, DREL, SEG_M } from "../materials";
-import { dealGrove, dealGroveTime, opOxidize, opSilicide, opDeposit, opPRCoat, opExpose, opDevelop, opCMP, opImplant, opAnneal } from "../ops";
+import { dealGrove, dealGroveTime, opOxidize, opSilicide, opDeposit, opEtch, opPRCoat, opExpose, opDevelop, opCMP, opImplant, opAnneal } from "../ops";
 import { columnTop, countOf, sumOf, surfaceZ } from "../measure";
 import { stripeMask, fullMask } from "../masks";
 import { adversarialOps } from "../sequences/opList";
@@ -450,6 +450,65 @@ describe("리소·CMP — 파이썬이 확인한 주장을 TS가 재현한다", 
     const r = opCMP(s, mat, phi, 10, { [OX]: 1 });
     expect(r.n).toBeGreaterThan(0); // 실제로 뭔가 깎이긴 해야 한다
     expect(countOf(s, mat, OX)).toBe(oxBefore);
+  });
+});
+
+describe("식각 방향 — 이온은 위에서 온다", () => {
+  /** 폭이 다른 창 둘을 같은 시간 판다. 종횡비가 크면 바닥이 하늘을 덜 본다. */
+  function twoTrenches(aniso: number) {
+    const s2 = createSim(96, 8, 60);
+    const mat = newMat(s2), phi = newPhi(s2);
+    for (let z = 0; z < 40; z++)
+      for (let y = 0; y < s2.NY; y++) for (let x = 0; x < s2.NX; x++) mat[at(s2, x, y, z)] = SI;
+    for (let z = 40; z < 44; z++)
+      for (let y = 0; y < s2.NY; y++)
+        for (let x = 0; x < s2.NX; x++)
+          if (!((x >= 10 && x < 30) || (x >= 60 && x < 66))) mat[at(s2, x, y, z)] = OX;
+    s2.phiDirty = true;
+    opEtch(s2, mat, phi, { [SI]: 1.0, [OX]: 0.02 }, 20, aniso);
+    const depth = (x: number) => {
+      for (let z = 39; z >= 0; z--) if (mat[at(s2, x, 4, z)] !== EMPTY) return 39 - z;
+      return 40;
+    };
+    return { wide: depth(20), narrow: depth(63) };
+  }
+
+  it("좁은 창이 넓은 창보다 얕게 파인다 (RIE lag)", () => {
+    // 축별 간격만으로는 종횡비를 모른다 — 고치기 전에는 어느 이방성에서도
+    // 좁은 창과 넓은 창의 깊이 비가 정확히 1.00이었다.
+    const dry = twoTrenches(0.97);
+    expect(dry.wide).toBeGreaterThan(0);
+    expect(dry.narrow / dry.wide, "좁은 쪽이 얕아야 한다").toBeLessThan(0.8);
+  });
+
+  it("습식(이방성 0)은 종횡비를 타지 않는다 — 예전 결과 그대로", () => {
+    // 화학 식각에는 이온 통로가 없다. lat=1이면 hz=1이라 계산 자체를 건너뛴다.
+    const wet = twoTrenches(0);
+    expect(wet.narrow).toBe(wet.wide);
+  });
+
+  it("오버행 밑면은 이온이 못 닿아 거의 안 깎인다", () => {
+    // ±z 대칭인 타원 계량은 처마 **밑면**도 수직 속도로 위를 팠다. 이방성
+    // 0.97에서 습식과 똑같이 세 층을 먹었다.
+    const under = (aniso: number) => {
+      const s2 = createSim(40, 8, 50);
+      const mat = newMat(s2), phi = newPhi(s2);
+      for (let z = 0; z < 20; z++)
+        for (let y = 0; y < s2.NY; y++) for (let x = 0; x < s2.NX; x++) mat[at(s2, x, y, z)] = SI;
+      for (let z = 30; z < 33; z++)
+        for (let y = 0; y < s2.NY; y++) for (let x = 0; x < 20; x++) mat[at(s2, x, y, z)] = SI;
+      s2.phiDirty = true;
+      opEtch(s2, mat, phi, { [SI]: 1.0 }, 6, aniso);
+      let gone = 0;
+      for (let z = 30; z < 33; z++) {
+        let all = true;
+        for (let x = 4; x < 16; x++) if (mat[at(s2, x, 4, z)] !== EMPTY) all = false;
+        if (all) gone++;
+      }
+      return gone;
+    };
+    expect(under(0), "습식은 처마를 다 먹는다").toBe(3);
+    expect(under(0.97), "건식은 밑면을 거의 못 판다").toBeLessThan(3);
   });
 });
 

@@ -198,13 +198,26 @@ def op_deposit_uf(mat, phi, material, thickness, coverage):
 
 
 def op_etch_uf(mat, phi, sel, seconds, anisotropy=0.0, base=1.0):
+    """Ions arrive from ABOVE.
+
+    The axis spacings (1/lat, 1/lat, 1) forget that -- they are symmetric in +-z,
+    so the UNDERSIDE of an overhang was cut upward at the full vertical rate, and
+    with no aspect-ratio dependence a narrow trench went as deep as a wide one.
+    Slowing only the vertical spacing by the sky visibility fixes both without a
+    new knob (decision R):
+        V=1 (open)      hz = 1       -> unchanged
+        V=0 (shadowed)  hz = 1/lat   -> lateral speed only, chemistry alone
+    Wet (anisotropy 0, lat 1) gives hz=1 for any V, so it is skipped.
+    """
     lat = max(1e-3, 1.0 - anisotropy)
+    isotropic = lat >= 1.0
     removed = touched = rounds = 0
     t_left = seconds
     while t_left > 1e-6 and rounds < 6:
         rounds += 1
         reach = ambient(mat)
         sealed_reps = []
+        front = []
         src = bytearray(N)
         any_src = False
         for i in range(N):
@@ -217,13 +230,22 @@ def op_etch_uf(mat, phi, sel, seconds, anisotropy=0.0, base=1.0):
             for j in nb6(i):
                 if mat[j] != EMPTY and sel.get(mat[j], 0.0) > 0:
                     src[i] = 1
+                    front.append(i)
                     any_src = True
                     break
         if not any_src:
             break
         speed = [base * sel.get(mat[i], 0.0) if mat[i] != EMPTY else 0.0
                  for i in range(N)]
-        T, tch = fmm3(src, speed, hx=1.0 / lat, hy=1.0 / lat, hz=1.0, tmax=t_left)
+        if isotropic:
+            hz = 1.0
+        else:
+            # visibility on the front, carried to solid cells by the feature
+            # transform -- the same approximation deposition makes for growth.
+            vis = M.visibility(mat, front)
+            _, feat = M.edt3(src, want_feature=True)
+            hz = [1.0 / (lat + (1.0 - lat) * vis.get(feat[i], 1.0)) for i in range(N)]
+        T, tch = fmm3(src, speed, hx=1.0 / lat, hy=1.0 / lat, hz=hz, tmax=t_left)
         touched += tch
         tb = breakthrough_uf(mat, T, t_left, sealed_reps)
         cut = tb if tb is not None else t_left

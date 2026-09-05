@@ -13,6 +13,8 @@
 import { EMPTY } from "../materials";
 import { XOF, YOF, ZOF, type Sim } from "../grid";
 import { fmm3 } from "../fmm";
+import { edt3 } from "../edt";
+import { visibility } from "../visibility";
 import { ambient, breakthroughTime } from "../connectivity";
 
 export interface EtchResult {
@@ -28,6 +30,10 @@ export type Selectivity = Record<number, number>;
 
 /** 돌파 재계산 상한. 무한 루프 방지용이며 실제로는 1~3에서 끝난다. */
 const MAX_ROUNDS = 6;
+
+/** 하늘 가시성 광선 — 증착과 같은 상수를 쓴다. 결정성을 위해 고정이다. */
+const NRAY = 12;
+const RAYLEN = 26;
 
 export function opEtch(
   s: Sim,
@@ -48,6 +54,33 @@ export function opEtch(
     tLeft = seconds;
   const reach = new Uint8Array(N);
 
+  /**
+   * 이온은 **위에서 온다** — 축별 간격 (1/lat, 1/lat, 1)은 그걸 잊고 ±z에 대칭이라
+   * 오버행 **밑면**도 수직 속도로 위를 판다. 실제 RIE에서 그늘에 든 면은 이온을
+   * 못 받고 화학 성분(측면 속도)만 남는다. 종횡비가 클수록 바닥이 하늘을 덜 봐
+   * 느려지는 것(RIE lag)도 같은 이야기다.
+   *
+   * 그래서 수직 간격만 하늘 가시성으로 늦춘다(결정 R). 노브는 늘지 않는다:
+   *   V=1(트인 면)   hz = 1        → 지금과 똑같다
+   *   V=0(완전 그늘) hz = 1/lat    → 측면과 같은 속도, 즉 등방 화학 식각만
+   * 습식(α=0, lat=1)이면 어떤 V에서도 hz=1이라 계산 자체를 건너뛴다.
+   *
+   * 가시성은 전선 칸에서 재고, 고체 칸에는 증착과 같은 방식으로 feature
+   * transform이 배정한다. 한 단계 동안 이온 통로가 크게 안 변한다는 근사인데,
+   * 증착이 성장 속도에 쓰는 근사와 같은 종류다.
+   */
+  const isotropic = lat >= 1;
+  const verticalSpacing = (front: number[]): number | Float32Array => {
+    if (isotropic) return 1;
+    const vis = S.d1;
+    visibility(s, mat, front, NRAY, RAYLEN, vis, 0); // coverage 0 = 탈출 비율 그대로
+    edt3(s, S.u8a, true, S.d2); // feat = 가장 가까운 전선 칸
+    const hz = S.d2; // 거리는 더 안 쓰므로 그 자리에 덮어쓴다
+    const feat = S.feat;
+    for (let i = 0; i < N; i++) hz[i] = 1 / (lat + (1 - lat) * vis[feat[i]]);
+    return hz;
+  };
+
   while (tLeft > 1e-6 && rounds < MAX_ROUNDS) {
     rounds++;
     ambient(s, mat, reach);
@@ -55,6 +88,7 @@ export function opEtch(
     src.fill(0);
     // 봉인 보이드의 대표 칸 몇 개만 들고 간다 — 돌파 판정에는 대표 하나면 된다.
     const sealedReps: number[] = [];
+    const front: number[] = [];
     let any = false;
     for (let i = 0; i < N; i++) {
       if (mat[i] !== EMPTY) continue;
@@ -68,12 +102,12 @@ export function opEtch(
       else if (y < NY - 1 && ok(i + NX)) hit = true;
       else if (z > 0 && ok(i - NX * NY)) hit = true;
       else if (z < NZ - 1 && ok(i + NX * NY)) hit = true;
-      if (hit) { src[i] = 1; any = true; }
+      if (hit) { src[i] = 1; front.push(i); any = true; }
     }
     if (!any) break;
 
     for (let i = 0; i < N; i++) speed[i] = mat[i] !== EMPTY ? sel[mat[i]] || 0 : 0;
-    touched += fmm3(s, src, speed, 1 / lat, 1 / lat, 1, tLeft, T);
+    touched += fmm3(s, src, speed, 1 / lat, 1 / lat, verticalSpacing(front), tLeft, T);
 
     const tb = breakthroughTime(s, mat, T, tLeft, sealedReps);
     const cut = tb !== null ? tb : tLeft;
