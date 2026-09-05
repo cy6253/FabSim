@@ -68,6 +68,7 @@ def oxidant_reach(mat, l_ox):
     at the mask edge -- bird's beak -- at roughly the right scale.
     """
     reach = [False] * N
+    depth = [0] * N
     q = []
     for y in range(NY):
         for x in range(NX):
@@ -81,7 +82,6 @@ def oxidant_reach(mat, l_ox):
             if mat[j] == EMPTY and not reach[j]:
                 reach[j] = True; q.append(j)
     # then step into the oxide, at most l_ox voxels deep
-    depth = [0] * N
     cur = []
     for i in range(N):
         if not reach[i]:
@@ -98,7 +98,34 @@ def oxidant_reach(mat, l_ox):
                 if mat[j] == OX and not reach[j]:
                     reach[j] = True; depth[j] = depth[c] + 1; nxt.append(j)
         cur = nxt
-    return reach
+    return reach, depth
+
+
+def existing_oxide(mat, reach, depth):
+    """Deal-Grove's x0: how much oxide already covers the reaction interface.
+
+    Measured as layers actually stacked, not as the analytic thickness -- the two
+    differ by integer-layer rounding, and what the next oxidation has to cross is
+    the layers.
+    """
+    ds = []
+    for i in range(N):
+        if mat[i] != SI:
+            continue
+        best = -1
+        for j in nb6(i):
+            if not reach[j]:
+                continue
+            if mat[j] not in (EMPTY, OX):
+                continue
+            if best < 0 or depth[j] < best:
+                best = depth[j]
+        if best >= 0:
+            ds.append(best)
+    if not ds:
+        return 0.0
+    ds.sort()
+    return float(ds[len(ds) // 2])
 
 
 def edt_from(mask, want_feat=False):
@@ -118,11 +145,22 @@ def op_oxidize(mat, conc, ambience, temp, seconds):
     An earlier version gated consumption on "adjacent to a live surface cell",
     which also capped it at two layers no matter how thick the oxide got.
     """
-    x = deal_grove(ambience, temp, seconds)
-    consume_d, grow_d = x * CONSUME_FRAC, x * GROW_FRAC
-
-    l_ox = max(1.0, x)
-    reach = oxidant_reach(mat, l_ox)
+    # x0 -- the oxide already lying on the interface. The oxidant has to cross
+    # what has already grown, which is why a second oxidation is slower than the
+    # first. deal_grove has taken x0 from the start and the call never passed it,
+    # so every re-oxidation grew as if on bare silicon.
+    #
+    # For each oxidisable cell the shallowest adjacent oxidant cell gives the
+    # oxide covering it; the MEDIAN over the interface is the scalar. The mean
+    # gets dragged by the few cells that crawled a long way under a mask. The
+    # reach bound cannot truncate this: a cell only contributes if the oxidant
+    # actually got there, and then its hop count is the whole traversal.
+    l_ox = max(1.0, deal_grove(ambience, temp, seconds))
+    reach, depth = oxidant_reach(mat, l_ox)
+    x0 = existing_oxide(mat, reach, depth)
+    x = deal_grove(ambience, temp, seconds, x0)
+    dx = max(0.0, x - x0)
+    consume_d, grow_d = dx * CONSUME_FRAC, dx * GROW_FRAC
     oxidant = [reach[i] and mat[i] in (EMPTY, OX) for i in range(N)]
     if not any(oxidant):
         return 0, 0, x

@@ -708,9 +708,10 @@ function opAnneal(mat,conc,steps,dt){
 }
 
 /* interface reaction: oxidation */
-function dealGrove(key,seconds){
+function dealGrove(key,seconds,x0){
   const [A,Bc]=DG[key];
-  return 0.5*A*(Math.sqrt(1+4*Bc*seconds/(A*A))-1);
+  const tau=(x0>0&&Bc>0)?((x0*x0+A*x0)/Bc):0;
+  return 0.5*A*(Math.sqrt(1+4*Bc*(seconds+tau)/(A*A))-1);
 }
 /* Where the oxidant can get to. Vacuum is free, but travelling THROUGH oxide
    costs distance and the oxidant only diffuses about as far as the oxide is
@@ -719,8 +720,9 @@ function dealGrove(key,seconds){
    of the wafer and the mask would do nothing. Bounding it also produces the
    lateral encroachment at the mask edge -- bird's beak -- at about the right
    scale. */
-function oxidantReach(mat,lOx){
+function oxidantReach(mat,lOx,depth){
   const reach=floodTop(i=>mat[i]===EMPTY,new Uint8Array(N));
+  if(depth)depth.fill(0);
   let cur=[];
   for(let i=0;i<N;i++){
     if(!reach[i])continue;
@@ -729,7 +731,7 @@ function oxidantReach(mat,lOx){
     if(x>0)nb.push(i-1); if(x<NX-1)nb.push(i+1);
     if(y>0)nb.push(i-NX); if(y<NY-1)nb.push(i+NX);
     if(z>0)nb.push(i-NX*NY); if(z<NZ-1)nb.push(i+NX*NY);
-    for(const j of nb)if(mat[j]===OX&&!reach[j]){reach[j]=1;cur.push(j);}
+    for(const j of nb)if(mat[j]===OX&&!reach[j]){reach[j]=1;if(depth)depth[j]=1;cur.push(j);}
   }
   for(let d=1;d<lOx&&cur.length;d++){
     const nxt=[];
@@ -739,17 +741,50 @@ function oxidantReach(mat,lOx){
       if(x>0)nb.push(c-1); if(x<NX-1)nb.push(c+1);
       if(y>0)nb.push(c-NX); if(y<NY-1)nb.push(c+NX);
       if(z>0)nb.push(c-NX*NY); if(z<NZ-1)nb.push(c+NX*NY);
-      for(const j of nb)if(mat[j]===OX&&!reach[j]){reach[j]=1;nxt.push(j);}
+      for(const j of nb)if(mat[j]===OX&&!reach[j]){reach[j]=1;if(depth)depth[j]=Math.min(255,d+1);nxt.push(j);}
     }
     cur=nxt;
   }
   return reach;
 }
+/* The oxide already lying on the interface: Deal-Grove's x0. The oxidant has to
+   cross what has already grown, which is why a second oxidation is slower than
+   the first. dealGrove took x0 all along and the call never passed it, so every
+   re-oxidation grew as if on bare silicon. For each oxidisable cell the shallowest
+   adjacent oxidant cell gives the oxide covering it; the MEDIAN over the interface
+   is the scalar we use -- the mean gets dragged by the few cells that crawled a
+   long way under a mask. What is measured is the layers actually stacked, not the
+   analytic thickness; they differ by integer-layer rounding (9 layers for an
+   analytic 10.32), and the next oxidation has to cross the layers. */
+function existingOxide(mat,reach,depth){
+  const ds=[];
+  for(let i=0;i<N;i++){
+    if(mat[i]!==SI)continue;
+    const x=XOF(i),y=YOF(i),z=ZOF(i);
+    let best=-1;
+    const look=j=>{
+      if(!reach[j])return;
+      const m=mat[j];
+      if(m!==EMPTY&&m!==OX)return;
+      if(best<0||depth[j]<best)best=depth[j];
+    };
+    if(x>0)look(i-1); if(x<NX-1)look(i+1);
+    if(y>0)look(i-NX); if(y<NY-1)look(i+NX);
+    if(z>0)look(i-NX*NY); if(z<NZ-1)look(i+NX*NY);
+    if(best>=0)ds.push(best);
+  }
+  if(!ds.length)return 0;
+  ds.sort((a,b)=>a-b);
+  return ds[ds.length>>1];
+}
 function opOxidize(mat,phi,conc,key,seconds){
-  const x=dealGrove(key,seconds);
-  const cd=x*CONSUME, gd=x*GROW;
-  const lOx=Math.max(1,Math.round(x));
-  const reach=oxidantReach(mat,lOx);
+  const depth=new Uint8Array(N);
+  const lOx=Math.max(1,Math.round(dealGrove(key,seconds,0)));
+  const reach=oxidantReach(mat,lOx,depth);
+  const x0=existingOxide(mat,reach,depth);
+  const x=dealGrove(key,seconds,x0);
+  const dx=Math.max(0,x-x0);
+  const cd=dx*CONSUME, gd=dx*GROW;
   const oxid=S.u8a,isSi=S.u8b;
   let anyO=false,anySi=false;
   for(let i=0;i<N;i++){

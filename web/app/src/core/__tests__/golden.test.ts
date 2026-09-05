@@ -186,6 +186,31 @@ describe("열공정 — 파이썬이 확인한 주장을 TS가 재현한다", ()
     expect(encroach).toBeLessThan(s.NX - EDGE); // 마스크 전 구간을 먹지 않는다
   });
 
+  it("x0: 같은 조건 두 번이 두 배 시간 한 번과 같은 두께를 낸다", () => {
+    // Deal-Grove의 x0는 "이미 깔린 산화막"이다. 그걸 늘 0으로 넘기면 두 번째
+    // 산화가 맨 실리콘인 것처럼 빨라져, 나눠 하면 몰아서 한 것보다 두꺼워진다.
+    // 시간이 더해지려면 τ = (x0²+A·x0)/B 가 들어가야 한다.
+    const th = (nx: number) => {
+      const s2 = createSim(nx, 8, 60);
+      const mat = newMat(s2), phi = newPhi(s2), conc = newConc(s2);
+      for (let z = 0; z < 30; z++)
+        for (let y = 0; y < s2.NY; y++) for (let x = 0; x < nx; x++) mat[at(s2, x, y, z)] = SI;
+      s2.phiDirty = true;
+      return { s: s2, mat, phi, conc };
+    };
+    const twice = th(24);
+    opOxidize(twice.s, twice.mat, twice.phi, twice.conc, "wet1000", 100);
+    const r2 = opOxidize(twice.s, twice.mat, twice.phi, twice.conc, "wet1000", 100);
+    expect(r2.x0, "두 번째 산화는 x0를 보고 시작한다").toBeGreaterThan(0);
+
+    const once = th(24);
+    opOxidize(once.s, once.mat, once.phi, once.conc, "wet1000", 200);
+
+    const oxide = (w: ReturnType<typeof th>) =>
+      surfaceZ(w.s, w.mat, 4, 4) - surfaceZ(w.s, w.mat, 4, 4, SI);
+    expect(Math.abs(oxide(twice) - oxide(once)), "나눠 한 것과 몰아 한 것의 두께 차").toBeLessThanOrEqual(1);
+  });
+
   it("성장 자리: 질화막 마스크 **위**에는 산화막이 자라지 않는다", () => {
     // 성장을 "소비가 일어난 컬럼"으로 걸렀을 때의 결함. 산화제가 패드 산화막을
     // 타고 마스크 밑으로 기어들어가 컬럼을 열면, 같은 컬럼의 진공 — 질화막

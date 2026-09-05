@@ -459,7 +459,11 @@ export class Executor {
       }
       case "oxidize": {
         const r = opOxidize(s, mat, phi, conc, str("condition"), num("seconds"));
-        return `두께 ${r.x.toFixed(2)} · 소비 ${r.c.toLocaleString()} · 성장 ${r.g.toLocaleString()}`;
+        // 이미 산화막이 있었으면 이번에 자란 양과 총 두께를 같이 보여 준다 —
+        // 두 번째 산화가 왜 느린지가 이 두 숫자 사이에 있다.
+        const grew = (r.x - r.x0).toFixed(2);
+        const th = r.x0 > 0 ? `두께 +${grew} → ${r.x.toFixed(2)}` : `두께 ${r.x.toFixed(2)}`;
+        return `${th} · 소비 ${r.c.toLocaleString()} · 성장 ${r.g.toLocaleString()}`;
       }
       case "silicide": {
         const rec = silicideOf(lib, str("recipe"));

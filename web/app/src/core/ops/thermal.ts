@@ -74,24 +74,77 @@ function nb6(s: Sim, i: number): number[] {
  * 마스크가 아무 일도 안 하게 된다. 거리를 제한하면 마스크 가장자리의 측면
  * 침투(bird's beak)도 대략 맞는 규모로 따라온다.
  */
-export function oxidantReach(s: Sim, mat: Uint8Array, lOx: number): Uint8Array {
+export function oxidantReach(
+  s: Sim,
+  mat: Uint8Array,
+  lOx: number,
+  /** 각 칸까지 산화막을 몇 번 밟고 왔는가. 진공은 0. x0를 재는 데 쓴다. */
+  depth?: Uint8Array,
+): Uint8Array {
   const { N } = s;
   const { oxidantPermeable } = s.lib.mat;
   const reach = floodTop(s, (i) => mat[i] === EMPTY, new Uint8Array(N));
+  depth?.fill(0);
   let cur: number[] = [];
   for (let i = 0; i < N; i++) {
     if (!reach[i]) continue;
     for (const j of nb6(s, i))
-      if (oxidantPermeable[mat[j]] && !reach[j]) { reach[j] = 1; cur.push(j); }
+      if (oxidantPermeable[mat[j]] && !reach[j]) {
+        reach[j] = 1;
+        if (depth) depth[j] = 1;
+        cur.push(j);
+      }
   }
   for (let d = 1; d < lOx && cur.length; d++) {
     const nxt: number[] = [];
     for (const c of cur)
       for (const j of nb6(s, c))
-        if (oxidantPermeable[mat[j]] && !reach[j]) { reach[j] = 1; nxt.push(j); }
+        if (oxidantPermeable[mat[j]] && !reach[j]) {
+          reach[j] = 1;
+          if (depth) depth[j] = Math.min(255, d + 1);
+          nxt.push(j);
+        }
     cur = nxt;
   }
   return reach;
+}
+
+/**
+ * 반응 계면 위에 **이미 깔려 있는** 산화막 두께 x0.
+ *
+ * Deal-Grove의 x0가 바로 이것이다. 산화제는 자란 산화막을 뚫고 와야 하므로
+ * 두 번째 산화는 첫 번째보다 느리다 — 그 느려짐이 τ = (x0² + A·x0)/B 다.
+ *
+ * 산화될 수 있는 칸마다 "이웃한 산화제 칸 중 가장 얕은 것"이 그 위에 덮인
+ * 산화막 두께다(진공에 맞닿아 있으면 0). 계면 전체의 **중앙값**을 쓴다 —
+ * 평균은 마스크 밑으로 길게 기어 들어간 소수의 칸에 끌려간다.
+ */
+function existingOxide(s: Sim, mat: Uint8Array, reach: Uint8Array, depth: Uint8Array): number {
+  const { NX, NY, NZ, N } = s;
+  const { oxidizesTo, oxidantPermeable } = s.lib.mat;
+  const layer = NX * NY;
+  const ds: number[] = [];
+  for (let i = 0; i < N; i++) {
+    if (oxidizesTo[mat[i]] < 0) continue; // 산화되는 재질만
+    const x = XOF(s, i), y = YOF(s, i), z = ZOF(s, i);
+    let best = -1;
+    const look = (j: number) => {
+      if (!reach[j]) return;
+      const m = mat[j];
+      if (m !== EMPTY && !oxidantPermeable[m]) return;
+      if (best < 0 || depth[j] < best) best = depth[j];
+    };
+    if (x > 0) look(i - 1);
+    if (x < NX - 1) look(i + 1);
+    if (y > 0) look(i - NX);
+    if (y < NY - 1) look(i + NX);
+    if (z > 0) look(i - layer);
+    if (z < NZ - 1) look(i + layer);
+    if (best >= 0) ds.push(best);
+  }
+  if (ds.length === 0) return 0;
+  ds.sort((a, b) => a - b);
+  return ds[ds.length >> 1];
 }
 
 export interface OxidizeResult {
@@ -99,8 +152,10 @@ export interface OxidizeResult {
   c: number;
   /** 새로 자란 산화막 칸 수. */
   g: number;
-  /** Deal-Grove가 준 두께. */
+  /** 이 단계가 끝난 뒤의 **총** 산화막 두께. */
   x: number;
+  /** 이 단계가 시작할 때 이미 깔려 있던 두께. 이번에 자란 것은 x − x0 다. */
+  x0: number;
 }
 
 /**
@@ -124,9 +179,32 @@ export function opOxidize(
 ): OxidizeResult {
   const { N, S } = s;
   const { carriesOxidant, oxidantPermeable, oxidizesTo, expansion } = s.lib.mat;
-  const x = dealGrove(ambience, seconds, 0, dgTable(s));
-  const lOx = Math.max(1, Math.round(x));
-  const reach = oxidantReach(s, mat, lOx);
+  /**
+   * 이미 깔린 산화막을 셈에 넣는다.
+   *
+   * 예전에는 x0를 늘 0으로 넘겨서 **두 번째 산화가 맨 실리콘인 것처럼 빨랐다**.
+   * `dealGrove`가 x0를 받도록 만들어 두고 호출이 안 넘기고 있었다. 그래서
+   * 패드 산화막 위의 필드 산화, 게이트 재산화가 전부 과하게 자랐다.
+   *
+   * 순서가 뒤엉키지 않게 두 걸음으로 간다: 먼저 x0=0으로 대략의 두께를 잡아
+   * 산화제 도달 범위를 구하고, 그 안에서 x0를 잰 뒤, 진짜 두께를 푼다.
+   *
+   * 도달 한계 때문에 x0가 잘릴 걱정은 없다. 계면 칸이 x0에 값을 보태려면
+   * 산화제가 **거기까지 실제로 닿았어야** 하고, 닿았다면 그 hop 수가 곧 지나온
+   * 두께 전부다. 못 닿는 칸은 x0에도 안 들어가지만 소비도 안 되므로 앞뒤가 맞다.
+   *
+   * 재는 값은 해석적 두께가 아니라 **실제로 쌓인 층수**다. 둘은 정수 층 반올림
+   * 만큼 다르다(100초 산화의 해석값 10.32 대 실측 9층). 구조를 보고 재는 쪽이
+   * 맞다 — 다음 산화가 뚫고 와야 하는 것은 그 층들이지 계산값이 아니다.
+   */
+  const dg = dgTable(s);
+  const depth = new Uint8Array(N);
+  const lOx = Math.max(1, Math.round(dealGrove(ambience, seconds, 0, dg)));
+  const reach = oxidantReach(s, mat, lOx, depth);
+  const x0 = existingOxide(s, mat, reach, depth);
+  // 총 두께에서 이미 있던 것을 빼면 이번 단계가 자랄 몫이다.
+  const x = dealGrove(ambience, seconds, x0, dg);
+  const dx = Math.max(0, x - x0);
 
   const oxid = S.u8a,
     src = S.u8b;
@@ -140,13 +218,13 @@ export function opOxidize(
     if (oxid[i]) anyOxidant = true;
     if (src[i] && srcMat < 0) srcMat = m;
   }
-  if (!anyOxidant || srcMat < 0) return { c: 0, g: 0, x };
+  if (!anyOxidant || srcMat < 0) return { c: 0, g: 0, x, x0 };
 
   // 부피비는 소비되는 재질의 성질이다. 실리콘 1이 산화막 2.17이 되고,
   // 그중 1/2.17이 원래 자리를 채우고 나머지가 위로 밀려 올라간다.
   const exp = expansion[srcMat];
-  const cd = x * (1 / exp),
-    gd = x * (1 - 1 / exp);
+  const cd = dx * (1 / exp),
+    gd = dx * (1 - 1 / exp);
   const product = oxidizesTo[srcMat];
 
   const dIn = edt3(s, oxid, false, S.d1); // 표면 아래 깊이
@@ -197,7 +275,7 @@ export function opOxidize(
   for (const i of consumed) mat[i] = oxidizesTo[mat[i]];
   for (const i of grown) mat[i] = product;
   s.phiDirty = true;
-  return { c: consumed.length, g: grown.length, x };
+  return { c: consumed.length, g: grown.length, x, x0 };
 }
 
 /** 이 Sim의 라이브러리에서 Deal-Grove 계수표를 뽑는다. */
