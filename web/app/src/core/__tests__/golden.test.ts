@@ -312,6 +312,27 @@ describe("열공정 — 파이썬이 확인한 주장을 TS가 재현한다", ()
     }
     expect(inWindow).toBeGreaterThan(overOxide * 10);
   });
+
+  it("silicide: 사이에 산화막이 있으면 두꺼워져도 건너뛰지 않는다", () => {
+    // 거리를 금속 전체·반도체 전체에서 재면, 산화막이 있어도 거리만 맞으면
+    // 반응한다. 3층짜리 산화막에 두께 8(tS=4.96)이면 그냥 뛰어넘었다 —
+    // 창에서 4복셀 넘게 떨어진 자리에 240셀이 생겼다. 계면 쌍만 소스로 쓰면 0.
+    const { s, mat, phi } = flatWafer(48, 12, 40, 20);
+    for (let z = 20; z < 23; z++)
+      for (let y = 0; y < s.NY; y++) for (let x = 24; x < s.NX; x++) mat[at(s, x, y, z)] = OX;
+    s.phiDirty = true;
+    opDeposit(s, mat, phi, MET, 5, 1.0);
+    opSilicide(s, mat, phi, 8, 0.62);
+
+    let far = 0, win = 0;
+    for (let i = 0; i < s.N; i++) {
+      if (mat[i] !== MSI) continue;
+      if (XOF(s, i) < 24) win++;
+      else if (XOF(s, i) >= 28) far++; // 창 가장자리 침투로는 설명이 안 되는 거리
+    }
+    expect(win, "창 안에서는 생겨야 한다").toBeGreaterThan(0);
+    expect(far, "산화막을 건너뛴 실리사이드").toBe(0);
+  });
 });
 
 describe("도핑 — 파이썬이 확인한 주장을 TS가 재현한다", () => {

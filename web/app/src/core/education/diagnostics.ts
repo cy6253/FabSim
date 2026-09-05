@@ -257,6 +257,28 @@ export function analyze(
       }
     }
 
+    /* ------------------------------------------------------ 실리사이드 */
+    if (node.type === "silicide") {
+      // 살리사이드는 반응시킨 뒤 **안 반응한 금속을 벗기는** 것까지가 한 벌이다.
+      // 그걸 빼먹으면 산화막 위에 금속이 그대로 남아 게이트와 소스·드레인이
+      // 이어진 채로 끝난다 — 화면으로는 멀쩡해 보이므로 말해 줘야 한다.
+      let left = 0;
+      for (const [m, n] of Object.entries(f.counts))
+        if (lib.mat.kind[Number(m)] === "metal") left += n;
+      const removedLater = chain.slice(i + 1).some((n2) => n2.type === "etch" || n2.type === "cmp");
+      if (left > 0 && !removedLater) {
+        push({
+          kind: "unreacted-metal",
+          severity: "warn",
+          title: `반응하지 않은 금속이 ${left.toLocaleString()}셀 남았습니다`,
+          detail: "실리사이드 뒤에 금속을 걷어내는 단계가 없습니다",
+          advice:
+            "산화막 위에 남은 금속이 게이트와 소스·드레인을 잇습니다. " +
+            "식각 단계를 붙이고 식각액을 '미반응 금속 제거'로 두면 실리사이드만 남습니다.",
+        });
+      }
+    }
+
     /* -------------------------------------------------------------- CMP */
     if (node.type === "cmp") {
       const stop = lib.proc.byId.slurry[String(p.slurry)]?.stopOn ?? [];

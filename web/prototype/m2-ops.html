@@ -874,7 +874,26 @@ function opSilicide(mat,phi,thick,siFrac){
     if(isSi[i])a=true;if(isM[i])b=true;
   }
   if(!a||!b)return {si:0,me:0};
-  const dSi=edt3(isM,false,S.d1), dMe=edt3(isSi,false,S.d2);
+  /* Measure from the cells that actually TOUCH, not from all metal and all
+     silicon. Otherwise an oxide in between does not stop the reaction as long
+     as the distance fits: with a 3-layer oxide and thickness 8 (tS=4.96) the
+     silicide simply jumped it -- 240 cells landed more than 4 voxels past the
+     window. The one or two voxels of lateral creep at the window edge stay,
+     because that happens. */
+  const layer=NX*NY;
+  const faceM=new Uint8Array(N), faceS=new Uint8Array(N);
+  for(let i=0;i<N;i++){
+    const me=isM[i], si0=isSi[i];
+    if(!me&&!si0)continue;
+    const other=me?isSi:isM;
+    const x=XOF(i),y=YOF(i),z=ZOF(i);
+    const touch=(x>0&&other[i-1])||(x<NX-1&&other[i+1])||
+                (y>0&&other[i-NX])||(y<NY-1&&other[i+NX])||
+                (z>0&&other[i-layer])||(z<NZ-1&&other[i+layer]);
+    if(!touch)continue;
+    if(me)faceM[i]=1; else faceS[i]=1;
+  }
+  const dSi=edt3(faceM,false,S.d1), dMe=edt3(faceS,false,S.d2);
   const tS=thick*siFrac, tM=thick*(1-siFrac);
   let si=0,me=0;
   const hit=[];

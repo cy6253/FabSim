@@ -364,7 +364,7 @@ export function opSilicide(
   siFrac: number,
   recipe: SilicideRecipe = defaultSilicide(s),
 ): SilicideResult {
-  const { N, S } = s;
+  const { NX, NY, NZ, N, S } = s;
   const isSi = S.u8a,
     isM = S.u8b;
   let a = false,
@@ -376,8 +376,41 @@ export function opSilicide(
     if (isM[i]) b = true;
   }
   if (!a || !b) return { si: 0, me: 0 };
-  const dSi = edt3(s, isM, false, S.d1); // 금속까지의 거리
-  const dMe = edt3(s, isSi, false, S.d2); // 반도체까지의 거리
+
+  /**
+   * 거리를 **맞닿은 계면**에서 잰다.
+   *
+   * 예전에는 금속 전체·반도체 전체에서 쟀다. 그러면 사이에 산화막이 있어도
+   * 거리만 맞으면 반응한다 — 두께 8에서는 실리사이드의 16%가 산화막을
+   * 건너뛰어 생겼다(3층짜리 산화막, tS=4.96 > 3). 이 연산자가 가르치는 것이
+   * "산화막 패턴만으로 배치된다"인데 그 산화막을 뛰어넘으면 개념이 무너진다.
+   *
+   * 소스를 6-인접으로 실제 맞닿은 칸으로 좁히면 산화막으로 갈린 곳은 계면 쌍이
+   * 없어 반응이 0이 된다. 창 가장자리의 한두 복셀 측면 침투는 남는데, 그건
+   * 실제로 일어나는 일이라 남겨야 맞다.
+   */
+  const layer = NX * NY;
+  const faceM = new Uint8Array(N); // 반도체에 닿은 금속
+  const faceS = new Uint8Array(N); // 금속에 닿은 반도체
+  for (let i = 0; i < N; i++) {
+    const me = isM[i], si = isSi[i];
+    if (!me && !si) continue;
+    const other = me ? isSi : isM;
+    const x = i % NX, y = ((i / NX) | 0) % NY, z = (i / layer) | 0;
+    const touch =
+      (x > 0 && other[i - 1]) ||
+      (x < NX - 1 && other[i + 1]) ||
+      (y > 0 && other[i - NX]) ||
+      (y < NY - 1 && other[i + NX]) ||
+      (z > 0 && other[i - layer]) ||
+      (z < NZ - 1 && other[i + layer]);
+    if (!touch) continue;
+    if (me) faceM[i] = 1;
+    else faceS[i] = 1;
+  }
+
+  const dSi = edt3(s, faceM, false, S.d1); // 계면 금속까지의 거리
+  const dMe = edt3(s, faceS, false, S.d2); // 계면 반도체까지의 거리
   const tS = thick * siFrac,
     tM = thick * (1 - siFrac);
   let si = 0,

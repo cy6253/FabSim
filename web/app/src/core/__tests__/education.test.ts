@@ -30,6 +30,31 @@ function runWithDiagnostics(id: string, tweak?: (p: ReturnType<typeof exampleByI
 describe("예제가 실제로 그 공정을 해내는가", () => {
   // 진단이 이미 교재의 결함을 두 번 잡았다(M4). 여기는 그 자리를 상설로 만든 것 —
   // "레시피가 끝났을 때 구조가 실제로 그 모양인가"를 셀 수로 못 박는다.
+  it("NMOS: 미반응 금속을 벗기고 끝난다 — 빼면 진단이 짚어 준다", () => {
+    // 살리사이드는 반응시킨 뒤 안 반응한 금속을 걷어내는 것까지가 한 벌이다.
+    // 그게 없으면 산화막 위 금속이 게이트와 소스·드레인을 이은 채로 끝나는데,
+    // 화면으로는 멀쩡해 보인다.
+    const done = runWithDiagnostics("nmos");
+    const last = done.ex.materialOf(done.frames[done.frames.length - 1]);
+    let metal = 0, silicide = 0;
+    for (let i = 0; i < last.length; i++) {
+      const k = done.ex.library.mat.kind[last[i]];
+      if (k === "metal") metal++;
+      else if (k === "silicide") silicide++;
+    }
+    expect(silicide, "실리사이드는 남는다").toBeGreaterThan(0);
+    expect(metal, "미반응 금속").toBe(0);
+    expect(done.diags.some((d) => d.kind === "unreacted-metal"), "조용해야 한다").toBe(false);
+
+    // 마지막 제거 단계를 떼면 같은 자리를 진단이 짚어야 한다.
+    const without = runWithDiagnostics("nmos", (p) => {
+      const strip = p.nodes[p.nodes.length - 1];
+      p.nodes = p.nodes.filter((n) => n.id !== strip.id);
+      p.edges = p.edges.filter((e) => e.to !== strip.id && e.from !== strip.id);
+    });
+    expect(without.diags.some((d) => d.kind === "unreacted-metal"), "빠지면 짚어야 한다").toBe(true);
+  });
+
   it("LOCOS·allops: 인산 제거 뒤 질화막이 한 셀도 남지 않는다", () => {
     // 남았던 이유는 식각이 약해서가 아니라 **질화막 위에 산화막이 자라서**였다.
     // 그 캡의 SiO2 선택비가 0.025라 인산이 뚫지 못했다. 성장 자리를 고친 뒤 0.

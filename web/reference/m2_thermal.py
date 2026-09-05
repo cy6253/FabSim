@@ -258,8 +258,22 @@ def op_silicide(mat, thickness, si_frac=0.62):
     is_met = [mat[i] == MET for i in range(N)]
     if not any(is_si) or not any(is_met):
         return 0, 0
-    d_si = edt_from(is_met)      # inside Si: how far from the metal
-    d_met = edt_from(is_si)      # inside metal: how far from the silicon
+    # Measure from the cells that actually TOUCH, not from all metal and all
+    # silicon. Otherwise an oxide in between does not stop the reaction as long
+    # as the distance fits: with a 3-layer oxide and thickness 8 (tS = 4.96) the
+    # silicide jumped clean over it. The voxel or two of lateral creep at the
+    # window edge stays, because that happens.
+    face_m = [False] * N
+    face_s = [False] * N
+    for i in range(N):
+        if is_met[i]:
+            if any(is_si[j] for j in nb6(i)):
+                face_m[i] = True
+        elif is_si[i]:
+            if any(is_met[j] for j in nb6(i)):
+                face_s[i] = True
+    d_si = edt_from(face_m)      # inside Si: how far from the metal interface
+    d_met = edt_from(face_s)     # inside metal: how far from the silicon interface
     t_si = thickness * si_frac
     t_met = thickness * (1 - si_frac)
     a = [i for i in range(N) if mat[i] == SI and d_si[i] <= t_si]

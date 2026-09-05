@@ -87,6 +87,15 @@
       "teaches": "실리콘 등방 습식. 결정 방향 의존성은 아직 넣지 않았다 (결정 B, 훅만)"
     },
     {
+      "id": "metal_strip",
+      "name": "미반응 금속 제거 (NH4OH/H2O2, 습식)",
+      "phase": "wet",
+      "anisotropy": 0.0,
+      "baseRate": 2.0,
+      "selectivity": { "Ti": 1.0, "TiN": 1.0, "Co": 1.0, "Metal": 1.0, "Al": 0.6, "W": 0.4, "TiSi2": 0.0, "CoSi2": 0.0, "MetalSi": 0.0, "SiO2": 0.0, "Si": 0.0, "polySi": 0.0, "Si3N4": 0.0 },
+      "teaches": "실리사이드는 남기고 산화막 위 금속만 벗긴다 — 살리사이드의 마지막 단계"
+    },
+    {
       "id": "piranha_strip",
       "name": "PR 제거 (애싱/피라냐)",
       "phase": "wet",

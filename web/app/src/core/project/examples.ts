@@ -264,6 +264,13 @@ function nmos(): Project {
       params: { recipe: "TiSi2", thickness: s.L(0.042) },
       note: "마스크 없이 실리콘이 드러난 곳에만 생긴다",
     },
+    {
+      type: "etch",
+      params: { etchant: "metal_strip", seconds: s.etch("metal_strip", s.L(0.09)) },
+      note:
+        "반응하지 않은 티타늄만 벗긴다. 실리사이드는 남아 소스·드레인과 게이트에만 " +
+        "배선이 붙는다 — 여기까지가 자기정렬(salicide) 한 벌이다",
+    },
   ], [gate, sd]);
 }
 
