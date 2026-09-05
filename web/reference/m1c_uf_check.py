@@ -242,7 +242,9 @@ def op_etch_uf(mat, phi, sel, seconds, anisotropy=0.0, base=1.0):
         else:
             # visibility on the front, carried to solid cells by the feature
             # transform -- the same approximation deposition makes for growth.
-            vis = M.visibility(mat, front)
+            # the ion cone narrows as the etch gets more directional
+            cone = min(64.0, anisotropy / max(1e-3, 1.0 - anisotropy))
+            vis = M.visibility(mat, front, exponent=cone)
             _, feat = M.edt3(src, want_feature=True)
             hz = [1.0 / (lat + (1.0 - lat) * vis.get(feat[i], 1.0)) for i in range(N)]
         T, tch = fmm3(src, speed, hx=1.0 / lat, hy=1.0 / lat, hz=hz, tmax=t_left)

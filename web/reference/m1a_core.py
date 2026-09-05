@@ -253,19 +253,36 @@ def growth_front(mat, reach):
 
 
 # ------------------------------------------------- sky visibility
-def visibility(mat, cells, nray=12, length=26):
+def visibility(mat, cells, nray=12, length=26, exponent=0.0):
+    """Sky visibility, optionally weighted toward vertical.
+
+    exponent 0 is Lambert over the hemisphere (what deposition wants). Etching
+    needs it narrow: ions arrive in a cone, so the floor of a vertical-walled
+    trench is not in shadow -- the sky straight above it is clear. Averaged over
+    the hemisphere that floor reads as half-covered and the window's visibility
+    profile gets printed into the depth (9 voxels of bowing at anisotropy 1).
+    The explicit vertical ray matters once the weighting is sharp: one ray then
+    decides, and the most-vertical ray off the spiral is tilted to one azimuth,
+    which makes shadows left-right asymmetric.
+    """
     dirs = []
+    wts = []
+    if exponent > 0:
+        dirs.append((0.0, 0.0, 1.0))
+        wts.append(1.0)
     for r in range(nray):
         u = (r + 0.5) / nray
         phi = u * math.pi * 2 * 1.618034
         ct = math.sqrt(1 - u)
         st = math.sqrt(max(0.0, 1 - ct * ct))
         dirs.append((st * math.cos(phi), st * math.sin(phi), ct))
+        wts.append(ct ** exponent if exponent > 0 else 1.0)
+    wsum = sum(wts)
     vis = {}
     for i in cells:
         x0, y0, z0 = xyz(i)
-        esc = 0
-        for dx, dy, dz in dirs:
+        esc = 0.0
+        for k, (dx, dy, dz) in enumerate(dirs):
             px, py, pz = x0 + .5, y0 + .5, z0 + .5
             ok = True
             for _ in range(length):
@@ -277,8 +294,8 @@ def visibility(mat, cells, nray=12, length=26):
                 if mat[at(int(px), int(py), int(pz))] != EMPTY:
                     ok = False; break
             if ok:
-                esc += 1
-        vis[i] = esc / nray
+                esc += wts[k]
+        vis[i] = esc / wsum
     return vis
 
 

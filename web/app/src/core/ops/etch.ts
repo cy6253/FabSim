@@ -73,7 +73,10 @@ export function opEtch(
   const verticalSpacing = (front: number[]): number | Float32Array => {
     if (isotropic) return 1;
     const vis = S.d1;
-    visibility(s, mat, front, NRAY, RAYLEN, vis, 0); // coverage 0 = 탈출 비율 그대로
+    // 이온 원뿔은 지향성이 클수록 좁다. α=1이면 사실상 수직 하나만 보므로
+    // 수직 벽 트렌치의 바닥은 그늘이 아니고 바닥이 평평하게 남는다.
+    const cone = anisotropy / Math.max(1e-3, 1 - anisotropy);
+    visibility(s, mat, front, NRAY, RAYLEN, vis, 0, Math.min(64, cone));
     edt3(s, S.u8a, true, S.d2); // feat = 가장 가까운 전선 칸
     const hz = S.d2; // 거리는 더 안 쓰므로 그 자리에 덮어쓴다
     const feat = S.feat;

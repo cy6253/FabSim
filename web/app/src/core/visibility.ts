@@ -24,15 +24,33 @@ export function visibility(
   len: number,
   rate: Float32Array,
   coverage: number,
+  /**
+   * 도래 분포의 좁기. 0이면 램버트(반구 전체, 증착의 기본), 크면 수직에 몰린다.
+   *
+   * 식각이 이걸 쓴다. 이온은 좁은 원뿔로 오므로 수직 벽 트렌치의 바닥은
+   * **바로 위가 뚫려 있으면** 그늘이 아니다. 반구 평균으로 재면 그 바닥이
+   * 절반쯤 가려진 것으로 나와, 창의 가시성 분포가 깊이 프로파일에 그대로
+   * 찍힌다(이방성 1에서 바닥 편차 9복셀). 지향성이 클수록 원뿔이 좁아야 한다.
+   */
+  exponent = 0,
 ): void {
   const { NX, NY, NZ } = s;
   const dirs: [number, number, number][] = [];
+  const w: number[] = [];
+  let wsum = 0;
+  // 수직 광선을 명시적으로 넣는다. 가중이 세지면 사실상 이 하나가 판정을
+  // 맡는데, 나선에서 뽑힌 "가장 수직에 가까운" 광선은 방위가 한쪽으로
+  // 치우쳐 있어 그늘이 좌우 비대칭이 된다.
+  if (exponent > 0) { dirs.push([0, 0, 1]); w.push(1); wsum += 1; }
   for (let r = 0; r < nray; r++) {
     const u = (r + 0.5) / nray,
       ph = u * Math.PI * 2 * 1.618034;
     const ct = Math.sqrt(1 - u),
       stt = Math.sqrt(Math.max(0, 1 - ct * ct));
     dirs.push([stt * Math.cos(ph), stt * Math.sin(ph), ct]);
+    const wr = exponent > 0 ? Math.pow(ct, exponent) : 1;
+    w.push(wr);
+    wsum += wr;
   }
   for (let c = 0; c < cells.length; c++) {
     const i = cells[c],
@@ -52,8 +70,8 @@ export function visibility(
         if (pz < 0) { ok = false; break; }
         if (mat[(px | 0) + NX * ((py | 0) + NY * (pz | 0))] !== EMPTY) { ok = false; break; }
       }
-      if (ok) esc++;
+      if (ok) esc += w[r];
     }
-    rate[i] = coverage + (1 - coverage) * (esc / nray);
+    rate[i] = coverage + (1 - coverage) * (esc / wsum);
   }
 }

@@ -441,12 +441,26 @@ function fmm3(src,speed,hx,hy,hz,tmax,T){
 }
 
 /* ---------------- visibility ---------------- */
-function visibility(mat,cells,nray,len,rate,coverage){
-  const dirs=[];
+/* exponent narrows the arrival distribution: 0 is Lambert over the hemisphere
+   (deposition's default), large is concentrated near vertical. Etching needs it.
+   Ions arrive in a narrow cone, so the floor of a vertical-walled trench is NOT
+   in shadow -- the sky straight above it is clear. Averaged over the hemisphere
+   that floor reads as half-covered, and then the window's visibility profile
+   gets printed into the depth: at anisotropy 1 the floor bowed by 9 voxels.
+   The explicit vertical ray matters: once the weighting is sharp one ray decides
+   the answer, and the most-vertical ray off the spiral is tilted to one azimuth,
+   which makes shadows left-right asymmetric. */
+function visibility(mat,cells,nray,len,rate,coverage,exponent){
+  const dirs=[],w=[];
+  let wsum=0;
+  const p=exponent||0;
+  if(p>0){dirs.push([0,0,1]);w.push(1);wsum+=1;}
   for(let r=0;r<nray;r++){
     const u=(r+0.5)/nray,ph=u*Math.PI*2*1.618034;
     const ct=Math.sqrt(1-u),stt=Math.sqrt(Math.max(0,1-ct*ct));
     dirs.push([stt*Math.cos(ph),stt*Math.sin(ph),ct]);
+    const wr=p>0?Math.pow(ct,p):1;
+    w.push(wr);wsum+=wr;
   }
   for(let c=0;c<cells.length;c++){
     const i=cells[c],x0=XOF(i),y0=YOF(i),z0=ZOF(i);
@@ -459,9 +473,9 @@ function visibility(mat,cells,nray,len,rate,coverage){
         if(pz<0){ok=false;break;}
         if(mat[(px|0)+NX*((py|0)+NY*(pz|0))]!==EMPTY){ok=false;break;}
       }
-      if(ok)esc++;
+      if(ok)esc+=w[r];
     }
-    rate[i]=coverage+(1-coverage)*(esc/nray);
+    rate[i]=coverage+(1-coverage)*(esc/wsum);
   }
 }
 
@@ -541,7 +555,9 @@ function opEtch(mat,phi,sel,seconds,anisotropy){
   const verticalSpacing=front=>{
     if(isotropic)return 1;
     const vis=S.d1;
-    visibility(mat,front,12,26,vis,0);
+    /* the ion cone narrows as the etch gets more directional */
+    const cone=Math.min(64,anisotropy/Math.max(1e-3,1-anisotropy));
+    visibility(mat,front,12,26,vis,0,cone);
     edt3(S.u8a,true,S.d2);
     const hz=S.d2,feat=S.feat;
     for(let i=0;i<N;i++)hz[i]=1/(lat+(1-lat)*vis[feat[i]]);

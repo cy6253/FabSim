@@ -454,7 +454,7 @@ describe("리소·CMP — 파이썬이 확인한 주장을 TS가 재현한다", 
 });
 
 describe("식각 방향 — 이온은 위에서 온다", () => {
-  /** 폭이 다른 창 둘을 같은 시간 판다. 종횡비가 크면 바닥이 하늘을 덜 본다. */
+  /** 폭이 다른 창 둘을 같은 시간 판다. */
   function twoTrenches(aniso: number) {
     const s2 = createSim(96, 8, 60);
     const mat = newMat(s2), phi = newPhi(s2);
@@ -473,15 +473,33 @@ describe("식각 방향 — 이온은 위에서 온다", () => {
     return { wide: depth(20), narrow: depth(63) };
   }
 
-  it("좁은 창이 넓은 창보다 얕게 파인다 (RIE lag)", () => {
-    // 축별 간격만으로는 종횡비를 모른다 — 고치기 전에는 어느 이방성에서도
-    // 좁은 창과 넓은 창의 깊이 비가 정확히 1.00이었다.
-    const dry = twoTrenches(0.97);
-    expect(dry.wide).toBeGreaterThan(0);
-    expect(dry.narrow / dry.wide, "좁은 쪽이 얕아야 한다").toBeLessThan(0.8);
+  it("수직 벽 트렌치의 바닥은 평평하게 남는다", () => {
+    // 그늘을 **반구 평균** 가시성으로 재면 안 된다. 수직 벽 트렌치의 바닥은
+    // 바로 위가 뚫려 있어 이온이 그대로 닿는데, 반구로 재면 절반쯤 가려진
+    // 것으로 나온다. 그러면 창의 가시성 분포가 깊이에 그대로 찍혀 바닥이
+    // 사발처럼 팬다 — 이방성 1에서 편차가 9복셀이었다.
+    const s2 = createSim(80, 8, 60);
+    const mat = newMat(s2), phi = newPhi(s2);
+    for (let z = 0; z < 40; z++)
+      for (let y = 0; y < s2.NY; y++) for (let x = 0; x < s2.NX; x++) mat[at(s2, x, y, z)] = SI;
+    for (let z = 40; z < 52; z++)
+      for (let y = 0; y < s2.NY; y++)
+        for (let x = 0; x < s2.NX; x++) if (x < 25 || x >= 55) mat[at(s2, x, y, z)] = PR;
+    s2.phiDirty = true;
+    opEtch(s2, mat, phi, { [SI]: 1.0, [PR]: 0.25 }, 20, 1);
+
+    let lo = 99, hi = -1;
+    for (let x = 28; x < 52; x++) {
+      let z = 39;
+      while (z >= 0 && mat[at(s2, x, 4, z)] === EMPTY) z--;
+      const d = 39 - z;
+      lo = Math.min(lo, d); hi = Math.max(hi, d);
+    }
+    expect(hi, "실제로 파여야 한다").toBeGreaterThan(10);
+    expect(hi - lo, "바닥 깊이 편차").toBeLessThanOrEqual(1);
   });
 
-  it("습식(이방성 0)은 종횡비를 타지 않는다 — 예전 결과 그대로", () => {
+  it("습식(이방성 0)은 가시성을 아예 안 본다 — 예전 결과 그대로", () => {
     // 화학 식각에는 이온 통로가 없다. lat=1이면 hz=1이라 계산 자체를 건너뛴다.
     const wet = twoTrenches(0);
     expect(wet.narrow).toBe(wet.wide);
@@ -508,7 +526,8 @@ describe("식각 방향 — 이온은 위에서 온다", () => {
       return gone;
     };
     expect(under(0), "습식은 처마를 다 먹는다").toBe(3);
-    expect(under(0.97), "건식은 밑면을 거의 못 판다").toBeLessThan(3);
+    expect(under(0.97), "지향성 식각은 밑면을 거의 못 판다").toBeLessThan(3);
+    expect(under(0.9), "0.9에서도 지켜진다").toBeLessThan(3);
   });
 });
 
