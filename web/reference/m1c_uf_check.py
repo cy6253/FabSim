@@ -277,7 +277,11 @@ def build_phi(mat):
     solid = [mat[i] != EMPTY for i in range(N)]
     d_out = edt3(solid)
     d_in = edt3([not s for s in solid])
-    return [(-d_in[i] if solid[i] else d_out[i]) for i in range(N)]
+    # 반 복셀 관례. EDT는 칸 중심 사이 거리를 주므로 계면에 맞닿은 칸이 ±1이
+    # 되는데, 실제 계면은 그 둘 사이 0.5에 있다. 반 칸을 빼야 진짜 부호거리이고,
+    # 없으면 계면 바로 위 칸이 1이라 두께 1 증착이 속도<1인 면에서 한 층도 못
+    # 쌓는다. 부호 규약(고체 <=> phi <= 0)은 그대로다.
+    return [(-(d_in[i] - 0.5) if solid[i] else d_out[i] - 0.5) for i in range(N)]
 
 
 # ------------------------------------------------------------------ the run

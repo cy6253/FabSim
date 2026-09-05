@@ -119,7 +119,9 @@ export function adversarialOps(NX: number, NY: number, NZ: number): OpCall[] {
     {
       op: "etch",
       sel: { [NIT]: 0.25, [OX]: 1.0, [SI]: 0.05 },
-      seconds: Math.round(NZ * 0.8),
+      // 되뚫기가 **끝까지** 가야 단언에 뜻이 있다. 0.8배는 캡을 겨우 뚫는
+      // 시간이라, 캡이 반 복셀만 두꺼워져도 82%가 봉인된 채 남았다.
+      seconds: Math.round(NZ * 1.0),
       anisotropy: 0.6,
     },
   ];

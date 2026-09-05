@@ -232,7 +232,15 @@ function redistance(mat,phi){
   const a=S.u8a,b=S.u8b;
   for(let i=0;i<N;i++){const s=mat[i]!==EMPTY?1:0;a[i]=s;b[i]=1-s;}
   const dOut=edt3(a,false,S.fa), dIn=edt3(b,false,S.fb);
-  for(let i=0;i<N;i++)phi[i]=a[i]?-dIn[i]:dOut[i];
+  /* Half-voxel convention. The EDT measures centre to centre, so the empty cell
+     touching the surface reads 1 and the top solid cell -1, while the interface
+     actually lies halfway between them. Dropping half a voxel makes it a real
+     signed distance. Without it the cell just above the surface sits at 1, so a
+     1-voxel deposit lays down nothing wherever the growth rate is below 1 --
+     only a flat open top worked, and only because 1*1 = 0 landed exactly on the
+     <= test. The sign rule (solid <=> phi <= 0) is unaffected: either distance
+     is at least 1, so +-0.5 never reaches 0. */
+  for(let i=0;i<N;i++)phi[i]=a[i]?-(dIn[i]-0.5):dOut[i]-0.5;
 }
 /* phi is READ by exactly one operator: deposition (arrival = phi / rate).
    Everything else only changes mat. So instead of re-distancing after every

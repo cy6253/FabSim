@@ -658,22 +658,58 @@ describe("증착 방식 — 커버리지 하나로 갈리지 않는다", () => {
     return { top, side, ratio: side / Math.max(1, top) };
   }
 
-  it("실측 측벽/상면 비가 방식이 선언한 커버리지와 맞는다", () => {
+  it("실측 측벽/상면 비가 방식이 선언한 커버리지를 따라간다", () => {
     // "스텝 커버리지"의 정의가 곧 이 비다. 예전에는 각도 분포와 표면 법선을
     // 안 봐서 증발(0.12)이 측벽에 상면의 **절반**을 붙였다.
+    //
+    // 실측은 선언값보다 조금 **높게** 나오고, 그게 맞다: rate = cov + (1−cov)·F
+    // 라 하늘이 보이는 측벽은 맨 커버리지보다 빨리 자란다. 선언값은 하한이다.
+    // 여기에 복셀 반올림이 최대 한 칸(막 두께 10에서 0.1) 더 붙는다.
+    let prev = Infinity;
     for (const d of DEFAULT_LIBRARY.proc.depositions) {
       const r = stepCoverage(d.coverage, d.directionality ?? 1);
       expect(r.top, `${d.id} 상면`).toBeGreaterThan(0);
-      expect(Math.abs(r.ratio - d.coverage), `${d.id} 실측 ${r.ratio} 대 선언 ${d.coverage}`)
-        .toBeLessThanOrEqual(0.11);
+      expect(r.ratio, `${d.id} 실측 ${r.ratio} < 선언 ${d.coverage}`).toBeGreaterThanOrEqual(d.coverage - 0.02);
+      expect(r.ratio, `${d.id} 실측 ${r.ratio} 대 선언 ${d.coverage}`).toBeLessThanOrEqual(d.coverage + 0.16);
+      // 커버리지가 낮은 방식일수록 측벽이 얇아야 한다 — 순서가 뒤집히면 안 된다.
+      expect(r.ratio, `${d.id} 순서`).toBeLessThanOrEqual(prev);
+      prev = r.ratio;
     }
   });
 
   it("증발은 측벽에 거의 안 붙는다 — 리프트오프가 성립하는 조건", () => {
     // 측벽 막이 두꺼우면 상면 막과 이어져, 용제가 못 들어가 패턴이 뜯긴다.
+    // 컨포멀 대비 몇 배나 얇은지가 실제로 중요한 값이다.
     const ev = DEFAULT_LIBRARY.proc.byId.deposition["evaporation"];
     const r = stepCoverage(ev.coverage, ev.directionality ?? 1);
-    expect(r.ratio, "증발 측벽/상면").toBeLessThanOrEqual(0.15);
+    expect(r.ratio, "증발 측벽/상면").toBeLessThanOrEqual(0.25);
+    expect(r.ratio * 4, "컨포멀보다 네 배 넘게 얇다").toBeLessThan(stepCoverage(1, 1).ratio);
+  });
+
+  it("두께 1도 증착된다 — 속도가 1보다 낮은 면에서도", () => {
+    // 사용자가 찾은 것. φ가 계면 바로 위 칸에서 1이면 두께 1 × 속도<1 이
+    // 0을 못 넘어 한 층도 안 쌓였다. 평평한 상면만 1×1=0 이라는 칼날 위에서
+    // 겨우 성립했다. 반 복셀 관례를 넣어 계면이 ±0.5가 되면서 풀렸다.
+    const NX = 60, NY = 8, NZ = 40, W0 = 24, W1 = 36;
+    const build = () => {
+      const s2 = createSim(NX, NY, NZ);
+      const mat = newMat(s2), phi = newPhi(s2);
+      for (let z = 0; z < 24; z++)
+        for (let y = 0; y < NY; y++) for (let x = 0; x < NX; x++) mat[at(s2, x, y, z)] = SI;
+      for (let z = 12; z < 24; z++)
+        for (let y = 0; y < NY; y++) for (let x = W0; x < W1; x++) mat[at(s2, x, y, z)] = EMPTY;
+      s2.phiDirty = true;
+      return { s2, mat, phi };
+    };
+    for (const id of ["ALD", "LPCVD", "PECVD"]) {
+      const d = DEFAULT_LIBRARY.proc.byId.deposition[id];
+      const w = build();
+      opDeposit(w.s2, w.mat, w.phi, OX, 1, d.coverage, d.directionality ?? 1);
+      const solid = (x: number, z: number) => w.mat[at(w.s2, x, 4, z)] === OX;
+      expect(solid(5, 24), `${id} 상면`).toBe(true);
+      expect(solid(W0, 18), `${id} 측벽`).toBe(true);
+      expect(solid(30, 12), `${id} 트렌치 바닥`).toBe(true);
+    }
   });
 
   it("컨포멀(커버리지 1)은 방식과 무관하게 그대로다", () => {
