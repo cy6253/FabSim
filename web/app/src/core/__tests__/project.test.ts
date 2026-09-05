@@ -300,6 +300,47 @@ describe("예제 레시피가 실제로 그것을 가르치는가", () => {
     expect(nz).toBeGreaterThan(0);
   });
 
+  it("3D NAND — 질화막이 통째로 빠지고 그 자리에 워드라인이 층층이 선다", () => {
+    // 이 레시피의 주장은 하나다: 질화막은 **자리를 맡아 두는 재료**이고, 마지막에
+    // 통째로 빠진 뒤 그 자리에 금속이 들어간다. 그 두 가지가 실제로 일어나는지만
+    // 본다 — 하나라도 어긋나면 레시피가 가르치는 것이 거짓이 된다.
+    const p = exampleById("nand3d");
+    const ex = new Executor(p);
+    const frames = ex.run(defaultLeaf(p)!);
+    const last = frames[frames.length - 1];
+    const L = ex.library.mat.index;
+
+    expect(last.counts[L.Si3N4] ?? 0, "질화막이 한 칸도 남으면 안 된다").toBe(0);
+    expect(last.counts[L.W] ?? 0, "그 자리에 텅스텐이 들어와 있어야 한다").toBeGreaterThan(0);
+
+    // 산화막 선반이 남아 있어야 워드라인끼리 절연된다. 인산이 오래 머물면
+    // 위아래 양면에서 같이 녹아 선반이 사라진다 — 그때를 잡는 단언이다.
+    // 처음부터 0인 앞쪽 단계가 아니라, 있다가 없어진 그 단계를 찾는다.
+    const iPull = frames.findIndex(
+      (f, i) => i > 0 && (frames[i - 1].counts[L.Si3N4] ?? 0) > 0 && (f.counts[L.Si3N4] ?? 0) === 0,
+    );
+    expect(iPull, "질화막이 사라지는 단계가 있어야 한다").toBeGreaterThan(0);
+    const before = frames[iPull - 1];
+    const lost = 1 - (frames[iPull].counts[L.SiO2] ?? 0) / (before.counts[L.SiO2] ?? 1);
+    expect(lost, `질화막 뽑기에서 산화막이 ${(lost * 100).toFixed(0)}% 녹았다`).toBeLessThan(0.05);
+
+    // 워드라인은 층마다 **따로** 서야 한다. 세로로 이어지면 한 줄만 있는 셈이다.
+    const mat = ex.materialOf(last);
+    const g = p.grid;
+    const x = Math.round(g.nx * 0.3), y = g.ny >> 1;
+    let bands = 0, prev = false;
+    for (let z = 0; z < g.nz; z++) {
+      const on = mat[x + g.nx * (y + g.ny * z)] === L.W;
+      if (on && !prev) bands++;
+      prev = on;
+    }
+    expect(bands, "워드라인 층이 서로 떨어져 있어야 한다").toBeGreaterThanOrEqual(4);
+
+    // 슬릿이 금속으로 막히면 안쪽 공동이 빈 채 봉인된다. 실제로 겪은 실패다 —
+    // 슬릿을 워드라인 틈만큼 좁게 두면 여기서 보이드 수만 개가 잡힌다.
+    expect(last.voidCount, "봉인된 보이드가 없어야 한다").toBe(0);
+  });
+
   it("STI — CMP가 질화막 정지층에서 멈춘다", () => {
     const p = exampleById("sti");
     const ex = new Executor(p);
