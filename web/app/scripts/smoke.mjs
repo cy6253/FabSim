@@ -59,6 +59,23 @@ if (await hint.count()) await hint.click();
 console.log("1) 첫 화면 (트렌치 예제, 1단계)");
 await shot("01-initial");
 
+// 자동 진행 — 눌러 두면 저 혼자 넘어가고, 다시 누르면 멈추는가.
+const pos = () => page.locator(".stepbar .pos").innerText();
+const play = page.locator(".stepbar .play");
+const before = await pos();
+await play.click();
+await page.waitForTimeout(7000);
+const during = await pos();
+await play.click();
+await settle();
+const stopped = await pos();
+await page.waitForTimeout(3500);
+const after = await pos();
+console.log(`1b) 자동 진행: ${before} → ${during}, 멈춘 뒤 ${stopped} → ${after}`);
+if (during === before) console.log("   ⚠ 자동 진행이 단계를 못 넘겼다");
+if (after !== stopped) console.log("   ⚠ 멈춤을 눌렀는데 계속 넘어간다");
+await shot("01b-autoplay");
+
 /** 레시피 목록의 마지막 단계로 간다. */
 const gotoLast = async () => {
   const steps = page.locator(".step");

@@ -19,7 +19,7 @@
  *
  * Run 버튼은 여전히 없다 — 노브를 움직이면 그 지점부터 자동으로 다시 돈다(결정 ⑥).
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EXAMPLES, exampleById } from "../core/project/examples";
 import { parseProject, serializeProject, libraryOf, newProject } from "../core/project/serialize";
 import { insertStep, removeStep, moveStepDown, moveStepUp } from "../core/project/edit";
@@ -42,6 +42,15 @@ import "./styles.css";
 
 const HINT_KEY = "fabsim3d.hint.dismissed";
 
+/**
+ * 자동 진행에서 한 단계를 보여 주는 시간.
+ *
+ * 계산 시간에 **더해지는** 값이다. 무거운 단계는 저절로 오래 머문다. 여기 있는
+ * 숫자는 "그림이 다 온 뒤 얼마나 더 보여 줄까"뿐이고, 아래 메모 한 줄을 읽을
+ * 만큼은 되어야 한다.
+ */
+const PLAY_DWELL_MS = 1100;
+
 export function App() {
   const [project, setProject] = useState<Project>(() => exampleById("trench"));
   const [doping, setDoping] = useState(false);
@@ -55,6 +64,7 @@ export function App() {
   const [smooth, setSmooth] = useState(3);
   const [mode, setMode] = useState<"smooth" | "voxel">("smooth");
   const [meshStats, setMeshStats] = useState<{ triangles: number; ms: number } | null>(null);
+  const [playing, setPlaying] = useState(false);
   const [modal, setModal] = useState<null | "mask" | "library" | "graph">(null);
   const [menu, setMenu] = useState(false);
   const [restored, setRestored] = useState(false);
@@ -151,9 +161,47 @@ export function App() {
   }, [project, sim.step, restored]);
 
   /* ------------------------------------------------------------------ 동작 */
+
+  /**
+   * 사람이 직접 옮기는 이동. 자동 진행을 멈춘다 — 눌렀는데 곧바로 자동이
+   * 덮어써 버리면 화면을 뺏긴 것처럼 느껴진다.
+   */
+  const goTo = useCallback((n: number) => {
+    setPlaying(false);
+    sim.setStep(n);
+  }, [sim.setStep]);
+
+  /**
+   * 자동 진행.
+   *
+   * 넘어가는 시점은 **그 단계의 그림이 실제로 온 뒤**다. 고정 간격으로 밀면
+   * 4초 걸리는 산화 단계에서 화면이 못 따라와, 본 적 없는 단계를 지나쳐 버린다.
+   * 그러면 자동 진행이 공정을 보여 주는 것이 아니라 감추는 것이 된다.
+   */
+  useEffect(() => {
+    if (!playing) return;
+    if (sim.busy || sim.view?.step !== sim.step) return;
+    if (sim.step >= sim.chain.length - 1) { setPlaying(false); return; }
+    const t = setTimeout(() => sim.setStep(sim.step + 1), PLAY_DWELL_MS);
+    return () => clearTimeout(t);
+  }, [playing, sim.busy, sim.view, sim.step, sim.chain.length, sim.setStep]);
+
+  /**
+   * 레시피를 건드리면 자동 진행을 멈춘다. 노브를 돌려 놓고 결과를 보려는데
+   * 화면이 다음 단계로 떠나 버리면 무엇을 바꿨는지 확인할 방법이 없다.
+   */
+  useEffect(() => { setPlaying(false); }, [project]);
+
+  /** 마지막에서 누르면 처음부터 다시 — 한 번 더 보려고 되감는 수고를 없앤다. */
+  const togglePlay = () => {
+    if (playing) { setPlaying(false); return; }
+    if (sim.step >= sim.chain.length - 1) sim.setStep(0);
+    setPlaying(true);
+  };
+
   const openExample = (id: string) => {
     setProject(exampleById(id));
-    sim.setStep(0);
+    goTo(0);
   };
 
   /** 빈 프로젝트로 시작한다. 지금 것을 버리므로 한 번 묻는다. */
@@ -163,7 +211,7 @@ export function App() {
     const p = newProject("새 프로젝트", project.grid);
     p.nmPerVoxel = nmPerVoxel;
     setProject(p);
-    sim.setStep(0);
+    goTo(0);
     setCutX(-1);
     setHidden(new Set());
   };
@@ -172,14 +220,14 @@ export function App() {
     const { project: next } = insertStep(project, type, currentId);
     setProject(next);
     // 새로 넣은 단계로 바로 옮겨 간다 — 넣었는데 안 보이면 넣은 줄 모른다.
-    sim.setStep(currentId ? sim.step + 1 : 0);
+    goTo(currentId ? sim.step + 1 : 0);
   };
 
   const load = (file: File) =>
     file.text().then((t) => {
       try {
         setProject(parseProject(t));
-        sim.setStep(0);
+        goTo(0);
       } catch (e) {
         alert((e as Error).message);
       }
@@ -326,7 +374,7 @@ export function App() {
               selectedId={currentId ?? null}
               onSelect={(id) => {
                 const i = sim.chain.findIndex((c) => c.id === id);
-                if (i >= 0) sim.setStep(i);
+                if (i >= 0) goTo(i);
               }}
               activeId={currentId}
             />
@@ -341,11 +389,11 @@ export function App() {
             chain={sim.chain}
             meta={sim.meta}
             step={sim.step}
-            onStep={sim.setStep}
+            onStep={goTo}
             onAdd={addStep}
             onRemove={(id) => {
               setProject(removeStep(project, id));
-              sim.setStep(Math.max(0, sim.step - 1));
+              goTo(Math.max(0, sim.step - 1));
             }}
             onMove={(id, dir) =>
               setProject(dir < 0 ? moveStepUp(project, id) : moveStepDown(project, id))
@@ -453,7 +501,9 @@ export function App() {
             chain={sim.chain}
             meta={sim.meta}
             step={sim.step}
-            onStep={sim.setStep}
+            onStep={goTo}
+            playing={playing}
+            onPlay={togglePlay}
             busy={sim.busy}
             progress={sim.progress}
             /* 그릴 것이 없으면 삼각형 수도 없다. 안 지우면 앞 프로젝트의 숫자다. */
@@ -468,7 +518,7 @@ export function App() {
               lib={lib}
               diagnostics={sim.diagnostics}
               step={sim.step}
-              onGoTo={sim.setStep}
+              onGoTo={goTo}
               probeX={px}
               sliceY={y}
               donors={donors}

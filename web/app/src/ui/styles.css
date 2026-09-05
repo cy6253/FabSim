@@ -211,6 +211,9 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
   border-top: 1px solid var(--line); flex: 0 0 auto;
 }
 .stepbar button { padding: 1px 9px; }
+/* 자동 진행 버튼. 켜져 있는 동안은 눌린 채로 보여야 멈추는 법을 찾는다. */
+.stepbar .play { padding: 1px 10px; margin-left: 2px; min-width: 74px; }
+.stepbar .play.on { border-color: var(--accent); color: var(--accent); }
 .stepbar .pos {
   color: var(--dim); font-variant-numeric: tabular-nums;
   min-width: 52px; text-align: center;

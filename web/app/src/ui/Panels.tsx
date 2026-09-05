@@ -179,6 +179,9 @@ export function StepBar(p: {
   meta: (StepMeta | undefined)[];
   step: number;
   onStep: (n: number) => void;
+  /** 자동 진행 중인가. */
+  playing?: boolean;
+  onPlay?: () => void;
   busy: boolean;
   progress: { index: number; total: number } | null;
   /** 3D 메시를 만든 결과 — 삼각형 수와 걸린 시간. */
@@ -187,13 +190,30 @@ export function StepBar(p: {
   const m = p.meta[p.step];
   const node = p.chain[p.step];
   const last = p.chain.length - 1;
+  const atEnd = p.step >= last;
   return (
     <div className="stepbar">
       <button onClick={() => p.onStep(Math.max(0, p.step - 1))} disabled={p.step <= 0}>◀</button>
       <b className="pos">
         {p.chain.length === 0 ? "—" : `${p.step + 1} / ${p.chain.length}`}
       </b>
-      <button onClick={() => p.onStep(Math.min(last, p.step + 1))} disabled={p.step >= last}>▶</button>
+      <button onClick={() => p.onStep(Math.min(last, p.step + 1))} disabled={atEnd}>▶</button>
+      {p.onPlay && (
+        <button
+          className={`play${p.playing ? " on" : ""}`}
+          onClick={p.onPlay}
+          disabled={p.chain.length < 2}
+          title={
+            p.playing
+              ? "멈춥니다. 화살표를 누르거나 레시피를 골라도 멈춥니다"
+              : atEnd
+                ? "처음부터 순서대로 보여 줍니다"
+                : "여기서부터 순서대로 보여 줍니다"
+          }
+        >
+          {p.playing ? "❚❚ 멈춤" : atEnd ? "↻ 처음부터" : "▶ 자동"}
+        </button>
+      )}
       <b className="label">{node?.label ?? ""}</b>
       {m && <span className="note">{m.note}</span>}
       <span className="spacer" />
