@@ -417,7 +417,7 @@ export class Executor {
       case "deposit": {
         const method = lib.proc.byId.deposition[str("method")];
         const cov = num("coverage") >= 0 ? num("coverage") : (method?.coverage ?? 1);
-        const r = opDeposit(s, mat, phi, matId("material"), num("thickness"), cov);
+        const r = opDeposit(s, mat, phi, matId("material"), num("thickness"), cov, method?.directionality ?? 1);
         return `성장 ${r.n.toLocaleString()} · 커버리지 ${cov} · ${r.note}`;
       }
       case "etch": {

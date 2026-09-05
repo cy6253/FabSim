@@ -70,6 +70,11 @@ export interface DepositionDef {
   id: string;
   name: string;
   coverage: number;
+  /**
+   * 입자가 오는 각도 분포의 지수 n (cosⁿ). 1이면 램버트(열 가스), 클수록
+   * 수직에 몰린다. 없으면 1로 본다.
+   */
+  directionality?: number;
   teaches?: string;
 }
 

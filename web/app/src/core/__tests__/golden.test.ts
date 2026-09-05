@@ -24,6 +24,7 @@ import { newProject } from "../project/serialize";
 import { defaultParams } from "../project/nodes";
 import { Executor } from "../runner/executor";
 import { EMPTY, SI, OX, NIT, PR, MET, MSI, B, P_, AS, DG, DREL, SEG_M } from "../materials";
+import { DEFAULT_LIBRARY } from "../library";
 import { dealGrove, dealGroveTime, opOxidize, opSilicide, opDeposit, opEtch, opPRCoat, opExpose, opDevelop, opCMP, opImplant, opAnneal } from "../ops";
 import { columnTop, countOf, sumOf, surfaceZ } from "../measure";
 import { stripeMask, fullMask } from "../masks";
@@ -450,6 +451,56 @@ describe("리소·CMP — 파이썬이 확인한 주장을 TS가 재현한다", 
     const r = opCMP(s, mat, phi, 10, { [OX]: 1 });
     expect(r.n).toBeGreaterThan(0); // 실제로 뭔가 깎이긴 해야 한다
     expect(countOf(s, mat, OX)).toBe(oxBefore);
+  });
+});
+
+describe("증착 방식 — 커버리지 하나로 갈리지 않는다", () => {
+  /** 언더컷 PR 창에 증착하고 상면 대비 측벽 두께를 잰다 = 실측 스텝 커버리지. */
+  function stepCoverage(coverage: number, directionality: number) {
+    const NX = 100, NY = 8, NZ = 90, W0 = 30, W1 = 60, T = 10;
+    const s2 = createSim(NX, NY, NZ);
+    const mat = newMat(s2), phi = newPhi(s2);
+    for (let z = 0; z < 20; z++)
+      for (let y = 0; y < NY; y++) for (let x = 0; x < NX; x++) mat[at(s2, x, y, z)] = SI;
+    for (let z = 20; z < 50; z++)
+      for (let y = 0; y < NY; y++)
+        for (let x = 0; x < NX; x++) {
+          const under = z < 26 ? 3 : 0; // 밑동을 넓혀 언더컷을 만든다
+          if (x < W0 - under || x >= W1 + under) mat[at(s2, x, y, z)] = PR;
+        }
+    s2.phiDirty = true;
+    opDeposit(s2, mat, phi, OX, T, coverage, directionality);
+    let top = 0;
+    for (let z = 50; z < NZ; z++) if (mat[at(s2, 5, 4, z)] === OX) top++;
+    let side = 0;
+    for (let x = W0; x < W0 + 20; x++) { if (mat[at(s2, x, 4, 40)] === OX) side++; else break; }
+    return { top, side, ratio: side / Math.max(1, top) };
+  }
+
+  it("실측 측벽/상면 비가 방식이 선언한 커버리지와 맞는다", () => {
+    // "스텝 커버리지"의 정의가 곧 이 비다. 예전에는 각도 분포와 표면 법선을
+    // 안 봐서 증발(0.12)이 측벽에 상면의 **절반**을 붙였다.
+    for (const d of DEFAULT_LIBRARY.proc.depositions) {
+      const r = stepCoverage(d.coverage, d.directionality ?? 1);
+      expect(r.top, `${d.id} 상면`).toBeGreaterThan(0);
+      expect(Math.abs(r.ratio - d.coverage), `${d.id} 실측 ${r.ratio} 대 선언 ${d.coverage}`)
+        .toBeLessThanOrEqual(0.11);
+    }
+  });
+
+  it("증발은 측벽에 거의 안 붙는다 — 리프트오프가 성립하는 조건", () => {
+    // 측벽 막이 두꺼우면 상면 막과 이어져, 용제가 못 들어가 패턴이 뜯긴다.
+    const ev = DEFAULT_LIBRARY.proc.byId.deposition["evaporation"];
+    const r = stepCoverage(ev.coverage, ev.directionality ?? 1);
+    expect(r.ratio, "증발 측벽/상면").toBeLessThanOrEqual(0.15);
+  });
+
+  it("컨포멀(커버리지 1)은 방식과 무관하게 그대로다", () => {
+    // 커버리지 1이면 가시성 계산 자체를 건너뛴다. 지향성을 아무리 줘도 같아야
+    // 한다 — ALD가 예전 결과와 비트 동일이라는 뜻이다.
+    const a = stepCoverage(1, 1), b = stepCoverage(1, 12);
+    expect(a.side).toBe(b.side);
+    expect(a.ratio).toBe(1);
   });
 });
 

@@ -7,6 +7,10 @@
  * - 비균일이면 표면점마다 가시성으로 r을 구하고, feature transform으로
  *   각 칸이 어느 표면점을 따르는지 정한다.
  *
+ * 방식(ALD·CVD·스퍼터·증발)은 커버리지 하나로만 갈리지 않는다. 오는 각도 폭도 다르고
+ * (`directionality`), 벽은 스치는 입자를 거의 못 받는다(법선 가중). 이 둘이 없으면
+ * 증발이 트인 트렌치 측벽에 상면의 38%나 붙어 리프트오프 실습이 성립하지 않는다.
+ *
  * 봉인 보정이 반드시 필요하다. 미리 만든 도달시각만 쓰면 보이드가 자기 벽에서
  * 계속 채워져 사라진다. 실제로는 입구가 막히면 가스가 못 들어와 그 크기로
  * 얼어붙어야 한다 — 그래서 채움량을 min(두께, 봉인시각)으로 자른다.
@@ -36,6 +40,8 @@ export function opDeposit(
   material: number,
   thick: number,
   coverage: number,
+  /** 도래 분포의 지수 n (cosⁿ). 1 = 램버트. 방식이 정한다. */
+  directionality = 1,
 ): DepositResult {
   ensurePhi(s, mat, phi); // φ의 유일한 독자
   const { NX, NY, NZ, N, S } = s;
@@ -66,7 +72,9 @@ export function opDeposit(
       if (t) { front[i] = 1; cells.push(i); }
     }
     const fr = new Float32Array(N);
-    visibility(s, mat, cells, NRAY, RAYLEN, fr, coverage);
+    // 지수는 표본이 이미 cos 분포인 만큼 하나를 뺀 값으로 넘긴다.
+    // φ를 같이 주면 표면 법선까지 셈에 들어간다 — 수직 벽이 얇아지는 이유다.
+    visibility(s, mat, cells, NRAY, RAYLEN, fr, coverage, Math.max(0, directionality - 1), phi);
     edt3(s, front, true, S.d1);
     const feat = S.feat;
     for (let i = 0; i < N; i++) rate[i] = fr[feat[i]];

@@ -106,35 +106,47 @@
     }
   ],
 
+  "_depositionNote": [
+    "coverage: 스텝 커버리지. 깊은 곳이 하늘을 덜 봐도 이만큼은 자란다.",
+    "directionality: 입자가 오는 각도 분포의 지수 n (cos^n). 1이면 램버트(열 가스),",
+    "  클수록 수직에 몰린다. 스퍼터 4, 증발 12 — 증발이 측벽에 거의 안 붙어야",
+    "  리프트오프가 성립한다."
+  ],
+
   "depositions": [
     {
       "id": "ALD",
       "name": "ALD",
       "coverage": 1.0,
+      "directionality": 1,
       "teaches": "완전 컨포멀 — 보이드가 안 생긴다. 대신 느리다"
     },
     {
       "id": "LPCVD",
       "name": "LPCVD",
       "coverage": 0.85,
+      "directionality": 1,
       "teaches": "거의 컨포멀. 종횡비가 아주 크면 그때 보이드"
     },
     {
       "id": "PECVD",
       "name": "PECVD",
       "coverage": 0.55,
+      "directionality": 1,
       "teaches": "입구가 먼저 좁아진다 — 중간 정도의 오버행"
     },
     {
       "id": "sputter",
       "name": "스퍼터 (PVD)",
       "coverage": 0.3,
+      "directionality": 4,
       "teaches": "지향성이 강해 트렌치 입구가 먼저 막히고 보이드가 갇힌다"
     },
     {
       "id": "evaporation",
       "name": "증발 (PVD)",
       "coverage": 0.12,
+      "directionality": 12,
       "teaches": "거의 직진. 측벽에 거의 안 붙어 리프트오프에 쓴다"
     }
   ],

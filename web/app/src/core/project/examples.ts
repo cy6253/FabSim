@@ -120,7 +120,9 @@ function twoWindows(id: string, name: string, g: GridSpec, inset: number, gap: n
 /** ① 트렌치 증착 — 스텝 커버리지와 보이드. 가장 짧고 가장 극적인 실습. */
 function trenchFill(): Project {
   const s = scaleOf({ nx: 176, ny: 64, nz: 96 });
-  const m = stripe("trench", "트렌치 창", s.grid, 0.42, 0.58);
+  // 종횡비가 보이드의 조건이다. 폭 28(종횡비 1.3)에서는 스퍼터 막이 입구를
+  // 다 못 닫아 위까지 열린 홈으로 남았다 — 22(1.6)로 좁혀야 실제로 갇힌다.
+  const m = stripe("trench", "트렌치 창", s.grid, 0.44, 0.56);
   return chain("트렌치 증착 — 보이드는 왜 생기나", s.grid, [
     { type: "substrate", params: { material: "Si", thickness: s.L(0.42) } },
     { type: "prCoat", params: { thickness: s.L(0.11), planarization: 1 } },

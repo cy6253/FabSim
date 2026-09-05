@@ -25,14 +25,27 @@ export function visibility(
   rate: Float32Array,
   coverage: number,
   /**
-   * 도래 분포의 좁기. 0이면 램버트(반구 전체, 증착의 기본), 크면 수직에 몰린다.
+   * 도래 분포의 좁기. **표본 자체가 이미 cos 분포**이므로 실제 분포는
+   * cos^(1+exponent)다 — 0이면 램버트, 크면 수직에 몰린다.
    *
-   * 식각이 이걸 쓴다. 이온은 좁은 원뿔로 오므로 수직 벽 트렌치의 바닥은
-   * **바로 위가 뚫려 있으면** 그늘이 아니다. 반구 평균으로 재면 그 바닥이
-   * 절반쯤 가려진 것으로 나와, 창의 가시성 분포가 깊이 프로파일에 그대로
-   * 찍힌다(이방성 1에서 바닥 편차 9복셀). 지향성이 클수록 원뿔이 좁아야 한다.
+   * 식각: 이온은 좁은 원뿔로 오므로 수직 벽 트렌치의 바닥은 **바로 위가
+   * 뚫려 있으면** 그늘이 아니다. 반구 평균으로 재면 그 바닥이 절반쯤 가려진
+   * 것으로 나와, 창의 가시성 분포가 깊이 프로파일에 그대로 찍힌다(이방성 1에서
+   * 바닥 편차 9복셀).
+   *
+   * 증착: 방식마다 입자가 오는 각도 폭이 다르다. 열 가스(CVD)는 램버트지만
+   * 스퍼터는 좁고 증발은 거의 수직이다.
    */
   exponent = 0,
+  /**
+   * 주면 표면 **법선**도 셈에 넣는다 (증착). 플럭스는 n̂·d̂에 비례하므로 수직
+   * 벽은 스치는 광선에서 거의 못 받는다 — 그래서 PVD는 위에 두껍고 벽에 얇다.
+   * 이게 없으면 벽과 바닥이 같은 하늘만 보면 같은 속도로 자란다.
+   *
+   * φ는 고체 안이 음수인 부호거리장이라 ∇φ가 곧 바깥 법선이다. 증착은
+   * `ensurePhi` 직후에 부르므로 φ가 항상 유효하다.
+   */
+  phi?: Float32Array,
 ): void {
   const { NX, NY, NZ } = s;
   const dirs: [number, number, number][] = [];
@@ -52,11 +65,24 @@ export function visibility(
     w.push(wr);
     wsum += wr;
   }
+  // 트인 평면(법선 ẑ, 전부 탈출)이 1이 되도록 나눌 값. 법선을 안 쓰면 가중 합이다.
+  let flat = 0;
+  for (let r = 0; r < dirs.length; r++) flat += w[r] * (phi ? dirs[r][2] : 1);
+  const layer = NX * NY;
+
   for (let c = 0; c < cells.length; c++) {
     const i = cells[c],
       x0 = XOF(s, i),
       y0 = YOF(s, i),
       z0 = ZOF(s, i);
+    let nx0 = 0, ny0 = 0, nz0 = 0, hasN = false;
+    if (phi) {
+      const gx = (x0 > 0 && x0 < NX - 1) ? (phi[i + 1] - phi[i - 1]) * 0.5 : 0;
+      const gy = (y0 > 0 && y0 < NY - 1) ? (phi[i + NX] - phi[i - NX]) * 0.5 : 0;
+      const gz = (z0 > 0 && z0 < NZ - 1) ? (phi[i + layer] - phi[i - layer]) * 0.5 : 0;
+      const gl = Math.sqrt(gx * gx + gy * gy + gz * gz);
+      if (gl > 1e-6) { nx0 = gx / gl; ny0 = gy / gl; nz0 = gz / gl; hasN = true; }
+    }
     let esc = 0;
     for (let r = 0; r < dirs.length; r++) {
       const d = dirs[r];
@@ -70,8 +96,12 @@ export function visibility(
         if (pz < 0) { ok = false; break; }
         if (mat[(px | 0) + NX * ((py | 0) + NY * (pz | 0))] !== EMPTY) { ok = false; break; }
       }
-      if (ok) esc += w[r];
+      if (!ok) continue;
+      if (hasN) {
+        const dot = nx0 * d[0] + ny0 * d[1] + nz0 * d[2];
+        if (dot > 0) esc += w[r] * dot;
+      } else esc += w[r] * (phi ? d[2] : 1);
     }
-    rate[i] = coverage + (1 - coverage) * (esc / wsum);
+    rate[i] = coverage + (1 - coverage) * Math.min(1, esc / flat);
   }
 }

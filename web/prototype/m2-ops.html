@@ -450,7 +450,14 @@ function fmm3(src,speed,hx,hy,hz,tmax,T){
    The explicit vertical ray matters: once the weighting is sharp one ray decides
    the answer, and the most-vertical ray off the spiral is tilted to one azimuth,
    which makes shadows left-right asymmetric. */
-function visibility(mat,cells,nray,len,rate,coverage,exponent){
+/* phi turns on surface-normal weighting (deposition). Flux goes as n-dot-d, so a
+   vertical wall barely catches a grazing arrival -- that is why PVD is thick on
+   top and thin on the wall. Without it a wall and a floor seeing the same sky
+   grow at the same rate, and evaporation put HALF its top thickness on the
+   sidewall, which makes lift-off impossible. phi is a signed distance, negative
+   inside solid, so grad(phi) is the outward normal, and deposition is called
+   right after ensurePhi so it is always valid. */
+function visibility(mat,cells,nray,len,rate,coverage,exponent,phi){
   const dirs=[],w=[];
   let wsum=0;
   const p=exponent||0;
@@ -462,8 +469,20 @@ function visibility(mat,cells,nray,len,rate,coverage,exponent){
     const wr=p>0?Math.pow(ct,p):1;
     w.push(wr);wsum+=wr;
   }
+  /* value for an open flat surface (normal z, everything escapes) = 1 */
+  let flat=0;
+  for(let r=0;r<dirs.length;r++)flat+=w[r]*(phi?dirs[r][2]:1);
+  const layer=NX*NY;
   for(let c=0;c<cells.length;c++){
     const i=cells[c],x0=XOF(i),y0=YOF(i),z0=ZOF(i);
+    let nx0=0,ny0=0,nz0=0,hasN=false;
+    if(phi){
+      const gx=(x0>0&&x0<NX-1)?(phi[i+1]-phi[i-1])*0.5:0;
+      const gy=(y0>0&&y0<NY-1)?(phi[i+NX]-phi[i-NX])*0.5:0;
+      const gz=(z0>0&&z0<NZ-1)?(phi[i+layer]-phi[i-layer])*0.5:0;
+      const gl=Math.sqrt(gx*gx+gy*gy+gz*gz);
+      if(gl>1e-6){nx0=gx/gl;ny0=gy/gl;nz0=gz/gl;hasN=true;}
+    }
     let esc=0;
     for(let r=0;r<dirs.length;r++){
       const d=dirs[r];let px=x0+.5,py=y0+.5,pz=z0+.5,ok=true;
@@ -473,9 +492,11 @@ function visibility(mat,cells,nray,len,rate,coverage,exponent){
         if(pz<0){ok=false;break;}
         if(mat[(px|0)+NX*((py|0)+NY*(pz|0))]!==EMPTY){ok=false;break;}
       }
-      if(ok)esc+=w[r];
+      if(!ok)continue;
+      if(hasN){const dot=nx0*d[0]+ny0*d[1]+nz0*d[2];if(dot>0)esc+=w[r]*dot;}
+      else esc+=w[r]*(phi?d[2]:1);
     }
-    rate[i]=coverage+(1-coverage)*(esc/wsum);
+    rate[i]=coverage+(1-coverage)*Math.min(1,esc/flat);
   }
 }
 
@@ -495,7 +516,7 @@ function opSubstrate(mat,phi,m,thick){
   phiDirty=true;
 }
 
-function opDeposit(mat,phi,material,thick,coverage){
+function opDeposit(mat,phi,material,thick,coverage,directionality){
   ensurePhi(mat,phi);                 // the only reader of phi
   const uniform=coverage>=0.999;
   const rate=S.fa,arrival=S.fb,seal=S.d2;
@@ -517,7 +538,8 @@ function opDeposit(mat,phi,material,thick,coverage){
       if(t){front[i]=1;cells.push(i);}
     }
     const fr=new Float32Array(N);
-    visibility(mat,cells,12,26,fr,coverage);
+    /* the sampling is already cosine-distributed, so pass n-1 */
+    visibility(mat,cells,12,26,fr,coverage,Math.max(0,(directionality||1)-1),phi);
     edt3(front,true,S.d1);
     const feat=S.feat;
     for(let i=0;i<N;i++)rate[i]=fr[feat[i]];

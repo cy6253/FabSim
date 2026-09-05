@@ -253,7 +253,7 @@ def growth_front(mat, reach):
 
 
 # ------------------------------------------------- sky visibility
-def visibility(mat, cells, nray=12, length=26, exponent=0.0):
+def visibility(mat, cells, nray=12, length=26, exponent=0.0, phi=None):
     """Sky visibility, optionally weighted toward vertical.
 
     exponent 0 is Lambert over the hemisphere (what deposition wants). Etching
@@ -264,6 +264,12 @@ def visibility(mat, cells, nray=12, length=26, exponent=0.0):
     The explicit vertical ray matters once the weighting is sharp: one ray then
     decides, and the most-vertical ray off the spiral is tilted to one azimuth,
     which makes shadows left-right asymmetric.
+
+    phi turns on surface-normal weighting (deposition). Flux goes as n.d, so a
+    vertical wall barely catches a grazing arrival -- that is why PVD is thick on
+    top and thin on the wall. Without it evaporation put HALF its top thickness on
+    the sidewall and lift-off could not work. phi is negative inside solid, so
+    grad(phi) is the outward normal.
     """
     dirs = []
     wts = []
@@ -278,9 +284,19 @@ def visibility(mat, cells, nray=12, length=26, exponent=0.0):
         dirs.append((st * math.cos(phi), st * math.sin(phi), ct))
         wts.append(ct ** exponent if exponent > 0 else 1.0)
     wsum = sum(wts)
+    # value for an open flat surface (normal +z, everything escapes) = 1
+    flat = sum(wts[k] * (dirs[k][2] if phi is not None else 1.0) for k in range(len(dirs)))
     vis = {}
     for i in cells:
         x0, y0, z0 = xyz(i)
+        n_out = None
+        if phi is not None:
+            gx = (phi[i + 1] - phi[i - 1]) * 0.5 if 0 < x0 < NX - 1 else 0.0
+            gy = (phi[i + NX] - phi[i - NX]) * 0.5 if 0 < y0 < NY - 1 else 0.0
+            gz = (phi[i + NX * NY] - phi[i - NX * NY]) * 0.5 if 0 < z0 < NZ - 1 else 0.0
+            gl = math.sqrt(gx * gx + gy * gy + gz * gz)
+            if gl > 1e-6:
+                n_out = (gx / gl, gy / gl, gz / gl)
         esc = 0.0
         for k, (dx, dy, dz) in enumerate(dirs):
             px, py, pz = x0 + .5, y0 + .5, z0 + .5
@@ -293,9 +309,15 @@ def visibility(mat, cells, nray=12, length=26, exponent=0.0):
                     ok = False; break
                 if mat[at(int(px), int(py), int(pz))] != EMPTY:
                     ok = False; break
-            if ok:
-                esc += wts[k]
-        vis[i] = esc / wsum
+            if not ok:
+                continue
+            if n_out is not None:
+                dot = n_out[0] * dx + n_out[1] * dy + n_out[2] * dz
+                if dot > 0:
+                    esc += wts[k] * dot
+            else:
+                esc += wts[k] * (dz if phi is not None else 1.0)
+        vis[i] = min(1.0, esc / flat)
     return vis
 
 
