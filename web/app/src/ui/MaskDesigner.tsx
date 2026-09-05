@@ -8,7 +8,8 @@
  * 마스크는 프로젝트에 함께 저장되므로 여기서 만든 것이 파일 하나로 배포된다.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { packMask, unpackMask, type MaskAsset, type Project } from "../core/project/types";
+import { packMask, unpackMask, nmPerVoxelOf, type MaskAsset, type Project } from "../core/project/types";
+import { GRID_PRESETS } from "../core/project/serialize";
 
 type Tool = "rect" | "poly";
 
@@ -37,9 +38,13 @@ export function MaskDesigner({ project, onChange, onClose }: MaskDesignerProps) 
   const [refsOff, setRefsOff] = useState<Set<string>>(new Set());
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
+  /** 확대 배율. null이면 화면에 맞춰 자동으로 고른다. */
+  const [zoom, setZoom] = useState<number | null>(null);
+
   const asset = project.masks.find((m) => m.id === selId) ?? null;
   const px = useMemo(() => (asset ? unpackMask(asset) : null), [asset]);
-  const scale = asset ? pickScale(asset.w, asset.h) : 4;
+  const fit = asset ? pickScale(asset.w, asset.h) : 4;
+  const scale = zoom ?? fit;
 
   /**
    * 겹쳐 볼 마스크들.
@@ -189,6 +194,34 @@ export function MaskDesigner({ project, onChange, onClose }: MaskDesignerProps) 
     setSelId(project.masks.find((m) => m.id !== asset.id)?.id ?? null);
   };
 
+  /**
+   * 마스크를 격자 크기에 맞춰 다시 뜬다.
+   *
+   * 마스크는 격자와 크기가 달라도 실행할 때 늘려 쓰지만, 그러면 그린 것보다
+   * 거칠어지거나 뭉개진다. 격자를 바꾼 뒤 여기서 한 번 맞춰 두면 화면에서
+   * 보는 것이 그대로 결과가 된다.
+   */
+  const resample = () => {
+    if (!asset || !px) return;
+    const { nx, ny } = project.grid;
+    if (asset.w === nx && asset.h === ny) return;
+    const next = new Uint8Array(nx * ny);
+    for (let y = 0; y < ny; y++) {
+      const sy = Math.min(asset.h - 1, Math.floor((y * asset.h) / ny));
+      for (let x = 0; x < nx; x++) {
+        const sx = Math.min(asset.w - 1, Math.floor((x * asset.w) / nx));
+        next[x + nx * y] = px[sx + asset.w * sy];
+      }
+    }
+    onChange({
+      ...project,
+      masks: project.masks.map((m) =>
+        m.id === asset.id ? packMask(m.id, m.name, nx, ny, next) : m,
+      ),
+    });
+    setZoom(null);
+  };
+
   const transform = (fn: (v: number) => number) => {
     if (!px) return;
     const next = px.slice();
@@ -247,6 +280,39 @@ export function MaskDesigner({ project, onChange, onClose }: MaskDesignerProps) 
         </header>
 
         <div className="masktools">
+          {/* 마스크 한 칸 = 격자 한 칸이다. 더 잘게 그리려면 격자를 늘리는 수밖에
+              없는데, 그 설정이 다른 메뉴에 있으면 여기서 막힌 사람은 못 찾는다. */}
+          <label className="slider" title="마스크 한 칸이 곧 격자 한 칸입니다">
+            격자
+            <select
+              value={`${project.grid.nx}x${project.grid.ny}x${project.grid.nz}`}
+              onChange={(e) => {
+                const g = GRID_PRESETS.find(
+                  (q) => `${q.grid.nx}x${q.grid.ny}x${q.grid.nz}` === e.target.value,
+                );
+                if (!g) return;
+                onChange({
+                  ...project,
+                  grid: g.grid,
+                  nmPerVoxel:
+                    Math.round(
+                      ((nmPerVoxelOf(project) * project.grid.nz) / g.grid.nz) * 100,
+                    ) / 100,
+                });
+                setZoom(null);
+              }}
+            >
+              <option value={`${project.grid.nx}x${project.grid.ny}x${project.grid.nz}`}>
+                {project.grid.nx}×{project.grid.ny} (마스크 칸)
+              </option>
+              {GRID_PRESETS.map((q) => (
+                <option key={q.label} value={`${q.grid.nx}x${q.grid.ny}x${q.grid.nz}`}>
+                  {q.grid.nx}×{q.grid.ny} — {q.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <span className="spacer" />
           <select value={selId ?? ""} onChange={(e) => setSelId(e.target.value || null)}>
             {project.masks.length === 0 && <option value="">(마스크 없음)</option>}
             {project.masks.map((m) => (
@@ -291,6 +357,13 @@ export function MaskDesigner({ project, onChange, onClose }: MaskDesignerProps) 
               <label className="slider">
                 스냅 {snap}
                 <input type="range" min={1} max={16} value={snap} onChange={(e) => setSnap(Number(e.target.value))} />
+              </label>
+              <label className="slider" title="한 칸을 몇 픽셀로 볼지. 격자가 촘촘하면 키워서 그린다">
+                확대 {scale}×
+                <input
+                  type="range" min={1} max={16} value={scale}
+                  onChange={(e) => setZoom(Number(e.target.value))}
+                />
               </label>
               <span className="spacer" />
               <button onClick={() => transform((v) => (v ? 0 : 1))}>반전</button>
@@ -372,7 +445,8 @@ export function MaskDesigner({ project, onChange, onClose }: MaskDesignerProps) 
               {(asset.w !== project.grid.nx || asset.h !== project.grid.ny) && (
                 <>
                   {" · "}
-                  <b>격자({project.grid.nx}×{project.grid.ny})와 크기가 달라 실행 시 늘려 씁니다</b>
+                  <b>격자({project.grid.nx}×{project.grid.ny})와 크기가 달라 실행 시 늘려 씁니다</b>{" "}
+                  <button className="ghost tiny" onClick={resample}>격자에 맞추기</button>
                 </>
               )}
             </p>

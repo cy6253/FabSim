@@ -347,9 +347,13 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
 .filebtn:hover { border-color: var(--accent); }
 .maskcanvas {
   border: 1px solid var(--line); border-radius: 5px; overflow: auto;
-  background: #0d1219; display: flex; justify-content: center; padding: 8px;
+  background: #0d1219; padding: 8px; max-height: 62vh;
 }
+/* 가운데 정렬은 margin으로 한다. flex의 justify-content: center 는 내용이
+   넘칠 때 시작 쪽을 잘라 버려 스크롤로도 왼쪽 끝에 못 간다. */
+.maskcanvas canvas { display: block; margin: 0 auto; }
 .maskcanvas canvas { image-rendering: pixelated; cursor: crosshair; }
+.masktools .slider select { max-width: 210px; }
 /* 겹쳐 볼 마스크 고르기. 칩은 범례와 같은 모양이라 색이 곧 화면의 색이다. */
 .refbar { gap: 6px; margin-bottom: 8px; }
 .refbar .chip { cursor: pointer; font-size: 12px; }

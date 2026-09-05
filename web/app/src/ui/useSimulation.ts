@@ -122,7 +122,16 @@ export function useSimulation(project: Project): SimState {
 
   // 그래프나 보는 단계가 바뀌면 다시 계산한다. 디바운스가 슬라이더 드래그를 막는다.
   useEffect(() => {
-    if (!activeLeaf || chain.length === 0) { setView(null); return; }
+    // 갈래가 비면 보여 줄 것이 없다. 앞 프로젝트의 결과를 남겨 두면 단계 바에
+    // 남의 숫자가 그대로 떠 있는다 — 새 프로젝트를 만들면 바로 보인다.
+    if (!activeLeaf || chain.length === 0) {
+      setView(null);
+      setMeta([]);
+      setDiagnostics([]);
+      return;
+    }
+    // 갈래가 짧아졌으면 넘치는 결과는 버린다.
+    setMeta((m) => (m.length > chain.length ? m.slice(0, chain.length) : m));
     const target = Math.min(step, chain.length - 1);
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {

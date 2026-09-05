@@ -31,6 +31,9 @@ export const GRID_PRESETS: { label: string; grid: GridSpec }[] = [
   { label: "기본 (1.08M)", grid: { nx: 176, ny: 64, nz: 96 } },
   { label: "넓게 (1.54M)", grid: { nx: 240, ny: 100, nz: 64 } },
   { label: "정밀 (2.15M)", grid: { nx: 224, ny: 80, nz: 120 } },
+  // 마스크는 nx × ny 다. 회로 배치를 그리려면 y가 넉넉해야 하는데, 위 프리셋들은
+  // 단면 실습에 맞춰 y가 얇다. 높이를 줄여 그 몫을 평면에 준다.
+  { label: "레이아웃 (1.79M)", grid: { nx: 200, ny: 160, nz: 56 } },
 ];
 
 export function newProject(name = "새 프로젝트", grid: GridSpec = DEFAULT_GRID): Project {

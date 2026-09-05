@@ -21,7 +21,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EXAMPLES, exampleById } from "../core/project/examples";
-import { parseProject, serializeProject, libraryOf, GRID_PRESETS } from "../core/project/serialize";
+import { parseProject, serializeProject, libraryOf, newProject, GRID_PRESETS } from "../core/project/serialize";
 import { insertStep, removeStep, moveStepDown, moveStepUp } from "../core/project/edit";
 import type { Project } from "../core/project/types";
 import { EMPTY } from "../core/materials";
@@ -51,7 +51,7 @@ export function App() {
   const [probeX, setProbeX] = useState(-1);
   const [cutX, setCutX] = useState(-1);
   const [cutAxis, setCutAxis] = useState<0 | 1 | 2>(0);
-  const [smooth, setSmooth] = useState(2);
+  const [smooth, setSmooth] = useState(3);
   const [mode, setMode] = useState<"smooth" | "voxel">("smooth");
   const [meshStats, setMeshStats] = useState<{ triangles: number; ms: number } | null>(null);
   const [modal, setModal] = useState<null | "mask" | "library" | "graph">(null);
@@ -65,11 +65,11 @@ export function App() {
 
   const y = sliceY >= 0 ? sliceY : Math.floor(project.grid.ny / 2);
   const px = probeX >= 0 ? probeX : Math.floor(project.grid.nx / 2);
-  // 절단면 기본값은 격자의 62% — 처음부터 층 구조가 보이게 한다. 꽉 채워 두면
-  // 마지막에 증착한 재질 하나만 보여서 3D가 아무것도 안 알려 준다.
+  // 절단면 기본값은 끝까지 — 자르지 않은 온전한 형상에서 시작한다. 잘라 보고
+  // 싶으면 슬라이더를 당기면 되고, 축도 골라 쓸 수 있다.
   const cutDim =
     cutAxis === 0 ? project.grid.nx : cutAxis === 1 ? project.grid.ny : project.grid.nz;
-  const cut = cutX >= 0 ? Math.min(cutX, cutDim) : Math.round(cutDim * 0.62);
+  const cut = cutX >= 0 ? Math.min(cutX, cutDim) : cutDim;
   const nmPerVoxel = nmPerVoxelOf(project);
 
   /** 지금 보고 있는 단계 = 지금 선택된 노드. 둘은 같은 것이다. */
@@ -155,6 +155,18 @@ export function App() {
     sim.setStep(0);
   };
 
+  /** 빈 프로젝트로 시작한다. 지금 것을 버리므로 한 번 묻는다. */
+  const newBlank = () => {
+    setMenu(false);
+    if (project.nodes.length > 0 && !confirm("지금 레시피를 버리고 새로 시작할까요?")) return;
+    const p = newProject("새 프로젝트", project.grid);
+    p.nmPerVoxel = nmPerVoxel;
+    setProject(p);
+    sim.setStep(0);
+    setCutX(-1);
+    setHidden(new Set());
+  };
+
   const addStep = (type: string) => {
     const { project: next } = insertStep(project, type, currentId);
     setProject(next);
@@ -221,6 +233,7 @@ export function App() {
           <button onClick={() => setMenu((v) => !v)} title="더 보기">⋯</button>
           {menu && (
             <div className="menu" onMouseLeave={() => setMenu(false)}>
+              <button onClick={newBlank}>새 프로젝트</button>
               <button onClick={save}>프로젝트 저장</button>
               <button onClick={() => fileRef.current?.click()}>프로젝트 열기</button>
               <hr />
@@ -464,7 +477,8 @@ export function App() {
             onStep={sim.setStep}
             busy={sim.busy}
             progress={sim.progress}
-            mesh={meshStats}
+            /* 그릴 것이 없으면 삼각형 수도 없다. 안 지우면 앞 프로젝트의 숫자다. */
+            mesh={sim.view ? meshStats : null}
           />
 
           {sim.chain[sim.step]?.note && <div className="nodenote">{sim.chain[sim.step].note}</div>}
