@@ -244,10 +244,11 @@ export function optionsFor(
   if (spec.options) return spec.options;
   switch (spec.source) {
     case "material":
-      // 빈 공간은 재질로 고를 수 없다.
+      // 빈 공간은 재질이 아니고, **노광된 형태**는 증착할 수 있는 것이 아니다 —
+      // 노광은 공정이 만드는 상태이지 통에 담아 파는 물질이 아니다.
       return lib.mat.key
         .map((k, i) => ({ value: k, label: lib.mat.name[i] }))
-        .filter((_, i) => i !== 0);
+        .filter((_, i) => i !== 0 && lib.mat.unexposedForm[i] < 0);
     case "etchant":
       return lib.proc.etchants.map((e) => ({ value: e.id, label: e.name }));
     case "deposition":

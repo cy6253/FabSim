@@ -685,6 +685,63 @@ describe("증착 방식 — 커버리지 하나로 갈리지 않는다", () => {
   });
 });
 
+describe("좌우 대칭 — 대칭인 것을 넣으면 대칭인 것이 나와야 한다", () => {
+  /** 창 중심에서 좌우 벽까지의 거리 차. 0이어야 한다. */
+  function etchSkew(aniso: number) {
+    const NX = 80, NY = 8, NZ = 60, W0 = 32, W1 = 48, MID = (W0 + W1) / 2 - 0.5;
+    const s2 = createSim(NX, NY, NZ);
+    const mat = newMat(s2), phi = newPhi(s2);
+    for (let z = 0; z < 40; z++)
+      for (let y = 0; y < NY; y++) for (let x = 0; x < NX; x++) mat[at(s2, x, y, z)] = SI;
+    for (let z = 40; z < 52; z++)
+      for (let y = 0; y < NY; y++)
+        for (let x = 0; x < NX; x++) if (x < W0 || x >= W1) mat[at(s2, x, y, z)] = PR;
+    s2.phiDirty = true;
+    opEtch(s2, mat, phi, { [SI]: 1.0, [PR]: 0.25 }, 24, aniso);
+    let worst = 0;
+    for (let z = 39; z >= 20; z--) {
+      let L = -1, R = -1;
+      for (let x = 0; x < NX; x++) if (mat[at(s2, x, 4, z)] === EMPTY) { if (L < 0) L = x; R = x; }
+      if (L < 0) continue;
+      worst = Math.max(worst, Math.abs((MID - L) - (R - MID)));
+    }
+    return worst;
+  }
+
+  function depoSkew(coverage: number, directionality: number) {
+    const NX = 80, NY = 8, NZ = 70, W0 = 32, W1 = 48, MID = (W0 + W1) / 2 - 0.5;
+    const s2 = createSim(NX, NY, NZ);
+    const mat = newMat(s2), phi = newPhi(s2);
+    for (let z = 0; z < 40; z++)
+      for (let y = 0; y < NY; y++) for (let x = 0; x < NX; x++) mat[at(s2, x, y, z)] = SI;
+    for (let z = 20; z < 40; z++)
+      for (let y = 0; y < NY; y++) for (let x = W0; x < W1; x++) mat[at(s2, x, y, z)] = EMPTY;
+    s2.phiDirty = true;
+    opDeposit(s2, mat, phi, OX, 10, coverage, directionality);
+    let worst = 0;
+    for (let z = 38; z >= 22; z--) {
+      let L = -1, R = -1;
+      for (let x = W0 - 4; x < W1 + 4; x++) if (mat[at(s2, x, 4, z)] === EMPTY) { if (L < 0) L = x; R = x; }
+      if (L < 0) continue;
+      worst = Math.max(worst, Math.abs((MID - L) - (R - MID)));
+    }
+    return worst;
+  }
+
+  it("대칭인 창을 파면 좌우가 정확히 같다", () => {
+    // 광선 방향을 황금비 나선으로 뽑던 시절에는 방위가 한쪽으로 치우쳐, 이방성
+    // 1인 수직 식각에서도 좌우 벽이 1~2복셀 어긋났다. 가중이 세질수록 소수의
+    // 광선이 판정을 도맡아 더 나빠졌다.
+    for (const a of [1, 0.97, 0.9, 0.5, 0]) expect(etchSkew(a), `이방성 ${a}`).toBe(0);
+  });
+
+  it("대칭인 트렌치를 채우면 좌우가 정확히 같다", () => {
+    // 스퍼터 증착에서는 9복셀까지 어긋났다.
+    for (const [c, d] of [[1, 1], [0.55, 1], [0.3, 4], [0.12, 12]] as [number, number][])
+      expect(depoSkew(c, d), `커버리지 ${c} 지향성 ${d}`).toBe(0);
+  });
+});
+
 describe("하드마스크 — 레지스트가 못 버티는 식각을 대신 받는다", () => {
   /** 실리콘 위 두께 10 마스크막에 실리콘 RIE를 걸고, 남은 비율을 돌려준다. */
   function survives(matId: string, seconds: number) {

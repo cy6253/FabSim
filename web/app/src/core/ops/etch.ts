@@ -31,8 +31,8 @@ export type Selectivity = Record<number, number>;
 /** 돌파 재계산 상한. 무한 루프 방지용이며 실제로는 1~3에서 끝난다. */
 const MAX_ROUNDS = 6;
 
-/** 하늘 가시성 광선 — 증착과 같은 상수를 쓴다. 결정성을 위해 고정이다. */
-const NRAY = 12;
+/** 하늘 가시성 광선 — 증착과 같은 상수를 쓴다. 8의 배수여야 좌우가 대칭이다. */
+const NRAY = 24;
 const RAYLEN = 26;
 
 export function opEtch(

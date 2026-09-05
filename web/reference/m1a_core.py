@@ -253,7 +253,7 @@ def growth_front(mat, reach):
 
 
 # ------------------------------------------------- sky visibility
-def visibility(mat, cells, nray=12, length=26, exponent=0.0, phi=None):
+def visibility(mat, cells, nray=24, length=26, exponent=0.0, phi=None):
     """Sky visibility, optionally weighted toward vertical.
 
     exponent 0 is Lambert over the hemisphere (what deposition wants). Etching
@@ -271,18 +271,26 @@ def visibility(mat, cells, nray=12, length=26, exponent=0.0, phi=None):
     the sidewall and lift-off could not work. phi is negative inside solid, so
     grad(phi) is the outward normal.
     """
+    # The ray set has to be LEFT-RIGHT SYMMETRIC. A golden-ratio spiral is
+    # deterministic but its azimuths lean one way, so a symmetric window came out
+    # lopsided. Rings instead: eight azimuths at odd multiples of pi/8, closed
+    # under x->-x and y->-y with no ray on an axis. Polar angles are stratified by
+    # the ACTUAL distribution rather than sampled Lambert and reweighted: for
+    # cos^m the CDF in t=cos(theta) is t^(m+1), so t_k = ((k+.5)/rings)^(1/(m+1))
+    # gives every ring an equal share and every ray weight 1. exponent 0 is
+    # exactly the old Lambert sampling.
+    AZ = 8
+    rings = max(1, round(nray / AZ))
+    m1 = 2 + max(0.0, exponent)
     dirs = []
     wts = []
-    if exponent > 0:
-        dirs.append((0.0, 0.0, 1.0))
-        wts.append(1.0)
-    for r in range(nray):
-        u = (r + 0.5) / nray
-        phi = u * math.pi * 2 * 1.618034
-        ct = math.sqrt(1 - u)
+    for k in range(rings):
+        ct = ((k + 0.5) / rings) ** (1.0 / m1)
         st = math.sqrt(max(0.0, 1 - ct * ct))
-        dirs.append((st * math.cos(phi), st * math.sin(phi), ct))
-        wts.append(ct ** exponent if exponent > 0 else 1.0)
+        for j in range(AZ):
+            phi = (2 * j + 1) * math.pi / AZ
+            dirs.append((st * math.cos(phi), st * math.sin(phi), ct))
+            wts.append(1.0)
     wsum = sum(wts)
     # value for an open flat surface (normal +z, everything escapes) = 1
     flat = sum(wts[k] * (dirs[k][2] if phi is not None else 1.0) for k in range(len(dirs)))

@@ -29,8 +29,9 @@ export interface DepositResult {
   note: string;
 }
 
-/** 가시성 광선 수와 길이. 결정성을 위해 고정 상수다. */
-const NRAY = 12;
+/** 가시성 광선 수와 길이. 결정성을 위해 고정 상수이고, 방위 8등분의 배수여야
+ * 좌우 대칭이 성립한다 (3고리 × 8방위). */
+const NRAY = 24;
 const RAYLEN = 26;
 
 export function opDeposit(

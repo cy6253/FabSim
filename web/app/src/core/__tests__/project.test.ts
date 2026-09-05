@@ -15,7 +15,7 @@ import {
 } from "../project/serialize";
 import { chainTo, leaves, indexGraph, defaultLeaf } from "../project/graph";
 import { EXAMPLES, exampleById } from "../project/examples";
-import { defaultParams, NODE_SPECS, optionsFor } from "../project/nodes";
+import { defaultParams, NODE_SPECS, NODE_SPEC_BY_TYPE, optionsFor } from "../project/nodes";
 import { Executor, Cancelled } from "../runner/executor";
 import { rleEncode, rleDecode } from "../runner/snapshot";
 import { DEFAULT_LIBRARY } from "../library";
@@ -400,5 +400,17 @@ describe("필드 크기 — 마스크가 덮는 영역이 곧 다이다", () => 
     expect(f.d).toBeCloseTo(2.816, 6);
     expect(f.h).toBeCloseTo(0.9856, 6);
     expect(fieldLabel({ nx: 200, ny: 160, nz: 56 }, 17.6)).toBe("3.52 × 2.82 × 0.99 µm");
+  });
+});
+
+describe("노드 카탈로그", () => {
+  it("증착 재질 목록에 진공과 노광된 형태는 없다", () => {
+    // 노광 PR은 공정이 만드는 상태이지 통에 담아 파는 물질이 아니다.
+    const spec = NODE_SPEC_BY_TYPE["deposit"].params.find((p) => p.key === "material")!;
+    const vals = optionsFor(spec as never, DEFAULT_LIBRARY).map((o) => o.value);
+    expect(vals).not.toContain("vacuum");
+    expect(vals).not.toContain("PR_exposed");
+    expect(vals).toContain("PR");
+    expect(vals).toContain("aC");
   });
 });
