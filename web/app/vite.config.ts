@@ -12,5 +12,7 @@ export default defineConfig({
     environment: "node",
     include: ["src/**/*.test.ts"],
     testTimeout: 120_000,
+    // 워커가 진행 보고의 응답을 집을 틈을 만든다. 이유는 setup 파일에 적었다.
+    setupFiles: ["./src/test-setup.ts"],
   },
 });
