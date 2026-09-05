@@ -203,7 +203,18 @@ function sti(): Project {
         "실리콘 식각 전에 PR을 벗긴다 — 이제 질화막이 하드마스크다. " +
         "PR을 남기면 긴 실리콘 식각을 못 견디고 도중에 소모된다",
     },
-    { type: "etch", params: { etchant: "RIE_silicon", seconds: s.etch("RIE_silicon", s.L(0.28)), anisotropy: 0.95 }, note: "트렌치" },
+    {
+      type: "etch",
+      params: { etchant: "RIE_oxide", seconds: s.etch("RIE_oxide", s.L(0.07)), anisotropy: 0.95 },
+      note:
+        "창 안의 패드 산화막을 먼저 뚫는다. 이 단계가 없으면 다음 실리콘 식각이 " +
+        "산화막에서 멈춘다 — 선택비가 0.02라 아예 못 지나간다",
+    },
+    {
+      type: "etch",
+      params: { etchant: "RIE_silicon", seconds: s.etch("RIE_silicon", s.L(0.28)), anisotropy: 0.95 },
+      note: "트렌치. 질화막이 하드마스크로 버텨 준다",
+    },
     {
       type: "deposit",
       params: { material: "SiO2", thickness: s.L(0.31), method: "PECVD", coverage: -1 },
