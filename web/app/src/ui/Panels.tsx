@@ -10,6 +10,7 @@ import { countBySeverity, type Diagnostic, type Severity } from "../core/educati
 import { columnStack, voidStats } from "../core/education/measure";
 import type { Library } from "../core/library";
 import { dopingProfile, junctionDepth } from "../core/render/slice";
+import { lengthLabel } from "../core/project/types";
 import type { ViewData } from "./useSimulation";
 import type { StepMeta } from "../worker/protocol";
 
@@ -241,7 +242,7 @@ export function Diagnostics(p: {
 /* --------------------------------------------------------------- 지점 프로브 */
 
 /** 컬럼 하나를 찍어 층 두께를 읽는다. 3D를 클릭하면 여기가 갱신된다. */
-export function Probe(p: { view: ViewData; lib: Library; x: number; y: number }) {
+export function Probe(p: { view: ViewData; lib: Library; x: number; y: number; nmPerVoxel: number }) {
   const stack = columnStack(
     p.view.mat,
     { nx: p.view.nx, ny: p.view.ny, nz: p.view.nz },
@@ -278,6 +279,7 @@ export function Probe(p: { view: ViewData; lib: Library; x: number; y: number })
                   {l.name}
                 </td>
                 <td className="num">{l.thickness}</td>
+                <td className="num dim">{lengthLabel(l.thickness, p.nmPerVoxel)}</td>
                 <td className="num dim">
                   z{l.from}–{l.to}
                 </td>

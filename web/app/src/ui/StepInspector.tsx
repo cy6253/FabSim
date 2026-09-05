@@ -12,7 +12,7 @@
 import { NODE_SPEC_BY_TYPE, optionsFor } from "../core/project/nodes";
 import { attachMask, maskOfStep, setNote, setParam } from "../core/project/edit";
 import type { Library } from "../core/library";
-import type { Project, RecipeNode } from "../core/project/types";
+import { lengthLabel, nmPerVoxelOf, type Project, type RecipeNode } from "../core/project/types";
 
 export function StepInspector(p: {
   project: Project;
@@ -37,6 +37,7 @@ export function StepInspector(p: {
     p.onChange(setParam(p.project, node.id, key, v));
 
   const mask = maskOfStep(p.project, node.id);
+  const nm = nmPerVoxelOf(p.project);
 
   return (
     <aside className="stepinspector">
@@ -82,6 +83,10 @@ export function StepInspector(p: {
                   <em>
                     {Number(v)}
                     {prm.unit ? ` ${prm.unit}` : ""}
+                    {/* 복셀은 그 자체로는 크기를 안 알려 준다. nm을 같이 적는다. */}
+                    {prm.unit === "복셀" && (
+                      <i className="nm">{lengthLabel(Number(v), nm)}</i>
+                    )}
                     {prm.autoValue !== undefined && (
                       <button
                         className="ghost tiny"

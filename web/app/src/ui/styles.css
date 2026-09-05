@@ -311,6 +311,8 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
 .field input[type="range"], .field select, .field textarea { width: 100%; }
 .field small { display: block; color: var(--dim); margin-top: 4px; line-height: 1.45; }
 .field > span em.auto { color: var(--dim); font-size: 12px; }
+/* 복셀 값 옆에 붙는 물리 길이. 값보다 흐리게 둬 노브가 주인공으로 남는다. */
+.field > span em .nm { font-style: normal; color: var(--dim); font-size: 11px; margin-left: 5px; }
 .field input[type="range"].auto { opacity: 0.45; }
 .field > span em button { margin-left: 6px; }
 .field.row { display: flex; align-items: center; gap: 6px; }

@@ -25,6 +25,7 @@ import { parseProject, serializeProject, libraryOf, GRID_PRESETS } from "../core
 import { insertStep, removeStep, moveStepDown, moveStepUp } from "../core/project/edit";
 import type { Project } from "../core/project/types";
 import { EMPTY } from "../core/materials";
+import { lengthLabel, nmPerVoxelOf } from "../core/project/types";
 import { useSimulation } from "./useSimulation";
 import { View3D } from "./View3D";
 import { RecipeList } from "./RecipeList";
@@ -66,6 +67,7 @@ export function App() {
   // 절단면 기본값은 격자의 62% — 처음부터 층 구조가 보이게 한다. 꽉 채워 두면
   // 마지막에 증착한 재질 하나만 보여서 3D가 아무것도 안 알려 준다.
   const cut = cutX >= 0 ? cutX : Math.round(project.grid.nx * 0.62);
+  const nmPerVoxel = nmPerVoxelOf(project);
 
   /** 지금 보고 있는 단계 = 지금 선택된 노드. 둘은 같은 것이다. */
   const currentId = sim.chain[sim.step]?.id;
@@ -244,6 +246,20 @@ export function App() {
                 단계표 CSV 내보내기
               </button>
               <hr />
+              <label className="menurow" title="길이를 nm으로 읽는 기준. 어닐의 확산 길이도 여기서 나온다">
+                복셀 크기
+                <input
+                  type="number"
+                  min={0.1}
+                  step={0.5}
+                  value={nmPerVoxel}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    if (v > 0) setProject({ ...project, nmPerVoxel: v });
+                  }}
+                />
+                nm
+              </label>
               <label className="menurow">
                 격자
                 <select
@@ -252,7 +268,16 @@ export function App() {
                     const g = GRID_PRESETS.find(
                       (q) => `${q.grid.nx}x${q.grid.ny}x${q.grid.nz}` === e.target.value,
                     );
-                    if (g) setProject({ ...project, grid: g.grid });
+                    // 격자만 바꾸면 물리 크기가 따라 바뀐다. 예제는 길이를 격자에
+                    // 대한 비율로 쓰므로, 복셀 크기를 반대로 스케일해야 같은
+                    // 구조가 해상도만 올라간다.
+                    if (g)
+                      setProject({
+                        ...project,
+                        grid: g.grid,
+                        nmPerVoxel:
+                          Math.round(((nmPerVoxel * project.grid.nz) / g.grid.nz) * 100) / 100,
+                      });
                   }}
                 >
                   <option value={`${project.grid.nx}x${project.grid.ny}x${project.grid.nz}`}>
@@ -382,7 +407,7 @@ export function App() {
                 />
               </label>
             )}
-            <label className="slider" title="이 x보다 오른쪽을 잘라 내부를 봅니다">
+            <label className="slider" title={`이 x보다 오른쪽을 잘라 내부를 봅니다 (${lengthLabel(cut, nmPerVoxel)})`}>
               절단 {cut}
               <input
                 type="range" min={1} max={project.grid.nx} value={cut}
@@ -435,6 +460,7 @@ export function App() {
               sliceY={y}
               donors={donors}
               acceptors={acceptors}
+              nmPerVoxel={nmPerVoxel}
             />
           )}
         </section>

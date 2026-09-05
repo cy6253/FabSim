@@ -279,6 +279,8 @@ export function summarize(type: string, params: Record<string, ParamValue>): str
   const v = params[pick.key];
   if (v === undefined || v === "") return "";
   if (pick.kind === "number" && pick.autoValue !== undefined && v === pick.autoValue) return "";
+  // 숫자만 있으면 뜻이 안 통한다 — "1000"보다 "1000°C"가 읽힌다.
+  if (pick.kind === "number" && pick.unit) return `${v}${pick.unit === "°C" ? "" : " "}${pick.unit}`;
   return String(v);
 }
 

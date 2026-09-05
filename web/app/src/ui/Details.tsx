@@ -26,6 +26,7 @@ export function Details(p: {
   sliceY: number;
   donors: number[];
   acceptors: number[];
+  nmPerVoxel: number;
 }) {
   // 기본은 접힘. 3D가 주인공이니 세로를 내주고, 진단 배지가 접힌 채로도
   // 볼 이유가 있는지 알려 준다.
@@ -87,7 +88,7 @@ export function Details(p: {
 
       {tab === "probe" && (
         <div className="tabbody">
-          <Probe view={p.view} lib={p.lib} x={p.probeX} y={p.sliceY} />
+          <Probe view={p.view} lib={p.lib} x={p.probeX} y={p.sliceY} nmPerVoxel={p.nmPerVoxel} />
         </div>
       )}
     </div>

@@ -31,7 +31,7 @@ import {
 import { NODE_SPEC_BY_TYPE } from "../project/nodes";
 import { chainTo, indexGraph, type GraphIndex } from "../project/graph";
 import { libraryOf } from "../project/serialize";
-import { unpackMask, type Project, type RecipeNode } from "../project/types";
+import { unpackMask, nmPerVoxelOf, type Project, type RecipeNode } from "../project/types";
 import { rleEncode, rleDecode, rleBytes, type RLE } from "./snapshot";
 
 /** 한 단계의 결과. 화면이 스크럽할 때 읽는 것. */
@@ -164,8 +164,7 @@ export class Executor {
 
   /** 복셀 한 변의 물리 크기 [nm]. 어닐이 확산 길이를 풀 때 쓴다. */
   get nmPerVoxel(): number {
-    const v = this.project.nmPerVoxel;
-    return Number.isFinite(v) && (v as number) > 0 ? (v as number) : 20;
+    return nmPerVoxelOf(this.project);
   }
 
   get grid() {

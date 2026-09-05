@@ -21,6 +21,9 @@ import type {
 } from "../library";
 
 export const PROJECT_FORMAT = "fabsim3d-project";
+
+/** 복셀 한 변의 기본 크기 [nm]. 프로젝트가 값을 안 들면 이걸 쓴다. */
+export const DEFAULT_NM_PER_VOXEL = 20;
 export const PROJECT_VERSION = 1;
 
 export interface GridSpec {
@@ -75,6 +78,19 @@ export interface LibraryOverride {
   oxidations?: OxidationDef[];
   silicides?: SilicideDef[];
   implants?: ImplantDef[];
+}
+
+/** 이 프로젝트의 복셀 크기 [nm]. */
+export function nmPerVoxelOf(p: { nmPerVoxel?: number }): number {
+  const v = p.nmPerVoxel;
+  return Number.isFinite(v) && (v as number) > 0 ? (v as number) : DEFAULT_NM_PER_VOXEL;
+}
+
+/** 복셀 길이를 사람이 읽는 문자열로. 1000nm를 넘으면 µm으로 접는다. */
+export function lengthLabel(voxels: number, nmPerVoxel: number): string {
+  const nm = voxels * nmPerVoxel;
+  if (!Number.isFinite(nm)) return "";
+  return nm >= 1000 ? `${(nm / 1000).toFixed(nm >= 10000 ? 1 : 2)} µm` : `${Math.round(nm)} nm`;
 }
 
 export interface Project {
