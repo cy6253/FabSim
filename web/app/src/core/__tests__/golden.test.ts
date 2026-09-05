@@ -20,6 +20,9 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
 import { createSim, newMat, newPhi, newConc, at, XOF, ZOF, type Sim } from "../grid";
+import { newProject } from "../project/serialize";
+import { defaultParams } from "../project/nodes";
+import { Executor } from "../runner/executor";
 import { EMPTY, SI, OX, NIT, PR, MET, MSI, B, P_, AS, DG, DREL, SEG_M } from "../materials";
 import { dealGrove, dealGroveTime, opOxidize, opSilicide, opDeposit, opPRCoat, opExpose, opDevelop, opCMP, opImplant, opAnneal } from "../ops";
 import { columnTop, countOf, sumOf, surfaceZ } from "../measure";
@@ -426,6 +429,35 @@ describe("리소·CMP — 파이썬이 확인한 주장을 TS가 재현한다", 
     const r = opCMP(s, mat, phi, 10, { [OX]: 1 });
     expect(r.n).toBeGreaterThan(0); // 실제로 뭔가 깎이긴 해야 한다
     expect(countOf(s, mat, OX)).toBe(oxBefore);
+  });
+});
+
+describe("식각 속도 — 표의 baseRate가 실제로 쓰인다", () => {
+  /** 기판 하나 깔고 식각 하나. 실행기를 통해야 baseRate 배선까지 탄다. */
+  function etchDepth(etchant: string, seconds: number): number {
+    const g = { nx: 16, ny: 8, nz: 40 };
+    const p = newProject("t", g);
+    p.nodes = [
+      { id: "a", type: "substrate", params: { ...defaultParams("substrate"), material: "Si", thickness: 30 } },
+      { id: "b", type: "etch", params: { ...defaultParams("etch"), etchant, seconds, anisotropy: 1 } },
+    ];
+    p.edges = [{ from: "a", to: "b", port: "state" }];
+    const ex = new Executor(p);
+    const mat = ex.materialOf(ex.run("b")[1]);
+    // 한가운데 컬럼에서 Si 꼭대기를 찾아 30에서 얼마나 내려갔는지 잰다.
+    for (let z = g.nz - 1; z >= 0; z--)
+      if (mat[8 + g.nx * (4 + g.ny * z)] === SI) return 30 - (z + 1);
+    return 30;
+  }
+
+  it("같은 시간이라도 빠른 식각액이 더 깊이 판다", () => {
+    // 표는 식각액마다 baseRate를 적고 있었는데(BOE 3.0, 인산 2.0, RIE 1.0)
+    // 코어가 그걸 안 읽어서 같은 10초에 습식과 건식이 같은 깊이를 팠다.
+    // KOH와 RIE_silicon은 Si 선택비가 둘 다 1.0이고 속도만 2배 다르다.
+    const rie = etchDepth("RIE_silicon", 6);
+    const koh = etchDepth("KOH", 6);
+    expect(rie, "건식 6초").toBeGreaterThan(0);
+    expect(koh / rie, "KOH(×2)는 RIE(×1)의 두 배 깊이").toBeGreaterThan(1.6);
   });
 });
 

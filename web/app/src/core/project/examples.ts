@@ -18,6 +18,7 @@
 import { newProject } from "./serialize";
 import { defaultParams } from "./nodes";
 import { dealGroveTime } from "../ops";
+import { DEFAULT_LIBRARY } from "../library";
 import { packMask, type Project, type RecipeNode, type GridSpec, type ParamValue } from "./types";
 
 interface Step {
@@ -36,6 +37,11 @@ interface Scale {
   /** 이 두께의 산화막을 얻는 데 필요한 시간. */
   ox: (condition: string, thickness: number) => number;
   /**
+   * 이만큼 파는 데 필요한 시간. 식각액마다 속도(baseRate)가 다르므로 깊이를
+   * 초에 그대로 박으면 습식 단계가 의도보다 몇 배 깊어진다.
+   */
+  etch: (etchant: string, depth: number) => number;
+  /**
    * 확산 시간. 확산 길이 σ=√(2Dt)가 길이처럼 커지려면 t는 길이의 제곱으로 커야
    * 한다. 기준 격자(nz=72)에서의 dt를 주면 이 격자에 맞게 환산한다.
    */
@@ -48,6 +54,10 @@ function scaleOf(grid: GridSpec): Scale {
     grid,
     L: (f) => Math.max(1, Math.round(grid.nz * f)),
     ox: (condition, thickness) => Math.max(1, Math.round(dealGroveTime(condition, thickness))),
+    etch: (etchant, depth) => {
+      const r = DEFAULT_LIBRARY.proc.byId.etchant[etchant]?.baseRate ?? 1;
+      return Math.max(1, Math.round(depth / (r > 0 ? r : 1)));
+    },
     dt: (base) => Math.round(base * k * k * 4) / 4,
   };
 }
@@ -118,7 +128,7 @@ function trenchFill(): Project {
     { type: "develop", params: { tone: "positive" } },
     {
       type: "etch",
-      params: { etchant: "RIE_silicon", seconds: s.L(0.36), anisotropy: 0.97 },
+      params: { etchant: "RIE_silicon", seconds: s.etch("RIE_silicon", s.L(0.36)), anisotropy: 0.97 },
       note: "이방성을 낮춰 보면 마스크 아래로 파고드는 언더컷이 보인다",
     },
     { type: "strip" },
@@ -151,7 +161,7 @@ function locos(): Project {
     },
     {
       type: "etch",
-      params: { etchant: "RIE_nitride", seconds: s.L(0.17), anisotropy: 0.85 },
+      params: { etchant: "RIE_nitride", seconds: s.etch("RIE_nitride", s.L(0.17)), anisotropy: 0.85 },
       note: "필드 쪽 질화막만 걷어낸다. 액티브 위 질화막이 다음 산화를 막는다",
     },
     { type: "strip" },
@@ -163,7 +173,7 @@ function locos(): Project {
         "침투 거리는 액티브 폭과 무관하게 산화막 두께로 정해지므로, 액티브를 좁히면 " +
         "양쪽 beak이 만나 액티브가 통째로 산화된다. LOCOS가 미세화에서 STI에 밀려난 이유다",
     },
-    { type: "etch", params: { etchant: "hot_phosphoric", seconds: s.L(0.19) }, note: "질화막만 벗긴다" },
+    { type: "etch", params: { etchant: "hot_phosphoric", seconds: s.etch("hot_phosphoric", s.L(0.19)) }, note: "질화막만 벗긴다" },
   ], [m]);
 }
 
@@ -184,7 +194,7 @@ function sti(): Project {
     { type: "develop", params: { tone: "positive" } },
     {
       type: "etch",
-      params: { etchant: "RIE_nitride", seconds: s.L(0.14), anisotropy: 0.9 },
+      params: { etchant: "RIE_nitride", seconds: s.etch("RIE_nitride", s.L(0.14)), anisotropy: 0.9 },
       note: "PR로 질화막에 패턴을 옮긴다. 여기까지가 PR이 할 일이다",
     },
     {
@@ -193,7 +203,7 @@ function sti(): Project {
         "실리콘 식각 전에 PR을 벗긴다 — 이제 질화막이 하드마스크다. " +
         "PR을 남기면 긴 실리콘 식각을 못 견디고 도중에 소모된다",
     },
-    { type: "etch", params: { etchant: "RIE_silicon", seconds: s.L(0.28), anisotropy: 0.95 }, note: "트렌치" },
+    { type: "etch", params: { etchant: "RIE_silicon", seconds: s.etch("RIE_silicon", s.L(0.28)), anisotropy: 0.95 }, note: "트렌치" },
     {
       type: "deposit",
       params: { material: "SiO2", thickness: s.L(0.31), method: "PECVD", coverage: -1 },
@@ -204,7 +214,7 @@ function sti(): Project {
       params: { amount: s.L(0.33), slurry: "slurry_oxide" },
       note: "질화막이 정지층. 패드가 그 위에 올라타 트렌치 안 산화막만 남는다",
     },
-    { type: "etch", params: { etchant: "hot_phosphoric", seconds: s.L(0.17) } },
+    { type: "etch", params: { etchant: "hot_phosphoric", seconds: s.etch("hot_phosphoric", s.L(0.17)) } },
   ], [m]);
 }
 
@@ -229,13 +239,13 @@ function nmos(): Project {
     { type: "develop", params: { tone: "negative" }, note: "게이트만 남겨야 하므로 negative" },
     {
       type: "etch",
-      params: { etchant: "RIE_poly", seconds: s.L(0.19), anisotropy: 0.95 },
+      params: { etchant: "RIE_poly", seconds: s.etch("RIE_poly", s.L(0.19)), anisotropy: 0.95 },
       note: "게이트 산화막에서 멈춘다 (선택비 100:1)",
     },
     { type: "strip" },
     {
       type: "etch",
-      params: { etchant: "BOE", seconds: s.L(0.055) },
+      params: { etchant: "BOE", seconds: s.etch("BOE", s.L(0.055)) },
       note:
         "노출된 게이트 산화막을 벗겨 소스/드레인 실리콘을 연다. 게이트 아래는 폴리가 " +
         "덮고 있어 살아남는다. 이 단계를 빼면 웨이퍼 전면이 산화막이라 뒤의 " +
@@ -268,11 +278,11 @@ function allOps(): Project {
     { type: "prCoat", params: { thickness: s.L(0.097), planarization: 1 } },
     { type: "expose", mask: "win" },
     { type: "develop", params: { tone: "positive" } },
-    { type: "etch", params: { etchant: "RIE_nitride", seconds: s.L(0.17), anisotropy: 0.8 } },
+    { type: "etch", params: { etchant: "RIE_nitride", seconds: s.etch("RIE_nitride", s.L(0.17)), anisotropy: 0.8 } },
     { type: "strip" },
     { type: "oxidize", params: { condition: "wet1100", seconds: s.ox("wet1100", s.L(0.22)) } },
-    { type: "etch", params: { etchant: "hot_phosphoric", seconds: s.L(0.19) } },
-    { type: "etch", params: { etchant: "BOE", seconds: s.L(0.14) } },
+    { type: "etch", params: { etchant: "hot_phosphoric", seconds: s.etch("hot_phosphoric", s.L(0.19)) } },
+    { type: "etch", params: { etchant: "BOE", seconds: s.etch("BOE", s.L(0.14)) } },
     { type: "implant", params: { species: "B", rp: s.L(0.097), drp: 2.0, dose: 1 } },
     { type: "anneal", params: { steps: 4, dt: s.dt(2) } },
     { type: "deposit", params: { material: "Metal", thickness: s.L(0.055), method: "LPCVD", coverage: 1 } },

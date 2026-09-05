@@ -424,8 +424,12 @@ export class Executor {
         const et = lib.proc.byId.etchant[str("etchant")];
         if (!et) throw new Error(`노드 '${n.id}'가 모르는 식각액을 씁니다: ${str("etchant")}`);
         const aniso = num("anisotropy") >= 0 ? num("anisotropy") : et.anisotropy;
-        const r = opEtch(s, mat, phi, selectivityOf(lib, et.id), num("seconds"), aniso);
-        return `제거 ${r.removed.toLocaleString()} · 이방성 ${aniso} · FMM ${((r.touched / s.N) * 100).toFixed(1)}%`;
+        // 식각액마다 속도가 다르다. 표가 baseRate로 그걸 적고 있었는데 코어가
+        // 안 읽어서, 같은 10초에 BOE와 RIE가 같은 깊이를 팠다.
+        const rate = et.baseRate > 0 ? et.baseRate : 1;
+        const r = opEtch(s, mat, phi, selectivityOf(lib, et.id), num("seconds") * rate, aniso);
+        const speed = rate === 1 ? "" : ` · 속도 ×${rate}`;
+        return `제거 ${r.removed.toLocaleString()} · 이방성 ${aniso}${speed} · FMM ${((r.touched / s.N) * 100).toFixed(1)}%`;
       }
       case "prCoat": {
         const nn = opPRCoat(s, mat, phi, num("thickness"), num("planarization"));

@@ -95,7 +95,10 @@ export const NODE_SPECS: NodeSpec[] = [
     category: "식각",
     params: [
       { kind: "select", key: "etchant", label: "식각액", source: "etchant", default: "RIE_oxide" },
-      { kind: "number", key: "seconds", label: "시간", min: 0, max: 120, step: 1, default: 10, unit: "s" },
+      {
+        kind: "number", key: "seconds", label: "시간", min: 0, max: 120, step: 1, default: 10, unit: "s",
+        help: "식각액마다 속도가 다르다 — 같은 시간에 습식(BOE는 ×3)이 훨씬 깊이 판다",
+      },
       {
         kind: "number", key: "anisotropy", label: "이방성", min: 0, max: 1, step: 0.05,
         default: -1, autoValue: -1, autoLabel: "식각액이 정한 값",
