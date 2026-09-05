@@ -281,6 +281,26 @@ export function analyze(
 
     /* -------------------------------------------------------------- CMP */
     if (node.type === "cmp") {
+      const slurry = lib.proc.byId.slurry[String(p.slurry)];
+      // 슬러리가 위에 있는 재질을 아예 못 갈면 패드가 거기 올라타 아무 일도
+      // 안 한다. 화면으로는 "제거량을 올려도 안 깎이네"로만 보인다.
+      if (slurry && f.changed.removed === 0 && prev) {
+        const cannot = Object.keys(prev.counts)
+          .map(Number)
+          .filter((m) => m !== 0 && (prev.counts[m] ?? 0) > 0)
+          .filter((m) => slurry.removal[lib.mat.key[m]] === undefined);
+        if (cannot.length > 0) {
+          push({
+            kind: "slurry-cannot-polish",
+            severity: "warn",
+            title: `${slurry.name}로는 ${cannot.map(name).join("·")}을(를) 갈 수 없습니다`,
+            detail: "제거 0셀 — 패드가 그 재질 위에 올라탔습니다",
+            advice:
+              "슬러리를 바꾸거나, 먼저 식각으로 그 재질을 걷어내고 연마하세요. " +
+              "재질·공정 표에서 이 슬러리의 제거 속도를 볼 수 있습니다.",
+          });
+        }
+      }
       const stop = lib.proc.byId.slurry[String(p.slurry)]?.stopOn ?? [];
       const hasStop = stop.some((k) => (prev?.counts[lib.mat.index[k]] ?? 0) > 0);
       if (!hasStop && f.changed.removed > 0) {

@@ -24,7 +24,7 @@ import { newProject, validateProject } from "../project/serialize";
 import { defaultParams } from "../project/nodes";
 import { Executor } from "../runner/executor";
 import { EMPTY, SI, OX, NIT, PR, MET, MSI, B, P_, AS, DG, DREL, SEG_M } from "../materials";
-import { DEFAULT_LIBRARY } from "../library";
+import { DEFAULT_LIBRARY, removalOf, stopLayersOf } from "../library";
 import { annealPlan, diffusivity, dealGrove, dealGroveTime, opOxidize, opSilicide, opDeposit, opEtch, opPRCoat, opExpose, opDevelop, opCMP, opImplant, opAnneal } from "../ops";
 import { columnTop, countOf, sumOf, surfaceZ } from "../measure";
 import { stripeMask, fullMask } from "../masks";
@@ -565,6 +565,64 @@ describe("리소·CMP — 파이썬이 확인한 주장을 TS가 재현한다", 
     const removedNeg = opDevelop(b.s, b.mat, b.phi, false);
     expect(removedPos + removedNeg).toBe(a.total);
     expect(a.total).toBe(b.total);
+  });
+
+  /** STI 꼴 — 왼쪽은 질화막 정지층, 오른쪽은 넓은 산화막 창. */
+  function stiPolish(amount: number, withRates: boolean) {
+    const NX = 40, NY = 6, NZ = 50;
+    const s2 = createSim(NX, NY, NZ);
+    const mat = newMat(s2), phi = newPhi(s2);
+    for (let z = 0; z < 20; z++)
+      for (let y = 0; y < NY; y++) for (let x = 0; x < NX; x++) mat[at(s2, x, y, z)] = SI;
+    for (let z = 20; z < 26; z++)
+      for (let y = 0; y < NY; y++) for (let x = 0; x < 20; x++) mat[at(s2, x, y, z)] = NIT;
+    for (let z = 20; z < 34; z++)
+      for (let y = 0; y < NY; y++)
+        for (let x = 0; x < NX; x++)
+          if (mat[at(s2, x, y, z)] === EMPTY) mat[at(s2, x, y, z)] = OX;
+    s2.phiDirty = true;
+    const r = opCMP(s2, mat, phi, amount,
+      stopLayersOf(DEFAULT_LIBRARY, "slurry_oxide"),
+      withRates ? removalOf(DEFAULT_LIBRARY, "slurry_oxide") : undefined);
+    const topOf = (x: number) => {
+      for (let z = NZ - 1; z >= 0; z--) if (mat[at(s2, x, 3, z)] !== EMPTY) return z;
+      return -1;
+    };
+    return { ...r, nitTop: topOf(5), oxTop: topOf(35), nit: countOf(s2, mat, NIT) };
+  }
+
+  it("cmp-dishing: 과연마하면 넓은 쪽이 정지층보다 낮게 파인다", () => {
+    // 예전에는 정지층에 닿는 순간 컬럼이 완전히 얼어붙어, STI·다마신에서 가장
+    // 중요한 결함인 디싱과 침식이 아예 안 나왔다.
+    const light = stiPolish(8, true);
+    expect(light.dish, "과연마 전에는 디싱이 없다").toBe(0);
+    expect(light.eroded).toBe(0);
+
+    const over = stiPolish(14, true);
+    expect(over.dish, "넓은 산화막이 질화막보다 낮다").toBeGreaterThan(0);
+    expect(over.oxTop).toBeLessThan(over.nitTop);
+    expect(over.nit, "아직 침식은 없다").toBe(light.nit);
+
+    const heavy = stiPolish(28, true);
+    expect(heavy.eroded, "심하게 갈면 정지층도 얇아진다").toBeGreaterThan(0);
+    expect(heavy.nit).toBeLessThan(light.nit);
+    expect(heavy.nitTop).toBeLessThan(over.nitTop);
+  });
+
+  it("cmp: 속도표를 안 주면 예전 그대로 — 정지층이 한 셀도 안 깎인다", () => {
+    for (const a of [8, 14, 20, 28]) {
+      const off = stiPolish(a, false);
+      expect(off.eroded, `amount ${a}`).toBe(0);
+      expect(off.nitTop, `amount ${a} 정지층 꼭대기`).toBe(25);
+    }
+  });
+
+  it("cmp: 슬러리가 못 가는 재질에서는 패드가 멈춘다", () => {
+    // 표에 없는 재질은 속도 0이다. 산화막 슬러리로는 실리콘을 못 간다 —
+    // 트렌치 산화막을 다 걷어내도 그 아래 실리콘에서 멈춰야 한다.
+    const deep = stiPolish(28, true);
+    expect(deep.oxTop, "실리콘 표면(z=19)에서 멈춘다").toBe(19);
+    expect(stiPolish(28, false).oxTop, "표가 없으면 실리콘까지 판다").toBeLessThan(19);
   });
 
   it("cmp-stop-layer: 정지층을 지정하면 그 재질이 하나도 안 깎인다", () => {

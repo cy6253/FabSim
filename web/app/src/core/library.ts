@@ -342,6 +342,15 @@ export function selectivityOf(lib: Library, etchantId: string): Record<number, n
   return out;
 }
 
+/** 슬러리 이름 → CMP가 받는 재질별 제거 속도. 표에 없으면 안 깎인다. */
+export function removalOf(lib: Library, slurryId: string): Record<number, number> {
+  const s = lib.proc.byId.slurry[slurryId];
+  if (!s) fail(`모르는 슬러리: ${slurryId}`);
+  const out: Record<number, number> = {};
+  for (const [k, v] of Object.entries(s.removal)) out[lib.mat.index[k]] = v;
+  return out;
+}
+
 /** 슬러리 이름 → CMP가 받는 정지층 표. */
 export function stopLayersOf(lib: Library, slurryId: string): Record<number, number> {
   const s = lib.proc.byId.slurry[slurryId];

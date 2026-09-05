@@ -23,7 +23,7 @@
 import { createSim, newMat, newPhi, newConc, type Sim } from "../grid";
 import { EMPTY } from "../materials";
 import { ambient } from "../connectivity";
-import { selectivityOf, stopLayersOf, silicideOf, type Library } from "../library";
+import { selectivityOf, stopLayersOf, removalOf, silicideOf, type Library } from "../library";
 import {
   opSubstrate, opDeposit, opEtch, opPRCoat, opExpose, opDevelop,
   opStrip, opCMP, opImplant, opAnneal, annealPlan, opOxidize, opSilicide,
@@ -453,8 +453,14 @@ export class Executor {
         return `제거 ${opStrip(s, mat, phi).toLocaleString()}`;
       }
       case "cmp": {
-        const r = opCMP(s, mat, phi, num("amount"), stopLayersOf(lib, str("slurry")));
-        return `절단 z${r.cut} · 제거 ${r.n.toLocaleString()}`;
+        const r = opCMP(
+          s, mat, phi, num("amount"),
+          stopLayersOf(lib, str("slurry")),
+          removalOf(lib, str("slurry")),
+        );
+        const dish = r.dish > 0 ? ` · 디싱 ${r.dish}` : "";
+        const ero = r.eroded > 0 ? ` · 침식 ${r.eroded.toLocaleString()}` : "";
+        return `절단 z${r.cut} · 제거 ${r.n.toLocaleString()}${dish}${ero}`;
       }
       case "implant": {
         const sp = lib.sp.index[str("species")];

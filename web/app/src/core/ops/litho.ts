@@ -127,6 +127,10 @@ export interface CMPResult {
   n: number;
   /** 실제로 깎인 높이의 하한 z. */
   cut: number;
+  /** 정지층이 과연마로 깎여 나간 셀 수 (침식). */
+  eroded: number;
+  /** 정지층 꼭대기와 그 옆 낮은 자리의 높이 차 (디싱, 복셀). */
+  dish: number;
 }
 
 /**
@@ -135,6 +139,20 @@ export interface CMPResult {
  * 6-연결 flood fill로 도달성을 보면 패드가 옆에서 파고든다. 실제 연마 패드는
  * 수직으로만 내려온다. 정지층을 만나면 멈추고, 그 지붕 아래는 살아남는다 —
  * 오버행 아래 묻힌 재질이 연마되지 않는 것이 이 방식의 핵심이다.
+ *
+ * **정지층도 조금은 깎인다.** 예전에는 정지층에 닿는 순간 그 컬럼이 완전히
+ * 얼어붙어, 실제 STI·다마신에서 가장 중요한 결함인 침식(정지층이 얇아짐)과
+ * 디싱(넓은 쪽이 정지층보다 낮게 파임)이 아예 안 나왔다. 슬러리 표는 재질마다
+ * 제거 속도를 적고 있었는데 코어가 그걸 안 읽었다.
+ *
+ * 두 걸음이다:
+ *  ① 평탄화 — 전역 평면 `gmax − amount`까지 내린다. 패드가 단단해서 높은 데를
+ *     먼저 깎는다는 뜻이고, 이게 CMP를 CMP이게 하는 성질이다.
+ *  ② 과연마 — 정지층에 막힌 컬럼은 패드가 `over`만큼 더 내려가려 했던 것이다.
+ *     그 몫을 정지층이 **자기 속도로** 받는다: over × 제거속도.
+ *
+ * 표에 없는 재질은 속도 0 — 안 깎이고 패드가 그 위에 올라탄다. 슬러리가
+ * 무엇을 갈 수 있는지는 표가 정한다.
  */
 export function opCMP(
   s: Sim,
@@ -142,24 +160,64 @@ export function opCMP(
   _phi: Float32Array,
   amount: number,
   protect?: Record<number, unknown>,
+  /** 재질 → 상대 제거 속도. 없는 재질은 0(안 깎임). 안 주면 전부 1로 본다. */
+  rate?: Record<number, number>,
 ): CMPResult {
   const { NX, NY, NZ } = s;
   const top = columnTop(s, mat);
   let gmax = 0;
   for (let k = 0; k < NX * NY; k++) if (top[k] > gmax) gmax = top[k];
   const cut = Math.max(0, gmax - amount);
-  let n = 0;
+  // 표가 없으면 전부 1로 본다 — 아무것도 하드 정지층이 되지 않아 예전과 같다.
+  const rateOf = (m: number) => (rate ? rate[m] ?? 0 : 1);
+  let n = 0,
+    eroded = 0,
+    stopTop = -1,
+    lowTop = Infinity;
+
   for (let y = 0; y < NY; y++)
     for (let x = 0; x < NX; x++) {
+      let blocked = -1;
       for (let z = NZ - 1; z >= cut; z--) {
         const i = at(s, x, y, z),
           m = mat[i];
         if (m === EMPTY) continue;
-        if (protect && protect[m]) break; // 패드가 정지층 위에 올라탄다
+        // 패드가 올라타는 것: 정지층이거나, 이 슬러리로는 아예 안 갈리는 재질.
+        if ((protect && protect[m]) || rateOf(m) <= 0) { blocked = z; break; }
         mat[i] = EMPTY;
         n++;
       }
+      // 속도표를 안 주면 침식을 낼 근거가 없다 — 예전처럼 정지층에서 딱 멈춘다.
+      if (blocked < 0 || !rate) continue;
+
+      // 과연마: 패드가 더 내려가려던 만큼을 정지층이 제 속도로 받는다.
+      const over = blocked - cut + 1;
+      let budget = Math.floor(over * rateOf(mat[at(s, x, y, blocked)]));
+      let z = blocked;
+      while (budget > 0 && z >= 0) {
+        const i = at(s, x, y, z),
+          m = mat[i];
+        if (m === EMPTY) { z--; continue; }
+        if (rateOf(m) <= 0) break;
+        mat[i] = EMPTY;
+        n++;
+        eroded++;
+        budget--;
+        z--;
+      }
+      if (z > stopTop) stopTop = z;
     }
+
+  // 디싱 — 정지층 꼭대기와 가장 낮은 자리의 차. 남은 구조에서 다시 잰다.
+  if (stopTop >= 0) {
+    const after = columnTop(s, mat);
+    for (let k = 0; k < NX * NY; k++) if (after[k] > 0 && after[k] < lowTop) lowTop = after[k];
+  }
   s.phiDirty = true;
-  return { n, cut };
+  return {
+    n,
+    cut,
+    eroded,
+    dish: stopTop >= 0 && Number.isFinite(lowTop) ? Math.max(0, stopTop + 1 - lowTop) : 0,
+  };
 }
