@@ -44,6 +44,46 @@ const mix = (
 ];
 
 /**
+ * 아래 세 함수는 3D 메시도 같이 쓴다 (core/render/mesh.ts).
+ *
+ * 같은 양을 두 화면이 다른 색으로 칠하면 그것만으로 틀린 화면이 된다 —
+ * 규칙은 한 군데만 두고 양쪽이 불러 쓴다.
+ */
+
+/** 변경분 하이라이트를 색에 섞는다. 1은 이번 단계가 더한 곳, 2는 없앤 곳. */
+export function mixDiff(
+  c: [number, number, number],
+  d: number,
+): [number, number, number] {
+  if (d === 1) return mix(c, ADDED, 0.55);
+  if (d === 2) return mix(c, REMOVED, 0.45);
+  return c;
+}
+
+/** 한 칸의 net doping — 도너에서 억셉터를 뺀 값. */
+export function netDoping(
+  conc: Float32Array[],
+  donors: number[],
+  acceptors: number[],
+  i: number,
+): number {
+  let net = 0;
+  for (const s of donors) net += conc[s][i];
+  for (const s of acceptors) net -= conc[s][i];
+  return net;
+}
+
+/** net doping을 색으로. 로그 네 자릿수, n형은 파랑 p형은 붉은색, 진성은 회색. */
+export function dopingColor(net: number, peak: number): [number, number, number] {
+  const a = Math.abs(net);
+  const t = a <= 0 || peak <= 0 ? 0 : Math.max(0, Math.min(1, (Math.log10(a / peak) + 4) / 4));
+  const base = 45;
+  return net >= 0
+    ? [base, base + 40 * t, base + 150 * t]
+    : [base + 150 * t, base + 30 * t, base + 20 * t];
+}
+
+/**
  * (nx × nz) RGBA. z는 위가 하늘이므로 뒤집어서 담는다 — 그대로 캔버스에 올리면
  * 위가 위다.
  */
@@ -58,10 +98,7 @@ export function renderSlice(mat: Uint8Array, o: SliceOptions): ImageDataLike {
     for (let z = 0; z < nz; z++)
       for (let x = 0; x < nx; x++) {
         const i = x + nx * (y + ny * z);
-        let net = 0;
-        for (const s of dope.donors) net += dope.conc[s][i];
-        for (const s of dope.acceptors) net -= dope.conc[s][i];
-        peak = Math.max(peak, Math.abs(net));
+        peak = Math.max(peak, Math.abs(netDoping(dope.conc, dope.donors, dope.acceptors, i)));
       }
   }
 
@@ -72,16 +109,7 @@ export function renderSlice(mat: Uint8Array, o: SliceOptions): ImageDataLike {
       let c: [number, number, number];
 
       if (dope && m !== EMPTY && peak > 0) {
-        let net = 0;
-        for (const s of dope.donors) net += dope.conc[s][i];
-        for (const s of dope.acceptors) net -= dope.conc[s][i];
-        // 로그 4자릿수. n형은 파랑, p형은 붉은색, 진성은 회색.
-        const a = Math.abs(net);
-        const t = a <= 0 ? 0 : Math.max(0, Math.min(1, (Math.log10(a / peak) + 4) / 4));
-        const base = 45;
-        c = net >= 0
-          ? [base, base + 40 * t, base + 150 * t]
-          : [base + 150 * t, base + 30 * t, base + 20 * t];
+        c = dopingColor(netDoping(dope.conc, dope.donors, dope.acceptors, i), peak);
       } else if (m === EMPTY) {
         c = o.voids?.[i] ? VOIDCOL : BG;
       } else if (o.hidden?.has(m)) {
@@ -90,11 +118,7 @@ export function renderSlice(mat: Uint8Array, o: SliceOptions): ImageDataLike {
         c = MATCOL[m] ?? [200, 200, 200];
       }
 
-      if (o.diff) {
-        const d = o.diff[i];
-        if (d === 1) c = mix(c, ADDED, 0.55);
-        else if (d === 2) c = mix(c, REMOVED, 0.45);
-      }
+      if (o.diff) c = mixDiff(c, o.diff[i]);
 
       // z를 뒤집어 화면 위쪽이 웨이퍼 위쪽이 되게 한다.
       const p = ((nz - 1 - z) * nx + x) * 4;

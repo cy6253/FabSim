@@ -48,7 +48,7 @@ const shot = async (name) => {
 const line = (sel) =>
   page.locator(sel).innerText().then((t) => t.split(String.fromCharCode(10)).join(" · "));
 
-await page.waitForSelector(".xsec canvas", { timeout: 60000 });
+await page.waitForSelector(".view3d canvas", { timeout: 60000 });
 await settle();
 await page.waitForTimeout(1200);
 
@@ -75,7 +75,7 @@ console.log("   " + (await line(".stepbar")));
 console.log("   범례: " + (await line(".legend")));
 await shot("02-final-step");
 
-// 변경분 하이라이트 (단면 탭이 기본으로 열려 있다)
+// 변경분 하이라이트 — 3D 도구줄의 토글이다
 await page.locator('.toggle:has-text("변경분") input').check();
 await page.waitForTimeout(1000);
 console.log("3) 변경분 하이라이트");
@@ -100,12 +100,10 @@ await page.waitForTimeout(600);
 console.log("5) 프로브: " + (await line(".stack")));
 await shot("05-probe");
 
-// NMOS + 도핑 (단면 탭으로 돌아가서)
+// NMOS + 도핑 — 이제 3D가 도핑 색을 칠한다
 await page.selectOption(".topbar select >> nth=0", "nmos");
 await page.waitForTimeout(1000);
 await gotoLast();
-await page.locator(".tabbar button", { hasText: "단면" }).click();
-await page.waitForTimeout(400);
 await page.locator('.toggle:has-text("도핑") input').check();
 await page.waitForTimeout(1500);
 console.log("6) NMOS 도핑 보기 — 게이트 아래 채널만 비어 있어야 한다");
@@ -187,17 +185,20 @@ if (steps3 !== steps2 - 1)
   console.log(`   ⚠ 삭제 후 단계 수가 예상과 다름 (${steps2} → ${steps3})`);
 await shot("11-stress");
 
-// 빈 화면을 통과시키지 않는다 — 색이 몇 종류밖에 없으면 아무것도 안 그려진 것이다.
+// 빈 화면을 통과시키지 않는다.
+//
+// 예전에는 2D 단면 캔버스의 픽셀 색을 세었다. 3D만 남은 지금은 그럴 수 없다 —
+// WebGL 캔버스는 그린 직후 readPixels가 빈 버퍼를 주는 일이 흔하다(직접 겪었다).
+// 대신 캔버스가 실제 크기를 가졌는지와, 단계 바가 보고하는 삼각형 수를 본다.
+// 메시가 0개면 화면에 아무것도 없다는 뜻이고, 그게 잡고 싶던 것이다.
 const painted = await page.evaluate(() => {
-  const cv = document.querySelector(".xsec canvas");
-  if (!cv) return { ok: false, why: "캔버스 없음" };
-  const ctx = cv.getContext("2d");
-  const d = ctx.getImageData(0, 0, cv.width, cv.height).data;
-  const seen = new Set();
-  for (let i = 0; i < d.length; i += 4 * 97) seen.add(`${d[i]},${d[i + 1]},${d[i + 2]}`);
-  return { ok: seen.size > 3, colors: seen.size, size: `${cv.width}x${cv.height}` };
+  const cv = document.querySelector(".view3d canvas");
+  if (!cv) return { ok: false, size: "캔버스 없음" };
+  return { ok: cv.width > 100 && cv.height > 100, size: `${cv.width}x${cv.height}` };
 });
-console.log(`\n캔버스 검사: ${painted.size}, 서로 다른 색 ${painted.colors}개 → ${painted.ok ? "그려짐" : "빈 화면!"}`);
+const tris = Number((((await line(".stepbar")).match(/\u25b3\s*([\d,]+)/)) ?? [0, "0"])[1].replace(/,/g, ""));
+painted.ok = painted.ok && tris > 0;
+console.log(`\n캔버스 검사: ${painted.size}, 삼각형 ${tris.toLocaleString()}개 -> ${painted.ok ? "그려짐" : "빈 화면!"}`);
 
 if (diagCount === 0) console.log("⚠ 진단이 하나도 없습니다 — 트렌치 예제는 보이드 경고가 나와야 합니다");
 console.log(`콘솔 오류 ${errors.length}건`);

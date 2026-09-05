@@ -11,6 +11,7 @@
  */
 import { EMPTY, MATCOL, VOIDCOL } from "../materials";
 import { blurField, surfaceNets } from "./surfaceNets";
+import { dopingColor, mixDiff, netDoping } from "./slice";
 
 export interface Mesh {
   position: Float32Array;
@@ -29,6 +30,21 @@ const FACES: { n: [number, number, number]; v: [number, number, number][] }[] = 
   { n: [0, 0, -1], v: [[0, 1, 0], [1, 1, 0], [1, 0, 0], [0, 0, 0]] },
 ];
 
+/**
+ * 도핑 보기는 로그 눈금이라 기준이 될 최대값을 먼저 알아야 한다.
+ * 단면은 그 평면에서, 3D는 부피 전체에서 잡는다 — 각 화면이 담은 범위가 기준이다.
+ */
+function dopingPeak(
+  mat: Uint8Array,
+  n: number,
+  d: { conc: Float32Array[]; donors: number[]; acceptors: number[] },
+): number {
+  let peak = 0;
+  for (let i = 0; i < n; i++)
+    if (mat[i] !== EMPTY) peak = Math.max(peak, Math.abs(netDoping(d.conc, d.donors, d.acceptors, i)));
+  return peak;
+}
+
 export interface MeshOptions {
   nx: number;
   ny: number;
@@ -37,6 +53,13 @@ export interface MeshOptions {
   cutX?: number;
   /** 봉인된 보이드도 그린다. */
   voids?: Uint8Array;
+  /**
+   * 재질 대신 net doping을 칠한다. 색 규칙은 단면과 공유한다 — 같은 양을 두
+   * 화면이 다르게 칠하면 그것만으로 틀린 화면이 된다.
+   */
+  doping?: { conc: Float32Array[]; donors: number[]; acceptors: number[] };
+  /** 변경분 하이라이트. 1 = 이번 단계가 더한 곳, 2 = 없앤 곳. */
+  diff?: Uint8Array;
   /** 이 재질은 숨긴다 (재질별 토글). */
   hidden?: Set<number>;
   /**
@@ -104,13 +127,20 @@ export function buildMesh(mat: Uint8Array, o: MeshOptions): Mesh {
     }
   };
 
+  const dope = o.doping;
+  const peak = dope ? dopingPeak(mat, nx * ny * nz, dope) : 0;
+
   for (let z = 0; z < nz; z++)
     for (let y = 0; y < ny; y++)
       for (let x = 0; x < cut && x < nx; x++) {
         const i = at(x, y, z);
         if (!visible(x, y, z)) continue;
         const m = mat[i];
-        const col = m === EMPTY ? VOIDCOL : MATCOL[m] ?? [200, 200, 200];
+        let col: [number, number, number] =
+          dope && m !== EMPTY && peak > 0
+            ? dopingColor(netDoping(dope.conc, dope.donors, dope.acceptors, i), peak)
+            : m === EMPTY ? VOIDCOL : MATCOL[m] ?? [200, 200, 200];
+        if (o.diff) col = mixDiff(col, o.diff[i]);
         if (x + 1 >= cut || x + 1 >= nx || !visible(x + 1, y, z)) emit(x, y, z, 0, col);
         if (x === 0 || !visible(x - 1, y, z)) emit(x, y, z, 1, col);
         if (y + 1 >= ny || !visible(x, y + 1, z)) emit(x, y, z, 2, col);
@@ -308,8 +338,10 @@ export function buildSmoothMesh(mat: Uint8Array, o: MeshOptions): Mesh {
     fields.push(blurField(f, { nx, ny, nz, passes }));
   }
 
-  /** 흐린 재질장을 삼선형으로 재고 가장 큰 재질을 고른다. 아무것도 없으면 -1. */
-  const labelAt = (sx: number, sy: number, sz: number): number => {
+  /** 표본 자리를 둘러싼 여덟 칸과 그 가중치. 삼선형 보간에 쓴다. */
+  const WI = new Int32Array(8);
+  const WW = new Float64Array(8);
+  const weigh = (sx: number, sy: number, sz: number) => {
     const ax = Math.max(0, Math.min(cut - 1, sx));
     const ay = Math.max(0, Math.min(ny - 1, sy));
     const az = Math.max(0, Math.min(nz - 1, sz));
@@ -319,20 +351,40 @@ export function buildSmoothMesh(mat: Uint8Array, o: MeshOptions): Mesh {
     const ya = Math.max(0, Math.min(ny - 1, yi)), yb = Math.max(0, Math.min(ny - 1, yi + 1));
     const za = Math.max(0, Math.min(nz - 1, zi)), zb = Math.max(0, Math.min(nz - 1, zi + 1));
     const ra = nx * ya, rb = nx * yb, la = nx * ny * za, lb = nx * ny * zb;
-    const i000 = xa + ra + la, i100 = xb + ra + la, i010 = xa + rb + la, i110 = xb + rb + la;
-    const i001 = xa + ra + lb, i101 = xb + ra + lb, i011 = xa + rb + lb, i111 = xb + rb + lb;
+    WI[0] = xa + ra + la; WI[1] = xb + ra + la; WI[2] = xa + rb + la; WI[3] = xb + rb + la;
+    WI[4] = xa + ra + lb; WI[5] = xb + ra + lb; WI[6] = xa + rb + lb; WI[7] = xb + rb + lb;
     const gx = 1 - fx, gy = 1 - fy, gz = 1 - fz;
-    const w000 = gx * gy * gz, w100 = fx * gy * gz, w010 = gx * fy * gz, w110 = fx * fy * gz;
-    const w001 = gx * gy * fz, w101 = fx * gy * fz, w011 = gx * fy * fz, w111 = fx * fy * fz;
+    WW[0] = gx * gy * gz; WW[1] = fx * gy * gz; WW[2] = gx * fy * gz; WW[3] = fx * fy * gz;
+    WW[4] = gx * gy * fz; WW[5] = fx * gy * fz; WW[6] = gx * fy * fz; WW[7] = fx * fy * fz;
+  };
+
+  /** 흐린 재질장을 삼선형으로 재고 가장 큰 재질을 고른다. 아무것도 없으면 -1. */
+  const labelAt = (sx: number, sy: number, sz: number): number => {
+    weigh(sx, sy, sz);
     let best = -1, bestV = 0;
     for (let L = 0; L < fields.length; L++) {
       const f = fields[L];
-      const v =
-        f[i000] * w000 + f[i100] * w100 + f[i010] * w010 + f[i110] * w110 +
-        f[i001] * w001 + f[i101] * w101 + f[i011] * w011 + f[i111] * w111;
+      let v = 0;
+      for (let q = 0; q < 8; q++) v += f[WI[q]] * WW[q];
       if (v > bestV) { bestV = v; best = labels[L]; }
     }
     return best;
+  };
+
+  /**
+   * 도핑 보기.
+   *
+   * 농도는 원래 이어진 양이므로 재질처럼 하나를 고를 것이 아니라 그대로 섞으면
+   * 된다 — 삼선형으로 재면 접합면이 복셀 계단 없이 번진다. 실제 도핑 분포가
+   * 그렇게 생겼으므로 이쪽이 더 정직하다.
+   */
+  const dope = o.doping;
+  const peak = dope ? dopingPeak(mat, n, dope) : 0;
+  const netAt = (sx: number, sy: number, sz: number): number => {
+    weigh(sx, sy, sz);
+    let v = 0;
+    for (let q = 0; q < 8; q++) v += netDoping(dope!.conc, dope!.donors, dope!.acceptors, WI[q]) * WW[q];
+    return v;
   };
 
   /** 흐린 장이 아무 말도 안 해 줄 때를 위한 원본 복셀 조회. */
@@ -428,7 +480,17 @@ export function buildSmoothMesh(mat: Uint8Array, o: MeshOptions): Mesh {
     const sx = cx - dx * 0.6, sy = cy - dy * 0.6, sz = cz - dz * 0.6;
     let m = labelAt(sx, sy, sz);
     if (m < 0) m = nearestAt(sx, sy, sz);
-    const c = m === EMPTY ? VOIDCOL : MATCOL[m] ?? [200, 200, 200];
+    let c: [number, number, number] =
+      dope && m !== EMPTY && peak > 0
+        ? dopingColor(netAt(sx, sy, sz), peak)
+        : m === EMPTY ? VOIDCOL : MATCOL[m] ?? [200, 200, 200];
+    if (o.diff) {
+      // 변경분은 있고 없고뿐이라 섞을 것이 없다 — 가장 가까운 칸을 그대로 읽는다.
+      const vx = Math.max(0, Math.min(cut - 1, Math.round(sx)));
+      const vy = Math.max(0, Math.min(ny - 1, Math.round(sy)));
+      const vz = Math.max(0, Math.min(nz - 1, Math.round(sz)));
+      c = mixDiff(c, o.diff[vx + nx * (vy + ny * vz)]);
+    }
     for (let v2 = 0; v2 < 3; v2++) {
       color[w + v2 * 3] = c[0] / 255;
       color[w + v2 * 3 + 1] = c[1] / 255;

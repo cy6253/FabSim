@@ -232,6 +232,49 @@ describe("표면 메시", () => {
     expect(fractional, "반 칸짜리 걸음").toBeGreaterThanOrEqual(6);
   });
 
+  it("도핑 보기가 3D에서도 n형과 p형을 뒤집지 않는다", () => {
+    // 단면을 걷어내면서 도핑 보기가 3D로 넘어왔다. 축이나 부호를 한 번만
+    // 잘못 꿰어도 접합이 뒤집히는데, 색만 보고는 알아채기 어렵다.
+    const g = { nx: 12, ny: 8, nz: 16 };
+    const s = createSim(g.nx, g.ny, g.nz);
+    const mat = newMat(s);
+    const conc = newConc(s);
+    const junction = 8;
+    for (let z = 0; z < 14; z++)
+      for (let y = 0; y < g.ny; y++)
+        for (let x = 0; x < g.nx; x++) {
+          const i = at(s, x, y, z);
+          mat[i] = SI;
+          // 위쪽은 As로 n형, 아래쪽은 B로 p형.
+          if (z >= junction) conc[AS][i] = 1e20;
+          else conc[B][i] = 1e18;
+        }
+
+    const cut = 8;
+    const m = buildSmoothMesh(mat, {
+      ...g, smooth: 2, cutX: cut,
+      doping: { conc, donors: [AS], acceptors: [B] },
+    });
+
+    // 절단면 위 삼각형만 본다 — 거기서 위아래가 한눈에 갈린다.
+    let nOnTop = 0, pOnBottom = 0, wrong = 0;
+    for (let t = 0; t < m.position.length; t += 9) {
+      const k = t / 3;
+      if (Math.abs(m.normal[k * 3]) < 0.85) continue;
+      const cx = (m.position[t] + m.position[t + 3] + m.position[t + 6]) / 3;
+      if (Math.abs(cx - (cut - 0.5)) > 0.75) continue;
+      const cz = (m.position[t + 2] + m.position[t + 5] + m.position[t + 8]) / 3;
+      if (Math.abs(cz - (junction - 0.5)) < 2) continue; // 접합 바로 옆은 섞인다
+      const blue = m.color[t + 2] > m.color[t] + 0.05;
+      const red = m.color[t] > m.color[t + 2] + 0.05;
+      if (cz > junction) { if (blue) nOnTop++; else if (red) wrong++; }
+      else if (cz < junction - 1) { if (red) pOnBottom++; else if (blue) wrong++; }
+    }
+    expect(nOnTop, "위쪽이 n형(파랑)으로 칠해진다").toBeGreaterThan(0);
+    expect(pOnBottom, "아래쪽이 p형(붉은색)으로 칠해진다").toBeGreaterThan(0);
+    expect(wrong, "위아래가 뒤집힌 삼각형").toBe(0);
+  });
+
   it("빈 격자는 삼각형이 없다", () => {
     const s = createSim(8, 4, 8);
     const m = buildMesh(newMat(s), { nx: 8, ny: 4, nz: 8 });

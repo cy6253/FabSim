@@ -79,6 +79,15 @@ export function App() {
     [lib],
   );
 
+  /**
+   * 3D에 넘길 도핑 자료. 객체를 매번 새로 만들면 참조가 달라져 메시를 다시
+   * 만들게 되므로 메모해 둔다.
+   */
+  const dopingData = useMemo(
+    () => (doping && sim.view ? { conc: sim.view.conc, donors, acceptors } : undefined),
+    [doping, sim.view, donors, acceptors],
+  );
+
   const present = useMemo(() => {
     const s = new Set<number>();
     if (!sim.view) return s;
@@ -347,6 +356,14 @@ export function App() {
               <input type="checkbox" checked={showVoids} onChange={(e) => setShowVoids(e.target.checked)} />
               보이드
             </label>
+            <label className="toggle" title="재질 대신 도펀트 농도를 색으로 — n형은 파랑, p형은 붉은색">
+              <input type="checkbox" checked={doping} onChange={(e) => setDoping(e.target.checked)} />
+              도핑
+            </label>
+            <label className="toggle" title="이번 단계가 더한 곳(초록)과 없앤 곳(자홍)">
+              <input type="checkbox" checked={showDiff} onChange={(e) => setShowDiff(e.target.checked)} />
+              변경분
+            </label>
             <select
               value={mode}
               onChange={(e) => setMode(e.target.value as "smooth" | "voxel")}
@@ -381,6 +398,9 @@ export function App() {
               hidden={hidden}
               smooth={smooth}
               mode={mode}
+              doping={dopingData}
+              diff={showDiff ? sim.view.diff : undefined}
+              onPick={(gx, gy) => { setProbeX(gx); setSliceY(gy); }}
               onStats={setMeshStats}
             />
           ) : (
@@ -411,17 +431,9 @@ export function App() {
               step={sim.step}
               onGoTo={sim.setStep}
               probeX={px}
-              onProbeX={setProbeX}
               sliceY={y}
-              onSliceY={setSliceY}
               donors={donors}
               acceptors={acceptors}
-              hidden={hidden}
-              doping={doping}
-              onDoping={setDoping}
-              showDiff={showDiff}
-              onShowDiff={setShowDiff}
-              gridNy={project.grid.ny}
             />
           )}
         </section>

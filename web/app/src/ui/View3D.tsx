@@ -23,12 +23,24 @@ export interface View3DProps {
   smooth: number;
   /** 부드러운 등위면으로 그릴지, 복셀 면 그대로 그릴지. */
   mode: "smooth" | "voxel";
+  /** 재질 대신 net doping을 칠한다. */
+  doping?: { conc: Float32Array[]; donors: number[]; acceptors: number[] };
+  /** 변경분 하이라이트. 1 = 이번 단계가 더한 곳, 2 = 없앤 곳. */
+  diff?: Uint8Array;
+  /**
+   * 표면을 클릭했을 때 그 자리의 격자 좌표. 프로브 지점을 여기서 고른다 —
+   * 예전에는 2D 단면을 클릭해 골랐는데, 단면을 걷어내면서 3D가 그 일을 맡았다.
+   */
+  onPick?: (x: number, y: number) => void;
   /** 메시를 만드는 데 걸린 시간을 알려 준다 (화면에 표시용). */
   onStats?: (s: { triangles: number; ms: number }) => void;
 }
 
 export function View3D(p: View3DProps) {
   const hostRef = useRef<HTMLDivElement>(null);
+  // 초기화 effect는 한 번만 돌기 때문에, 최신 콜백은 ref로 건네야 한다.
+  const pickRef = useRef(p.onPick);
+  pickRef.current = p.onPick;
   const stateRef = useRef<{
     renderer: THREE.WebGLRenderer;
     scene: THREE.Scene;
@@ -82,17 +94,44 @@ export function View3D(p: View3DProps) {
     };
 
     let dragging = false, lx = 0, ly = 0;
+    // 끌었는지 그냥 눌렀는지를 가른다 — 회전과 찍기가 같은 버튼을 쓰기 때문이다.
+    let dx0 = 0, dy0 = 0, moved = 0;
     const el = renderer.domElement;
-    const down = (e: PointerEvent) => { dragging = true; lx = e.clientX; ly = e.clientY; el.setPointerCapture(e.pointerId); };
+    const down = (e: PointerEvent) => {
+      dragging = true; lx = e.clientX; ly = e.clientY;
+      dx0 = e.clientX; dy0 = e.clientY; moved = 0;
+      el.setPointerCapture(e.pointerId);
+    };
     const move = (e: PointerEvent) => {
       if (!dragging) return;
+      moved = Math.max(moved, Math.abs(e.clientX - dx0) + Math.abs(e.clientY - dy0));
       const s = stateRef.current!;
       s.yaw -= (e.clientX - lx) * 0.007;
       s.pitch = Math.max(-1.3, Math.min(1.3, s.pitch + (e.clientY - ly) * 0.007));
       lx = e.clientX; ly = e.clientY;
       place();
     };
-    const up = (e: PointerEvent) => { dragging = false; el.releasePointerCapture(e.pointerId); };
+    const ray = new THREE.Raycaster();
+    const up = (e: PointerEvent) => {
+      dragging = false;
+      el.releasePointerCapture(e.pointerId);
+      if (moved > 4) return; // 돌린 것이지 찍은 것이 아니다
+      const s = stateRef.current!;
+      if (!s.mesh) return;
+      const r = el.getBoundingClientRect();
+      ray.setFromCamera(
+        new THREE.Vector2(
+          ((e.clientX - r.left) / r.width) * 2 - 1,
+          -((e.clientY - r.top) / r.height) * 2 + 1,
+        ),
+        s.camera,
+      );
+      const hit = ray.intersectObject(s.mesh, false)[0];
+      if (!hit) return;
+      // 메시의 국소 좌표가 곧 격자 좌표다.
+      const q = s.mesh.worldToLocal(hit.point.clone());
+      pickRef.current?.(Math.round(q.x), Math.round(q.y));
+    };
     const wheel = (e: WheelEvent) => {
       e.preventDefault();
       const s = stateRef.current!;
@@ -158,6 +197,8 @@ export function View3D(p: View3DProps) {
       voids: p.showVoids ? p.view.voids : undefined,
       hidden: p.hidden,
       smooth: p.smooth,
+      doping: p.doping,
+      diff: p.diff,
     };
     const m = p.mode === "smooth" ? buildSmoothMesh(p.view.mat, opts) : buildMesh(p.view.mat, opts);
     p.onStats?.({ triangles: m.triangles, ms: performance.now() - t0 });
@@ -194,7 +235,7 @@ export function View3D(p: View3DProps) {
     s.radius = 0.5 * Math.hypot(nx, ny, nz);
     (s as unknown as { place?: () => void }).place?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [p.view, p.cutX, p.showVoids, p.hidden, p.smooth, p.mode]);
+  }, [p.view, p.cutX, p.showVoids, p.hidden, p.smooth, p.mode, p.doping, p.diff]);
 
   return <div className="view3d" ref={hostRef} />;
 }
