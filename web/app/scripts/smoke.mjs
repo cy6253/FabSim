@@ -123,14 +123,14 @@ console.log("   완화 5: " + (await line(".stepbar")).split("·").slice(-2).joi
 await shot("07b-smooth5");
 
 // 모달 두 개
-await page.locator(".topbar .menuwrap button").click();
+await page.locator(".topbar .menuwrap > button").click();
 await page.locator(".menu button", { hasText: "마스크 편집" }).click();
 await page.waitForSelector(".maskcanvas canvas", { timeout: 10000 });
 console.log("8) 마스크 디자이너");
 await shot("08-mask");
 await page.locator(".modal-box header button", { hasText: "닫기" }).click();
 
-await page.locator(".topbar .menuwrap button").click();
+await page.locator(".topbar .menuwrap > button").click();
 await page.locator(".menu button", { hasText: "재질·공정 표" }).click();
 await page.waitForSelector("table.lib", { timeout: 10000 });
 console.log(`9) 재질·공정 표 — ${await page.locator("table.lib tbody tr").count()}행`);

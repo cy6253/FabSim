@@ -93,6 +93,44 @@ export function lengthLabel(voxels: number, nmPerVoxel: number): string {
   return nm >= 1000 ? `${(nm / 1000).toFixed(nm >= 10000 ? 1 : 2)} µm` : `${Math.round(nm)} nm`;
 }
 
+/**
+ * 시뮬레이션 필드의 물리 크기 [µm]. **마스크가 덮는 영역이 곧 이것이다** —
+ * 마스크는 격자 전체로 늘려 쓰이므로 둘은 항상 같은 넓이다.
+ */
+export function fieldSize(
+  grid: { nx: number; ny: number; nz: number },
+  nmPerVoxel: number,
+): { w: number; d: number; h: number } {
+  const k = nmPerVoxel / 1000;
+  return { w: grid.nx * k, d: grid.ny * k, h: grid.nz * k };
+}
+
+/** "3.52 × 2.82 × 0.99 µm" */
+export function fieldLabel(
+  grid: { nx: number; ny: number; nz: number },
+  nmPerVoxel: number,
+): string {
+  const f = fieldSize(grid, nmPerVoxel);
+  const n = (v: number) => (v >= 10 ? v.toFixed(1) : v.toFixed(2));
+  return `${n(f.w)} × ${n(f.d)} × ${n(f.h)} µm`;
+}
+
+/**
+ * 격자를 바꿀 때 쓸 새 복셀 크기.
+ *
+ * **가로 폭(다이 폭)을 붙들어 둔다.** 예전에는 높이(nz)를 기준으로 잡았는데,
+ * 그러면 평면을 넓힌 프리셋으로 갈수록 복셀이 오히려 굵어졌다 — 마스크를 더
+ * 잘게 그리려고 격자를 늘렸는데 칸이 커지는 셈이었다(20nm → 34.3nm).
+ * 폭을 고정하면 칸을 늘린 만큼 그대로 잘아진다.
+ */
+export function nmForGrid(
+  from: { nx: number },
+  to: { nx: number },
+  nmPerVoxel: number,
+): number {
+  return Math.round(((nmPerVoxel * from.nx) / to.nx) * 100) / 100;
+}
+
 export interface Project {
   format: typeof PROJECT_FORMAT;
   version: number;

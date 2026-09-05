@@ -25,7 +25,7 @@ import { parseProject, serializeProject, libraryOf, newProject, GRID_PRESETS } f
 import { insertStep, removeStep, moveStepDown, moveStepUp } from "../core/project/edit";
 import type { Project } from "../core/project/types";
 import { EMPTY } from "../core/materials";
-import { lengthLabel, nmPerVoxelOf } from "../core/project/types";
+import { lengthLabel, nmPerVoxelOf, fieldLabel, nmForGrid } from "../core/project/types";
 import { useSimulation } from "./useSimulation";
 import { View3D } from "./View3D";
 import { RecipeList } from "./RecipeList";
@@ -262,20 +262,28 @@ export function App() {
                 단계표 CSV 내보내기
               </button>
               <hr />
-              <label className="menurow" title="길이를 nm으로 읽는 기준. 어닐의 확산 길이도 여기서 나온다">
-                복셀 크기
+              {/* 마스크가 덮는 영역이 곧 이 필드다. 크기를 여기서 정한다. */}
+              <label
+                className="menurow"
+                title="시뮬레이션하는 웨이퍼 조각의 가로 폭. 마스크가 덮는 넓이가 이것이고, 어닐의 확산 길이도 여기서 나온다"
+              >
+                다이 폭
                 <input
                   type="number"
-                  min={0.1}
-                  step={0.5}
-                  value={nmPerVoxel}
+                  min={0.05}
+                  step={0.1}
+                  value={Math.round((project.grid.nx * nmPerVoxel) / 10) / 100}
                   onChange={(e) => {
-                    const v = Number(e.target.value);
-                    if (v > 0) setProject({ ...project, nmPerVoxel: v });
+                    const um = Number(e.target.value);
+                    if (um > 0)
+                      setProject({ ...project, nmPerVoxel: (um * 1000) / project.grid.nx });
                   }}
                 />
-                nm
+                µm
               </label>
+              <div className="menurow dim">
+                {fieldLabel(project.grid, nmPerVoxel)} · {nmPerVoxel.toFixed(1)} nm/칸
+              </div>
               <label className="menurow">
                 격자
                 <select
@@ -284,15 +292,12 @@ export function App() {
                     const g = GRID_PRESETS.find(
                       (q) => `${q.grid.nx}x${q.grid.ny}x${q.grid.nz}` === e.target.value,
                     );
-                    // 격자만 바꾸면 물리 크기가 따라 바뀐다. 예제는 길이를 격자에
-                    // 대한 비율로 쓰므로, 복셀 크기를 반대로 스케일해야 같은
-                    // 구조가 해상도만 올라간다.
+                    // 다이 폭을 붙들어 둔다 — 칸을 늘린 만큼 칸이 잘아진다.
                     if (g)
                       setProject({
                         ...project,
                         grid: g.grid,
-                        nmPerVoxel:
-                          Math.round(((nmPerVoxel * project.grid.nz) / g.grid.nz) * 100) / 100,
+                        nmPerVoxel: nmForGrid(project.grid, g.grid, nmPerVoxel),
                       });
                   }}
                 >

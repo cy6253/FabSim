@@ -7,7 +7,8 @@
  */
 import { describe, it, expect } from "vitest";
 import {
-  packMask, unpackMask, toBase64, fromBase64, PROJECT_FORMAT, type Project,
+  packMask, unpackMask, toBase64, fromBase64, PROJECT_FORMAT, nmForGrid, fieldSize, fieldLabel,
+  type Project,
 } from "../project/types";
 import {
   newProject, parseProject, serializeProject, validateProject, GRID_PRESETS,
@@ -373,5 +374,31 @@ describe("예제 레시피가 실제로 그것을 가르치는가", () => {
     const c = counts(ex, frames[frames.length - 1]);
     expect(c[EMPTY]).toBeGreaterThan(0);
     expect(ex.cacheBytes()).toBeGreaterThan(0);
+  });
+});
+
+describe("필드 크기 — 마스크가 덮는 영역이 곧 다이다", () => {
+  it("격자를 바꿔도 다이 폭이 유지된다 — 칸을 늘리면 칸이 잘아진다", () => {
+    // 예전에는 높이(nz)를 기준으로 복셀 크기를 잡았다. 그러면 평면을 넓힌
+    // 프리셋으로 갈수록 칸이 오히려 굵어져서, 마스크를 더 잘게 그리려고 격자를
+    // 늘렸는데 해상도가 떨어지는 일이 났다(20nm → 34.3nm).
+    const base = { nx: 176, ny: 64, nz: 96 };
+    const nm = 20;
+    const width = (g: { nx: number }, v: number) => (g.nx * v) / 1000;
+    for (const g of GRID_PRESETS.map((q) => q.grid)) {
+      const next = nmForGrid(base, g, nm);
+      expect(width(g, next), `${g.nx}×${g.ny}×${g.nz} 다이 폭`).toBeCloseTo(width(base, nm), 2);
+      // 가로 칸이 늘면 칸은 반드시 잘아진다.
+      if (g.nx > base.nx) expect(next).toBeLessThan(nm);
+      if (g.nx < base.nx) expect(next).toBeGreaterThan(nm);
+    }
+  });
+
+  it("필드 크기가 격자와 복셀 크기의 곱이다", () => {
+    const f = fieldSize({ nx: 200, ny: 160, nz: 56 }, 17.6);
+    expect(f.w).toBeCloseTo(3.52, 6);
+    expect(f.d).toBeCloseTo(2.816, 6);
+    expect(f.h).toBeCloseTo(0.9856, 6);
+    expect(fieldLabel({ nx: 200, ny: 160, nz: 56 }, 17.6)).toBe("3.52 × 2.82 × 0.99 µm");
   });
 });
