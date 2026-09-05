@@ -64,6 +64,15 @@ export function App() {
   const [smooth, setSmooth] = useState(3);
   const [mode, setMode] = useState<"smooth" | "voxel">("smooth");
   const [meshStats, setMeshStats] = useState<{ triangles: number; ms: number } | null>(null);
+  /**
+   * 좁은 화면에서 지금 보고 있는 칸.
+   *
+   * 폰에는 세 칸을 나란히 놓을 폭이 없다. 억지로 밀어 넣으면 레시피(250)와
+   * 인스펙터(300)가 폭을 다 먹고 정작 3D가 화면 밖으로 나간다 — 앱의 요점이
+   * 안 보이는 것이다. 그래서 한 번에 한 칸만 보이고 탭으로 오간다.
+   * 넓은 화면에서는 이 값이 아무 일도 안 한다 (CSS가 셋 다 보인다).
+   */
+  const [pane, setPane] = useState<"recipe" | "view" | "step">("view");
   const [playing, setPlaying] = useState(false);
   const [modal, setModal] = useState<null | "mask" | "library" | "graph">(null);
   const [menu, setMenu] = useState(false);
@@ -221,6 +230,8 @@ export function App() {
     setProject(next);
     // 새로 넣은 단계로 바로 옮겨 간다 — 넣었는데 안 보이면 넣은 줄 모른다.
     goTo(currentId ? sim.step + 1 : 0);
+    // 폰에서는 방금 넣은 단계를 맞춰야 하니 설정 칸으로 데려간다.
+    setPane("step");
   };
 
   const load = (file: File) =>
@@ -382,14 +393,23 @@ export function App() {
         </div>
       )}
 
-      <div className="body">
+      {/* 좁은 화면 전용 칸 전환. 넓은 화면에서는 CSS가 통째로 숨긴다. */}
+      <nav className="panebar">
+        {([["recipe", "레시피"], ["view", "화면"], ["step", "설정"]] as const).map(([k, label]) => (
+          <button key={k} className={pane === k ? "on" : ""} onClick={() => setPane(k)}>
+            {label}
+          </button>
+        ))}
+      </nav>
+
+      <div className="body" data-pane={pane}>
         <section className="left">
           <RecipeList
             project={project}
             chain={sim.chain}
             meta={sim.meta}
             step={sim.step}
-            onStep={goTo}
+            onStep={(n) => { goTo(n); setPane("view"); }}
             onAdd={addStep}
             onRemove={(id) => {
               setProject(removeStep(project, id));

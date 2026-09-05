@@ -12,6 +12,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc -b --noEmit false --emitDeclarationOnly false --pretty",
     "smoke": "node scripts/smoke.mjs",
+    "smoke:narrow": "node scripts/mobileshot.mjs",
     "serve:dist": "node scripts/serve-dist.mjs dist 5200"
   },
   "dependencies": {

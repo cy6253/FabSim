@@ -77,6 +77,9 @@ jobs:
           done
           npm run smoke -- ./shots http://localhost:5200/FabSim/
 
+      - name: 좁은 화면 (폰·태블릿)
+        run: npm run smoke:narrow -- http://localhost:5200/FabSim/
+
       - name: 스크린샷 남기기
         if: always()
         uses: actions/upload-artifact@v4

@@ -99,13 +99,47 @@ export function View3D(p: View3DProps) {
     let dragging = false, lx = 0, ly = 0;
     // 끌었는지 그냥 눌렀는지를 가른다 — 회전과 찍기가 같은 버튼을 쓰기 때문이다.
     let dx0 = 0, dy0 = 0, moved = 0;
+    /**
+     * 손가락은 여러 개가 동시에 닿는다.
+     *
+     * 폰에는 휠이 없어서 확대가 두 손가락 오므리기밖에 없다. 그래서 닿아 있는
+     * 포인터를 전부 들고 있다가 둘이 되면 회전을 접고 그 간격비로 거리를 잡는다.
+     * 마우스는 언제나 하나이므로 이 길로는 오지 않는다.
+     */
+    const pts = new Map<number, { x: number; y: number }>();
+    let pinch = 0;
+    /** 닿아 있는 두 점 사이 거리. */
+    const spread = () => {
+      const [a, b] = [...pts.values()];
+      return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0;
+    };
     const el = renderer.domElement;
     const down = (e: PointerEvent) => {
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      el.setPointerCapture(e.pointerId);
+      if (pts.size >= 2) {
+        // 두 번째 손가락이 닿는 순간 회전은 끝이고, 찍기도 아니다.
+        dragging = false;
+        moved = Infinity;
+        pinch = spread();
+        return;
+      }
       dragging = true; lx = e.clientX; ly = e.clientY;
       dx0 = e.clientX; dy0 = e.clientY; moved = 0;
-      el.setPointerCapture(e.pointerId);
     };
     const move = (e: PointerEvent) => {
+      if (!pts.has(e.pointerId)) return;
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pts.size >= 2) {
+        const d = spread();
+        if (pinch > 0 && d > 0) {
+          const s2 = stateRef.current!;
+          s2.dist = Math.max(0.35, Math.min(4, s2.dist * (pinch / d)));
+          place();
+        }
+        pinch = d;
+        return;
+      }
       if (!dragging) return;
       moved = Math.max(moved, Math.abs(e.clientX - dx0) + Math.abs(e.clientY - dy0));
       const s = stateRef.current!;
@@ -116,8 +150,12 @@ export function View3D(p: View3DProps) {
     };
     const ray = new THREE.Raycaster();
     const up = (e: PointerEvent) => {
+      pts.delete(e.pointerId);
+      if (pts.size < 2) pinch = 0;
       dragging = false;
       el.releasePointerCapture(e.pointerId);
+      // 손가락이 아직 남아 있으면 아직 끝난 동작이 아니다.
+      if (pts.size > 0) return;
       if (moved > 4) return; // 돌린 것이지 찍은 것이 아니다
       const s = stateRef.current!;
       if (!s.mesh) return;
@@ -144,6 +182,7 @@ export function View3D(p: View3DProps) {
     el.addEventListener("pointerdown", down);
     el.addEventListener("pointermove", move);
     el.addEventListener("pointerup", up);
+    el.addEventListener("pointercancel", up);
     el.addEventListener("wheel", wheel, { passive: false });
 
     const place = () => {
@@ -160,7 +199,17 @@ export function View3D(p: View3DProps) {
       const fov = (s.camera.fov * Math.PI) / 180;
       const fitV = s.radius / Math.sin(fov / 2);
       const fitH = s.radius / Math.sin(Math.atan(Math.tan(fov / 2) * s.camera.aspect));
-      const radius = Math.max(fitV, fitH) * 0.62 * s.dist;
+      /*
+       * 0.62는 감싸는 구보다 일부러 가까이 붙어 화면을 채우는 값이다. 구는
+       * 납작한 웨이퍼보다 한참 크니 넓은 화면에서는 그래도 다 들어온다.
+       *
+       * 폰은 그 여유가 없다. 세로로 세운 화면은 가로 시야가 좁아 웨이퍼의
+       * 긴 쪽이 그대로 잘려 나간다 — 잘린 그림이 처음 보는 화면이 된다.
+       * 그래서 기준 비율(1.45, 데스크톱 창)보다 좁아지는 만큼 파고들기를
+       * 되돌리고, 1을 넘지는 않게 한다(구에 꼭 맞는 것이 가장 뒤다).
+       */
+      const tighten = Math.min(1, 0.62 * Math.max(1, 1.45 / s.camera.aspect));
+      const radius = Math.max(fitV, fitH) * tighten * s.dist;
       s.camera.position.set(
         s.target.x + radius * Math.cos(s.pitch) * Math.sin(s.yaw),
         s.target.y + radius * Math.sin(s.pitch),
@@ -172,15 +221,25 @@ export function View3D(p: View3DProps) {
     };
     (stateRef.current as unknown as { place: () => void }).place = place;
 
+    /*
+     * 창 크기만 보면 놓치는 경우가 많다. 폰에서 탭을 옮기면 캔버스가
+     * display:none에서 돌아오며 크기가 바뀌는데 창은 그대로다 — 그러면 카메라가
+     * 이전 칸의 비율을 그대로 들고 있어 물체가 잘린 채로 남는다. 칸 자체를
+     * 지켜보면 창이든 탭이든 패널 접힘이든 한 길로 처리된다.
+     */
     const onResize = () => place();
+    const ro = new ResizeObserver(onResize);
+    if (host) ro.observe(host);
     window.addEventListener("resize", onResize);
     place();
 
     return () => {
+      ro.disconnect();
       window.removeEventListener("resize", onResize);
       el.removeEventListener("pointerdown", down);
       el.removeEventListener("pointermove", move);
       el.removeEventListener("pointerup", up);
+      el.removeEventListener("pointercancel", up);
       el.removeEventListener("wheel", wheel);
       renderer.dispose();
       host.removeChild(el);
