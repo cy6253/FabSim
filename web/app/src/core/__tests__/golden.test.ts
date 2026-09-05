@@ -358,6 +358,38 @@ describe("도핑 — 파이썬이 확인한 주장을 TS가 재현한다", () =>
     expect(b.placed / a.placed).toBeCloseTo(2.5, 6);
   });
 
+  it("implant-lateral: 마스크 가장자리에서 도핑이 계단으로 끊기지 않는다", () => {
+    // 이온은 멈추면서 옆으로도 흩어진다. 컬럼마다 깊이 방향만 놓으면 도핑이
+    // 마스크 경계에서 수직으로 딱 끊겨, 게이트와 소스·드레인의 겹침 — 유효
+    // 채널 길이 — 이 아예 안 보인다. NMOS가 가르쳐야 할 것이 그건데.
+    const g = { nx: 60, ny: 8, nz: 40 }, EDGE_X = 20, TOP = 29;
+    const s2 = createSim(g.nx, g.ny, g.nz);
+    const mat = newMat(s2), conc = newConc(s2);
+    for (let z = 0; z <= TOP; z++)
+      for (let y = 0; y < g.ny; y++) for (let x = 0; x < g.nx; x++) mat[at(s2, x, y, z)] = SI;
+    const drp = 3;
+    const placed = opImplant(s2, mat, conc, B, stripeMask(s2, EDGE_X, 40), 6, drp, 1, 0, 0);
+
+    // 도즈는 컬럼별로 정확히 보존된다 — 옆으로 번져도 총량은 그대로다.
+    expect(placed / sumOf(s2, conc[B]), "놓인 양과 실제 합").toBeCloseTo(1, 6);
+    expect(sumOf(s2, conc[B]), "열린 컬럼 수 × 도즈").toBeCloseTo(20 * g.ny, 4);
+
+    const zPk = TOP - 6;
+    const at2 = (x: number) => conc[B][at(s2, x, 4, zPk)];
+    const plateau = at2(EDGE_X + 8);
+    expect(plateau).toBeGreaterThan(0);
+    // 마스크 **밑**으로 번져야 하고, 창 안쪽으로 갈수록 차오른다.
+    expect(at2(EDGE_X - 2), "마스크 밑 2복셀").toBeGreaterThan(plateau * 0.02);
+    expect(at2(EDGE_X - 2)).toBeLessThan(plateau * 0.5);
+    expect(at2(EDGE_X), "경계 위").toBeGreaterThan(at2(EDGE_X - 2));
+    expect(at2(EDGE_X)).toBeLessThan(plateau * 0.9);
+    // 번지는 폭은 ΔRp가 정한다 — 노브가 따로 늘지 않았다는 뜻이다.
+    let reach = 0;
+    while (reach < 12 && at2(EDGE_X - 1 - reach) > plateau * 0.01) reach++;
+    expect(reach, `번진 폭 ${reach}`).toBeGreaterThanOrEqual(2);
+    expect(reach).toBeLessThanOrEqual(Math.ceil(3 * 0.6 * drp) + 1);
+  });
+
   it("anneal-sigma: 자유 공간에서 σ = √(σ₀²+2Dt), 도즈 100% 보존", () => {
     // 벽이 닿지 않는 벌크 한가운데여야 한다. 표면 근처면 무유출 반사가 σ를
     // 낮추는데, 그건 솔버 오차가 아니라 실제 거동이다 — 파이썬에서 이 단언을

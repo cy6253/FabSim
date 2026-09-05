@@ -35,7 +35,16 @@ def new_field():
 
 # =========================================================== implant (P4)
 def op_implant(mat, conc, species, mask, rp, drp, dose, dx=0, dy=0):
-    """Rays down; depth Rp measured from the first solid the ion meets."""
+    """Rays down; depth Rp measured from the first solid the ion meets.
+
+    Ions scatter sideways as they stop, so the doping does not end in a vertical
+    cut at the mask edge -- it runs under the mask, and that overlap is what sets
+    the effective channel length. Depth-only columns hid the one thing an NMOS
+    example is for. sigma_lat = 0.6*dRp, so dRp alone still sets both spreads and
+    no knob is added. Depth stays measured from the SOURCE column's entry point,
+    and each column normalises over what it actually deposits, so the dose is
+    conserved exactly.
+    """
     f = conc[species]
     placed = 0.0
     shadowed = 0
@@ -52,18 +61,40 @@ def op_implant(mat, conc, species, mask, rp, drp, dose, dx=0, dy=0):
             if entry is None:
                 shadowed += 1
                 continue
+            sd = max(1e-3, drp)
+            s_lat = 0.6 * sd
+            R = min(8, max(1, math.ceil(3 * s_lat)))
+            z_span = math.ceil(3 * sd)
+            z0 = max(0, entry - rp - z_span)
+            z1 = min(entry, entry - rp + z_span)
+            zw = [math.exp(-((entry - z - rp) ** 2) / (2 * sd * sd))
+                  for z in range(z0, z1 + 1)]
             col, tot = [], 0.0
-            for z in range(entry, -1, -1):
-                d = entry - z
-                w = math.exp(-((d - rp) ** 2) / (2 * drp * drp))
-                col.append((at(x, y, z), w))
-                tot += w
+            for oy in range(-R, R + 1):
+                ty = y + oy
+                if not (0 <= ty < NY):
+                    continue
+                for ox in range(-R, R + 1):
+                    tx = x + ox
+                    if not (0 <= tx < NX):
+                        continue
+                    wxy = math.exp(-(ox * ox + oy * oy) / (2 * s_lat * s_lat))
+                    if wxy < 1e-6:
+                        continue
+                    for z in range(z0, z1 + 1):
+                        i = at(tx, ty, z)
+                        if mat[i] == EMPTY:
+                            continue
+                        w = wxy * zw[z - z0]
+                        if w <= 0:
+                            continue
+                        col.append((i, w))
+                        tot += w
             if tot <= 0:
                 continue
             for i, w in col:
-                if mat[i] != EMPTY:
-                    f[i] += dose * w / tot
-                    placed += dose * w / tot
+                f[i] += dose * w / tot
+                placed += dose * w / tot
     return placed, shadowed
 
 

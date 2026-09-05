@@ -700,8 +700,23 @@ function opCMP(mat,phi,amount,protect){
 }
 
 /* P4 rays + depth profile */
+/* Ions scatter sideways as they stop, so the doping does not end in a vertical
+   cut at the mask edge -- it runs under the mask, and that overlap is what sets
+   the effective channel length. Depth-only columns hid the one thing an NMOS
+   example is for. sigma_lat = 0.6*dRp, so dRp alone still sets both spreads and
+   no knob is added. Depth is measured from the SOURCE column's entry point: the
+   ion went in there, so it stops at that depth even if the neighbour's surface
+   sits elsewhere. Each column normalises over what it actually deposits, so the
+   dose is conserved exactly. */
 function opImplant(mat,conc,sp,mask,rp,drp,dose,dx,dy){
   const f=conc[sp];
+  const sd=Math.max(1e-3,drp), sLat=0.6*sd;
+  const R=Math.min(8,Math.max(1,Math.ceil(3*sLat)));
+  const lat=[];
+  for(let k=-R;k<=R;k++)lat.push(Math.exp(-(k*k)/(2*sLat*sLat)));
+  const zSpan=Math.ceil(3*sd);
+  const cap=(2*R+1)*(2*R+1)*(2*zSpan+1);
+  const idx=new Int32Array(cap), wt=new Float64Array(cap), zw=new Float64Array(2*zSpan+1);
   let placed=0;
   for(let y=0;y<NY;y++)for(let x=0;x<NX;x++){
     const mx=x-dx,my=y-dy;
@@ -709,18 +724,34 @@ function opImplant(mat,conc,sp,mask,rp,drp,dose,dx,dy){
     let entry=-1;
     for(let z=NZ-1;z>=0;z--)if(mat[at(x,y,z)]!==EMPTY){entry=z;break;}
     if(entry<0)continue;
-    let tot=0;
-    for(let z=entry;z>=0;z--){
+    let n=0,tot=0;
+    const z0=Math.max(0,entry-rp-zSpan), z1=Math.min(entry,entry-rp+zSpan);
+    for(let z=z0;z<=z1;z++){
       const d=entry-z;
-      tot+=Math.exp(-((d-rp)*(d-rp))/(2*drp*drp));
+      zw[z-z0]=Math.exp(-((d-rp)*(d-rp))/(2*sd*sd));
+    }
+    for(let oy=-R;oy<=R;oy++){
+      const ty=y+oy;
+      if(ty<0||ty>=NY)continue;
+      const wy=lat[oy+R];
+      for(let ox=-R;ox<=R;ox++){
+        const tx=x+ox;
+        if(tx<0||tx>=NX)continue;
+        const wxy=wy*lat[ox+R];
+        if(wxy<1e-6)continue;
+        const base=at(tx,ty,z0);
+        for(let z=z0;z<=z1;z++){
+          const i=base+(z-z0)*NX*NY;
+          if(mat[i]===EMPTY)continue;
+          const w=wxy*zw[z-z0];
+          if(w<=0)continue;
+          idx[n]=i;wt[n]=w;n++;tot+=w;
+        }
+      }
     }
     if(tot<=0)continue;
-    for(let z=entry;z>=0;z--){
-      const i=at(x,y,z),d=entry-z;
-      if(mat[i]===EMPTY)continue;
-      const w=Math.exp(-((d-rp)*(d-rp))/(2*drp*drp))*dose/tot;
-      f[i]+=w;placed+=w;
-    }
+    const k=dose/tot;
+    for(let q=0;q<n;q++){f[idx[q]]+=wt[q]*k;placed+=wt[q]*k;}
   }
   concDirty=true;
   return placed;

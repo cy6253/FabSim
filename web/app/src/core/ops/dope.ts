@@ -8,10 +8,18 @@ import { EMPTY } from "../materials";
 import { at, type Sim } from "../grid";
 
 /**
- * 이온 주입 — 마스크 광선 + 깊이 방향 가우시안.
+ * 이온 주입 — 마스크 광선 + 3D 가우시안.
  *
  * 피크가 표면이 아니라 Rp 깊이에 앉는다. 도즈는 총량만, 에너지(Rp)는 피크
  * 위치만 바꿔 두 노브가 독립이다. 광선이라 오버행 그림자가 공짜로 따라온다.
+ *
+ * **측면 산포**도 있다. 이온은 멈추면서 옆으로도 흩어지므로 도핑이 마스크
+ * 가장자리에서 수직으로 딱 끊기지 않고 마스크 밑으로 번진다. 그 번짐이
+ * 게이트와 소스·드레인의 겹침 — 곧 유효 채널 길이 — 를 정한다. NMOS가
+ * 가르쳐야 할 것이 그건데, 컬럼마다 깊이 방향만 놓으면 그게 안 보인다.
+ *
+ * σ_lat ≈ 0.6·ΔRp로 둔다. 노브는 늘지 않는다 — ΔRp 하나가 깊이 산포와 측면
+ * 산포를 같이 정한다.
  */
 export function opImplant(
   s: Sim,
@@ -27,7 +35,23 @@ export function opImplant(
 ): number {
   const { NX, NY, NZ } = s;
   const f = conc[species];
+  const sd = Math.max(1e-3, drp);
+  const sLat = 0.6 * sd;
+  // 옆으로 훑을 반경. 3σ면 충분하지만 ΔRp가 아주 크면 비용이 제곱으로 늘어
+  // 상한을 둔다 — 잘린 만큼은 컬럼별 정규화가 흡수한다.
+  const R = Math.min(8, Math.max(1, Math.ceil(3 * sLat)));
+  const lat: number[] = [];
+  for (let k = -R; k <= R; k++) lat.push(Math.exp(-(k * k) / (2 * sLat * sLat)));
+  // 깊이도 피크 둘레 3σ만 본다. 나머지는 어차피 0에 가깝다.
+  const zSpan = Math.ceil(3 * sd);
+
+  // 컬럼 하나가 뿌릴 자리와 무게. 다 모은 뒤 정규화해야 도즈가 정확히 보존된다.
+  const cap = (2 * R + 1) * (2 * R + 1) * (2 * zSpan + 1);
+  const idx = new Int32Array(cap);
+  const wt = new Float64Array(cap);
+  const zw = new Float64Array(2 * zSpan + 1);
   let placed = 0;
+
   for (let y = 0; y < NY; y++)
     for (let x = 0; x < NX; x++) {
       const mx = x - dx,
@@ -37,20 +61,47 @@ export function opImplant(
       let entry = -1;
       for (let z = NZ - 1; z >= 0; z--) if (mat[at(s, x, y, z)] !== EMPTY) { entry = z; break; }
       if (entry < 0) continue;
-      // 정규화 상수를 먼저 재서 도즈가 정확히 보존되게 한다.
-      let tot = 0;
-      for (let z = entry; z >= 0; z--) {
+
+      // 깊이는 **출발 컬럼의 진입점** 기준이다 — 이온이 거기서 들어갔으므로,
+      // 옆 컬럼의 표면 높이가 달라도 멈추는 깊이는 같다.
+      let n = 0,
+        tot = 0;
+      const z0 = Math.max(0, entry - rp - zSpan);
+      const z1 = Math.min(entry, entry - rp + zSpan);
+      // 깊이 가중은 z에만 달렸다. 옆 칸마다 다시 지수를 계산하면 (2R+1)²배
+      // 헛일이다 — 컬럼당 한 번만 구해 둔다.
+      for (let z = z0; z <= z1; z++) {
         const d = entry - z;
-        tot += Math.exp(-((d - rp) * (d - rp)) / (2 * drp * drp));
+        zw[z - z0] = Math.exp(-((d - rp) * (d - rp)) / (2 * sd * sd));
+      }
+      for (let oy = -R; oy <= R; oy++) {
+        const ty = y + oy;
+        if (ty < 0 || ty >= NY) continue;
+        const wy = lat[oy + R];
+        for (let ox = -R; ox <= R; ox++) {
+          const tx = x + ox;
+          if (tx < 0 || tx >= NX) continue;
+          const wxy = wy * lat[ox + R];
+          if (wxy < 1e-6) continue;
+          const base = at(s, tx, ty, z0);
+          for (let z = z0; z <= z1; z++) {
+            const i = base + (z - z0) * NX * NY;
+            if (mat[i] === EMPTY) continue; // 빈 칸에는 안 쌓인다
+            const w = wxy * zw[z - z0];
+            if (w <= 0) continue;
+            idx[n] = i;
+            wt[n] = w;
+            n++;
+            tot += w;
+          }
+        }
       }
       if (tot <= 0) continue;
-      for (let z = entry; z >= 0; z--) {
-        const i = at(s, x, y, z),
-          d = entry - z;
-        if (mat[i] === EMPTY) continue;
-        const w = (Math.exp(-((d - rp) * (d - rp)) / (2 * drp * drp)) * dose) / tot;
-        f[i] += w;
-        placed += w;
+      // 이 컬럼이 받은 도즈를 정확히 dose만큼 나눠 준다.
+      const k = dose / tot;
+      for (let q = 0; q < n; q++) {
+        f[idx[q]] += wt[q] * k;
+        placed += wt[q] * k;
       }
     }
   s.concDirty = true;
