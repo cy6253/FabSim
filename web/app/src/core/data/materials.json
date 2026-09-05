@@ -8,6 +8,8 @@
     "kind: vacuum | semiconductor | insulator | resist | metal | silicide",
     "diffusionFactor: 도펀트 확산계수에 곱하는 배수. 0이면 확산 없음(빈 공간),",
     "  0.004면 장벽(산화막·질화막), 1이면 그대로 통과.",
+    "  금속·레지스트 0.01 — 도펀트는 그 안으로 거의 안 간다. 실리사이드 0.2 —",
+    "  조금 빨아들인다(실제로 있는 '도펀트 손실'이다).",
     "exposure: transparent(광선이 지나감) | resist(노광됨) | opaque(막음)",
     "carriesOxidant: 산화제가 이 재질을 통해 이동할 수 있는가. 진공과 산화막만.",
     "oxidizesTo: 산화되면 무엇이 되는가. null이면 산화 안 됨.",
@@ -57,7 +59,7 @@
       "name": "PR",
       "kind": "resist",
       "color": [185, 138, 212],
-      "diffusionFactor": 1,
+      "diffusionFactor": 0.01,
       "exposure": "resist",
       "exposedForm": "PR_exposed"
     },
@@ -66,7 +68,7 @@
       "name": "노광 PR",
       "kind": "resist",
       "color": [124, 95, 168],
-      "diffusionFactor": 1,
+      "diffusionFactor": 0.01,
       "exposure": "transparent",
       "unexposedForm": "PR"
     },
@@ -75,7 +77,7 @@
       "name": "Metal",
       "kind": "metal",
       "color": [185, 190, 201],
-      "diffusionFactor": 1,
+      "diffusionFactor": 0.01,
       "exposure": "opaque"
     },
     {
@@ -83,7 +85,7 @@
       "name": "MetalSi",
       "kind": "silicide",
       "color": [200, 110, 140],
-      "diffusionFactor": 1,
+      "diffusionFactor": 0.2,
       "exposure": "opaque"
     },
     {
@@ -101,7 +103,7 @@
       "name": "W",
       "kind": "metal",
       "color": [112, 84, 100],
-      "diffusionFactor": 1,
+      "diffusionFactor": 0.01,
       "exposure": "opaque"
     },
     {
@@ -109,7 +111,7 @@
       "name": "TiN",
       "kind": "metal",
       "color": [105, 105, 105],
-      "diffusionFactor": 1,
+      "diffusionFactor": 0.01,
       "exposure": "opaque"
     },
     {
@@ -117,7 +119,7 @@
       "name": "Ti",
       "kind": "metal",
       "color": [138, 170, 194],
-      "diffusionFactor": 1,
+      "diffusionFactor": 0.01,
       "exposure": "opaque"
     },
     {
@@ -125,7 +127,7 @@
       "name": "TiSi2",
       "kind": "silicide",
       "color": [180, 80, 120],
-      "diffusionFactor": 1,
+      "diffusionFactor": 0.2,
       "exposure": "opaque"
     },
     {
@@ -133,7 +135,7 @@
       "name": "Co",
       "kind": "metal",
       "color": [86, 156, 148],
-      "diffusionFactor": 1,
+      "diffusionFactor": 0.01,
       "exposure": "opaque"
     },
     {
@@ -141,7 +143,7 @@
       "name": "CoSi2",
       "kind": "silicide",
       "color": [150, 70, 110],
-      "diffusionFactor": 1,
+      "diffusionFactor": 0.2,
       "exposure": "opaque"
     },
     {
@@ -149,7 +151,7 @@
       "name": "Al",
       "kind": "metal",
       "color": [222, 226, 232],
-      "diffusionFactor": 1,
+      "diffusionFactor": 0.01,
       "exposure": "opaque"
     },
     {
@@ -157,7 +159,7 @@
       "name": "Cu",
       "kind": "metal",
       "color": [198, 112, 62],
-      "diffusionFactor": 1,
+      "diffusionFactor": 0.01,
       "exposure": "opaque"
     }
   ],

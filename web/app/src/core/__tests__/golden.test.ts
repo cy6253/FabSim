@@ -381,6 +381,46 @@ describe("도핑 — 파이썬이 확인한 주장을 TS가 재현한다", () =>
     expect(Math.abs(after.m0 / before.m0 - 1)).toBeLessThan(0.001);
   });
 
+  it("도펀트는 금속·레지스트 속으로 거의 안 간다", () => {
+    // 표가 금속·레지스트·실리사이드까지 전부 1로 두고 있어서, 도펀트가 텅스텐과
+    // 레지스트 속을 실리콘과 **같은 속도로** 퍼졌다. 확산 장벽이 산화막·질화막에만
+    // 있었던 셈이다.
+    const kindOf = (id: string) => DEFAULT_LIBRARY.mat.kind[DEFAULT_LIBRARY.mat.index[id]];
+    const facOf = (id: string) => DEFAULT_LIBRARY.mat.diffusionFactor[DEFAULT_LIBRARY.mat.index[id]];
+    for (let i = 0; i < DEFAULT_LIBRARY.mat.count; i++) {
+      const id = DEFAULT_LIBRARY.mat.key[i], k = kindOf(id), f = facOf(id);
+      if (k === "metal" || k === "resist") expect(f, `${id}`).toBeLessThanOrEqual(0.05);
+      if (k === "silicide") expect(f, `${id}`).toBeLessThanOrEqual(0.3);
+      if (k === "semiconductor") expect(f, `${id}`).toBe(1);
+    }
+
+    // 실제로 막히는지 — 왼쪽 절반에만 도펀트를 넣고, 오른쪽 절반을 바꿔 가며 어닐한다.
+    const leakInto = (rightId: string) => {
+      const g = { nx: 24, ny: 6, nz: 24 };
+      const s2 = createSim(g.nx, g.ny, g.nz);
+      const mat = newMat(s2), conc = newConc(s2);
+      const right = DEFAULT_LIBRARY.mat.index[rightId];
+      for (let z = 0; z < 20; z++)
+        for (let y = 0; y < g.ny; y++)
+          for (let x = 0; x < g.nx; x++) mat[at(s2, x, y, z)] = x < 12 ? SI : right;
+      for (let z = 6; z < 14; z++)
+        for (let y = 0; y < g.ny; y++)
+          for (let x = 8; x < 12; x++) conc[B][at(s2, x, y, z)] = 1;
+      const before = sumOf(s2, conc[B]);
+      opAnneal(s2, mat, conc, 8, 4);
+      let past = 0;
+      for (let i = 0; i < s2.N; i++) if (XOF(s2, i) >= 12) past += conc[B][i];
+      return { kept: sumOf(s2, conc[B]) / before, leak: past / before };
+    };
+    const si = leakInto("Si"), w = leakInto("W"), ox = leakInto("SiO2");
+    expect(si.kept, "총량 보존").toBeCloseTo(1, 3);
+    expect(w.kept, "총량 보존").toBeCloseTo(1, 3);
+    // 실리콘이면 자유롭게 넘어가고, 금속이면 막힌다. 산화막 장벽과 같은 규모다.
+    expect(si.leak, "실리콘 쪽으로는 자유롭게 퍼진다").toBeGreaterThan(0.25);
+    expect(w.leak, `금속으로 넘어간 몫 ${w.leak}`).toBeLessThan(si.leak / 4);
+    expect(w.leak, "산화막 장벽과 같은 규모").toBeLessThan(ox.leak * 3);
+  });
+
   it("anneal-species: 확산 폭이 B > P > As", () => {
     const widthOf = (sp: number) => {
       const s = createSim(16, 10, 40);

@@ -159,6 +159,11 @@ const NSP=3, B=0, P_=1, AS=2;
 const DREL=[1.0,0.6,0.18];
 const SEG_M=[0.30,4.0,10.0];        // C_Si / C_oxide at the interface
 const D_BLOCK=0.004;
+/* Dopant hardly enters metal or resist, and a silicide draws a little of it in
+   (a real effect -- "dopant loss"). Leaving these at 1 meant boron diffused
+   through tungsten and photoresist as fast as through silicon; only oxide and
+   nitride were barriers. */
+const D_METAL=0.01, D_SILICIDE=0.2;
 const CONSUME=1/2.17, GROW=1-1/2.17;
 const DG={"dry1000":[0.22,0.075],"wet1000":[0.35,1.10],"wet1100":[0.24,2.20]};
 
@@ -739,7 +744,11 @@ function opAnneal(mat,conc,steps,dt){
     const f=conc[sp],dr=DREL[sp];
     for(let i=0;i<N;i++){
       const m=mat[i];
-      dm[i]=m===EMPTY?0:((m===OX||m===NIT)?D_BLOCK*dr:dr);
+      dm[i]=m===EMPTY?0
+        :(m===OX||m===NIT)?D_BLOCK*dr
+        :(m===PR||m===EPR||m===MET)?D_METAL*dr
+        :(m===MSI)?D_SILICIDE*dr
+        :dr;
     }
     const face=(i,j)=>{const di=dm[i],dj=dm[j];
       return (di<=0||dj<=0)?0:2*di*dj/(di+dj);};

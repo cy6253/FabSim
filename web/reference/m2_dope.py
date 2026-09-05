@@ -15,11 +15,18 @@ import math, time
 import m1a_core as M
 from m1a_core import N, NX, NY, NZ, EMPTY, SI, OX, NIT, at, xyz, INF
 
+# material ids beyond the four m1a_core knows, matching the browser core's order
+PR, EPR, MET, MSI = 4, 5, 6, 7
+
 B, P_, AS = 0, 1, 2                      # boron, phosphorus, arsenic
 SPECIES = {B: "B", P_: "P", AS: "As"}
 # relative diffusivity at the anneal temperature; boron moves, arsenic barely
 DREL = {B: 1.0, P_: 0.6, AS: 0.18}
 D_BLOCK = 0.004                          # oxide as a diffusion barrier
+# Dopant hardly enters metal or resist, and a silicide draws a little of it in
+# (a real effect -- "dopant loss"). Leaving these at 1 meant boron diffused
+# through tungsten and photoresist as fast as through silicon.
+D_METAL, D_SILICIDE = 0.01, 0.2
 
 
 def new_field():
@@ -130,6 +137,10 @@ def diffusivity(mat, species):
             dm[i] = 0.0
         elif m == OX or m == NIT:
             dm[i] = D_BLOCK * dr
+        elif m in (PR, EPR, MET):
+            dm[i] = D_METAL * dr
+        elif m == MSI:
+            dm[i] = D_SILICIDE * dr
         else:
             dm[i] = dr
     return dm
