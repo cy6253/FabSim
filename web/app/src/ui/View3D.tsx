@@ -224,7 +224,6 @@ export function View3D(p: View3DProps) {
         side: p.mode === "smooth" ? THREE.DoubleSide : THREE.FrontSide,
       }),
     );
-    mesh.position.set(-nx / 2, -nz / 2, -ny / 2);
     // 격자는 z가 위지만 three는 y가 위다. 축을 돌려 맞춘다.
     mesh.rotation.x = -Math.PI / 2;
     mesh.position.set(-nx / 2, -nz / 2, ny / 2);

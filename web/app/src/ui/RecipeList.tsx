@@ -68,7 +68,7 @@ export function RecipeList(p: RecipeListProps) {
               <span className="num">{i + 1}</span>
               <span className="steptext">
                 <span className="name">
-                  {c.label}
+                  <span className="labeltext">{c.label}</span>
                   {summary && <em>{summary}</em>}
                 </span>
                 {maskName && <span className="maskchip">🞑 {maskName}</span>}

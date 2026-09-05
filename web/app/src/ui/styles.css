@@ -129,9 +129,14 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
    입력창처럼 보여서 누를 수 있는 줄이라는 게 오히려 가려졌다. */
 .step .steptext { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
 .step .name { display: flex; gap: 6px; align-items: baseline; min-width: 0; }
+/* 라벨("식각")은 한 줄로 고정한다 — 한글은 띄어쓰기 없이도 글자 사이에서
+   줄바꿈이 되므로, 선택된 줄이 화살표·삭제 버튼에 눌리면 "식"/"각"처럼
+   글자 하나씩 두 줄로 쪼개졌다. 줄어드는 몫은 summary(em)에게만 준다. */
+.step .name .labeltext { white-space: nowrap; flex: 0 0 auto; }
 .step .name em {
   font-style: normal; color: var(--dim); font-size: 12px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  min-width: 0; flex: 1 1 auto;
 }
 .step .maskchip { color: #b79ae0; font-size: 11px; }
 .step .dot { width: 7px; height: 7px; border-radius: 999px; flex: 0 0 auto; }

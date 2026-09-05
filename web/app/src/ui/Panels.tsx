@@ -240,7 +240,7 @@ export function Diagnostics(p: {
 
 /* --------------------------------------------------------------- 지점 프로브 */
 
-/** 컬럼 하나를 찍어 층 두께를 읽는다. 단면을 클릭하면 여기가 갱신된다. */
+/** 컬럼 하나를 찍어 층 두께를 읽는다. 3D를 클릭하면 여기가 갱신된다. */
 export function Probe(p: { view: ViewData; lib: Library; x: number; y: number }) {
   const stack = columnStack(
     p.view.mat,
