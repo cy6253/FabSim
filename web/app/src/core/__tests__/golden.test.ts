@@ -20,12 +20,12 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
 import { createSim, newMat, newPhi, newConc, at, XOF, ZOF, type Sim } from "../grid";
-import { newProject } from "../project/serialize";
+import { newProject, validateProject } from "../project/serialize";
 import { defaultParams } from "../project/nodes";
 import { Executor } from "../runner/executor";
 import { EMPTY, SI, OX, NIT, PR, MET, MSI, B, P_, AS, DG, DREL, SEG_M } from "../materials";
 import { DEFAULT_LIBRARY } from "../library";
-import { dealGrove, dealGroveTime, opOxidize, opSilicide, opDeposit, opEtch, opPRCoat, opExpose, opDevelop, opCMP, opImplant, opAnneal } from "../ops";
+import { annealPlan, diffusivity, dealGrove, dealGroveTime, opOxidize, opSilicide, opDeposit, opEtch, opPRCoat, opExpose, opDevelop, opCMP, opImplant, opAnneal } from "../ops";
 import { columnTop, countOf, sumOf, surfaceZ } from "../measure";
 import { stripeMask, fullMask } from "../masks";
 import { adversarialOps } from "../sequences/opList";
@@ -451,6 +451,57 @@ describe("도핑 — 파이썬이 확인한 주장을 TS가 재현한다", () =>
     expect(si.leak, "실리콘 쪽으로는 자유롭게 퍼진다").toBeGreaterThan(0.25);
     expect(w.leak, `금속으로 넘어간 몫 ${w.leak}`).toBeLessThan(si.leak / 4);
     expect(w.leak, "산화막 장벽과 같은 규모").toBeLessThan(ox.leak * 3);
+  });
+
+  it("어닐 노브가 온도와 시간이다 — √(2Dt)와 아레니우스가 그대로 보인다", () => {
+    // steps·dt는 ADI의 수치 파라미터였지 공정 조건이 아니다. 표에 D0·Ea가
+    // "온도 노브를 붙일 때 쓴다"고 적힌 채 놀고 있었다.
+    const sp = DEFAULT_LIBRARY.sp;
+    const sigma = (T: number, sec: number, i = 0) => {
+      const pl = annealPlan(sp, T, sec, 20);
+      return Math.sqrt(2 * pl.Dt * pl.rel[i]);
+    };
+    // σ = √(2Dt) — 시간을 네 배 늘려야 폭이 두 배다.
+    expect(sigma(1000, 4 * 900) / sigma(1000, 900), "시간 4배").toBeCloseTo(2, 6);
+    // 아레니우스 — 100도에 D가 열 배 가까이 뛴다.
+    const d1000 = diffusivity(0.76, 3.46, 1000), d1100 = diffusivity(0.76, 3.46, 1100);
+    expect(d1100 / d1000, "1000→1100도").toBeGreaterThan(5);
+    expect(sigma(1100, 900) / sigma(1000, 900), "같은 시간, 100도 위").toBeGreaterThan(2.5);
+    // 종별 순서. 비소가 붕소의 절반도 못 간다 — 얕은 접합을 비소로 하는 이유.
+    const [b, ph, as] = [0, 1, 2].map((i) => sigma(1000, 1800, i));
+    expect(b).toBeGreaterThan(ph);
+    expect(ph).toBeGreaterThan(as);
+    expect(as / b).toBeLessThan(0.5);
+    // 스텝 수는 코어가 정한다 — 사용자에게 안 보이고, 커도 상한을 넘지 않는다.
+    expect(annealPlan(sp, 1200, 7200, 20).steps).toBeLessThanOrEqual(48);
+    expect(annealPlan(sp, 800, 5, 20).steps).toBeGreaterThanOrEqual(1);
+  });
+
+  it("복셀이 작아지면 같은 물리 시간이 더 많은 복셀을 퍼진다", () => {
+    // 확산 길이는 물리량이다. 격자를 촘촘히 하면 같은 어닐이 복셀로는 더 넓게
+    // 보여야 구조가 유지된다. 예전에는 예제가 dt를 격자 제곱으로 손보정했다.
+    const sp = DEFAULT_LIBRARY.sp;
+    const coarse = annealPlan(sp, 1000, 1800, 20);
+    const fine = annealPlan(sp, 1000, 1800, 10);
+    expect(Math.sqrt(fine.Dt) / Math.sqrt(coarse.Dt), "복셀 절반 → 폭 두 배").toBeCloseTo(2, 6);
+    // 물리 길이로 환산하면 같다.
+    expect(Math.sqrt(fine.Dt) * 10).toBeCloseTo(Math.sqrt(coarse.Dt) * 20, 6);
+  });
+
+  it("옛 파일의 steps·dt가 온도·시간으로 이주한다", () => {
+    const old = {
+      ...newProject("옛 파일", { nx: 16, ny: 8, nz: 16 }),
+      nodes: [{ id: "a", type: "anneal", params: { steps: 4, dt: 2 } }],
+    };
+    const p = validateProject(old);
+    const n = p.nodes[0];
+    expect(n.params.steps, "옛 노브는 사라진다").toBeUndefined();
+    expect(n.params.dt).toBeUndefined();
+    expect(n.params.temperature, "기준 온도로").toBe(1000);
+    // Dt = 8 복셀²가 나오는 시간이어야 한다.
+    const pl = annealPlan(DEFAULT_LIBRARY.sp, 1000, Number(n.params.seconds), 20);
+    expect(pl.Dt, `이주된 Dt ${pl.Dt}`).toBeGreaterThan(7);
+    expect(pl.Dt).toBeLessThan(9);
   });
 
   it("anneal-species: 확산 폭이 B > P > As", () => {

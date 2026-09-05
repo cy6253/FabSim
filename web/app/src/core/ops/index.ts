@@ -19,7 +19,7 @@ export {
   defaultResist,
   type CMPResult,
 } from "./litho";
-export { opImplant, opAnneal, diffusivityMap } from "./dope";
+export { opImplant, opAnneal, diffusivityMap, diffusivity, annealPlan, type AnnealPlan } from "./dope";
 export {
   opOxidize,
   opSilicide,

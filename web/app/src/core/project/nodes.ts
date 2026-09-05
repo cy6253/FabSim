@@ -186,10 +186,18 @@ export const NODE_SPECS: NodeSpec[] = [
     label: "어닐",
     category: "도핑",
     params: [
-      { kind: "number", key: "steps", label: "스텝 수", min: 1, max: 32, step: 1, default: 4 },
-      { kind: "number", key: "dt", label: "스텝당 시간", min: 0.25, max: 8, step: 0.25, default: 2 },
+      {
+        kind: "number", key: "temperature", label: "온도", min: 700, max: 1200, step: 25,
+        default: 1000, unit: "°C",
+        help: "D = D₀·exp(−Ea/kT) — 100도만 올려도 확산이 열 배 빨라진다",
+      },
+      {
+        kind: "number", key: "seconds", label: "시간", min: 5, max: 7200, step: 5,
+        default: 1800, unit: "s",
+        help: "확산 폭은 √(2Dt) — 시간을 네 배 늘려야 폭이 두 배가 된다",
+      },
     ],
-    teaches: "확산 폭은 √(2Dt). 비소가 거의 안 움직이는 것이 얕은 접합의 이유",
+    teaches: "온도가 확산을 지수로 바꾼다. 비소가 거의 안 움직이는 것이 얕은 접합의 이유",
   },
   {
     type: "oxidize",

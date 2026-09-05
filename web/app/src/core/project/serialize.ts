@@ -9,6 +9,7 @@ import { buildLibrary, DEFAULT_LIBRARY, type Library, type MaterialDef, type Spe
 import materialsJson from "../data/materials.json";
 import processesJson from "../data/processes.json";
 import { NODE_SPEC_BY_TYPE, defaultParams } from "./nodes";
+import { diffusivity } from "../ops";
 import {
   PROJECT_FORMAT,
   PROJECT_VERSION,
@@ -98,6 +99,30 @@ function checkMask(raw: unknown, i: number): MaskAsset {
 }
 
 /** 알 수 없는 형태면 던지고, 열 수 있으면 빠진 곳을 채워 정규화한다. */
+/**
+ * 옛 어닐 노브(`steps`·`dt`)를 온도·시간으로 옮긴다.
+ *
+ * 그 둘은 ADI의 수치 파라미터였지 공정 조건이 아니었다. 옛 파일이 뜻하던 것은
+ * Dt = steps × dt [복셀²] 이므로, 기준 온도 1000도에서 같은 Dt가 나오는 시간을
+ * 역산해 준다. 정확히 같은 구조가 나오지는 않지만(종별 비가 온도에서 다시
+ * 나온다) 뜻은 보존된다.
+ */
+function migrateAnneal(raw: unknown): unknown {
+  const n = raw as RecipeNode;
+  if (!n || typeof n !== "object" || n.type !== "anneal") return raw;
+  const p = n.params ?? {};
+  if (p.temperature !== undefined) return n;
+  const steps = Number(p.steps), dt = Number(p.dt);
+  if (!Number.isFinite(steps) || !Number.isFinite(dt)) return n;
+  // D_B(1000°C) [cm²/s] × κ(복셀 20nm) = 초당 복셀²
+  const perSecond = diffusivity(0.76, 3.46, 1000) / (20e-7 * 20e-7);
+  const seconds = Math.max(1, Math.round((steps * dt) / perSecond));
+  const rest = { ...p };
+  delete rest.steps;
+  delete rest.dt;
+  return { ...n, params: { ...rest, temperature: 1000, seconds } };
+}
+
 export function validateProject(raw: unknown): Project {
   const p = raw as Project;
   if (!p || typeof p !== "object") bad("JSON이 객체가 아닙니다");
@@ -106,7 +131,8 @@ export function validateProject(raw: unknown): Project {
   if (p.version > PROJECT_VERSION)
     bad(`더 새 버전의 파일입니다 (${p.version} > ${PROJECT_VERSION}). 시뮬레이터를 업데이트하세요`);
 
-  const nodes = (p.nodes ?? []).map(checkNode);
+  // 이주가 **먼저**다. checkNode가 기본값을 채우고 나면 옛 노브인지 알 수 없다.
+  const nodes = (p.nodes ?? []).map((n, i) => checkNode(migrateAnneal(n), i));
   const ids = new Set<string>();
   for (const n of nodes) {
     if (ids.has(n.id)) bad(`노드 id가 중복입니다: ${n.id}`);
@@ -123,6 +149,9 @@ export function validateProject(raw: unknown): Project {
     name: typeof p.name === "string" ? p.name : "이름 없음",
     simVersion: typeof p.simVersion === "string" ? p.simVersion : "unknown",
     grid: checkGrid(p.grid),
+    ...(Number.isFinite(p.nmPerVoxel) && (p.nmPerVoxel as number) > 0
+      ? { nmPerVoxel: Number(p.nmPerVoxel) }
+      : {}),
     masks,
     nodes,
     edges,

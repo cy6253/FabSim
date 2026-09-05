@@ -51,7 +51,7 @@ export interface SpeciesDef {
   relD: number;
   /** 계면 편석 계수 m = C_Si / C_oxide. */
   segregation: number;
-  /** 온도 노브를 붙일 때 쓸 값. 지금 코어는 relD만 쓴다. */
+  /** 아레니우스 계수. D(T) = D0·exp(−Ea/kT), D0 [cm²/s], Ea [eV]. */
   D0?: number;
   Ea?: number;
 }
@@ -156,6 +156,9 @@ export interface SpeciesTable {
   name: string[];
   relD: Float64Array;
   segregation: Float64Array;
+  /** 아레니우스 계수. 없으면 0 — 그러면 relD를 기준 온도의 배수로 본다. */
+  D0: Float64Array;
+  Ea: Float64Array;
 }
 
 export interface ProcessTable {
@@ -255,10 +258,14 @@ export function resolveSpecies(defs: SpeciesDef[]): SpeciesTable {
     name: defs.map((d) => d.name),
     relD: new Float64Array(n),
     segregation: new Float64Array(n),
+    D0: new Float64Array(n),
+    Ea: new Float64Array(n),
   };
   defs.forEach((d, i) => {
     t.relD[i] = d.relD;
     t.segregation[i] = d.segregation;
+    t.D0[i] = d.D0 ?? 0;
+    t.Ea[i] = d.Ea ?? 0;
   });
   return t;
 }

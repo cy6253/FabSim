@@ -26,7 +26,7 @@ import { ambient } from "../connectivity";
 import { selectivityOf, stopLayersOf, silicideOf, type Library } from "../library";
 import {
   opSubstrate, opDeposit, opEtch, opPRCoat, opExpose, opDevelop,
-  opStrip, opCMP, opImplant, opAnneal, opOxidize, opSilicide,
+  opStrip, opCMP, opImplant, opAnneal, annealPlan, opOxidize, opSilicide,
 } from "../ops";
 import { NODE_SPEC_BY_TYPE } from "../project/nodes";
 import { chainTo, indexGraph, type GraphIndex } from "../project/graph";
@@ -160,6 +160,12 @@ export class Executor {
       this.phiHolders = [];
       this.frames.clear();
     }
+  }
+
+  /** 복셀 한 변의 물리 크기 [nm]. 어닐이 확산 길이를 풀 때 쓴다. */
+  get nmPerVoxel(): number {
+    const v = this.project.nmPerVoxel;
+    return Number.isFinite(v) && (v as number) > 0 ? (v as number) : 20;
   }
 
   get grid() {
@@ -458,11 +464,21 @@ export class Executor {
         return `${str("species")} 도즈 ${d.toFixed(1)} · Rp ${num("rp")}`;
       }
       case "anneal": {
-        opAnneal(s, mat, conc, num("steps"), num("dt"));
-        return `${num("steps")} 스텝 × dt ${num("dt")} (Dt ${(num("steps") * num("dt")).toFixed(1)})`;
+        const tC = num("temperature"), sec = num("seconds");
+        const pl = annealPlan(lib.sp, tC, sec, this.nmPerVoxel);
+        opAnneal(s, mat, conc, pl.steps, pl.dt, pl.rel);
+        // 학생이 볼 것은 노브 둘과 그 결과인 확산 폭이다. 스텝 수는 솔버 사정이다.
+        return `${tC}°C ${sec}s · 확산 폭 σ ${Math.sqrt(2 * pl.Dt).toFixed(1)}복셀`;
       }
       case "oxidize": {
         const r = opOxidize(s, mat, phi, conc, str("condition"), num("seconds"));
+        // 산화는 고온이다. 그 동안 도펀트도 움직인다 — 필드 산화가 채널스톱
+        // 주입을 밀어 넣는 것이 LOCOS 실습의 일부다. 도펀트가 없으면 건너뛴다.
+        const ox = lib.proc.byId.oxidation[str("condition")];
+        if (ox && conc.some((f) => f.some((v) => v > 0))) {
+          const pl = annealPlan(lib.sp, ox.temperature, num("seconds"), this.nmPerVoxel);
+          opAnneal(s, mat, conc, pl.steps, pl.dt, pl.rel);
+        }
         // 이미 산화막이 있었으면 이번에 자란 양과 총 두께를 같이 보여 준다 —
         // 두 번째 산화가 왜 느린지가 이 두 숫자 사이에 있다.
         const grew = (r.x - r.x0).toFixed(2);

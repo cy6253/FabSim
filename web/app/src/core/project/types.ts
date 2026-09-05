@@ -84,6 +84,14 @@ export interface Project {
   /** 이 프로젝트를 만든 시뮬레이터 버전. 결과 재현성의 기록이다. */
   simVersion: string;
   grid: GridSpec;
+  /**
+   * 복셀 한 변의 물리 크기 [nm]. 기본 20.
+   *
+   * 화면에 길이를 nm으로 같이 적는 데 쓰고, **어닐이 확산 길이를 푸는 데도**
+   * 쓴다 — D(T)는 cm²/s라 복셀로 옮기려면 이 값이 있어야 한다. 격자를 촘촘히
+   * 하면서 이 값을 함께 줄이면 같은 물리 구조가 더 높은 해상도로 나온다.
+   */
+  nmPerVoxel?: number;
   masks: MaskAsset[];
   nodes: RecipeNode[];
   edges: RecipeEdge[];

@@ -41,30 +41,43 @@ interface Scale {
    * 초에 그대로 박으면 습식 단계가 의도보다 몇 배 깊어진다.
    */
   etch: (etchant: string, depth: number) => number;
-  /**
-   * 확산 시간. 확산 길이 σ=√(2Dt)가 길이처럼 커지려면 t는 길이의 제곱으로 커야
-   * 한다. 기준 격자(nz=72)에서의 dt를 주면 이 격자에 맞게 환산한다.
-   */
-  dt: (base: number) => number;
+  /** 복셀 한 변의 물리 크기 [nm]. 격자를 촘촘히 하면 이 값이 작아진다. */
+  nm: number;
 }
 
+/**
+ * 기준 격자(nz=72)에서 복셀 한 변이 몇 nm인가.
+ *
+ * 웨이퍼 단면의 물리 높이를 격자와 무관하게 붙들어 두는 값이다. nz=72에 25nm면
+ * 스택 전체가 1.8µm — 이 실습들이 다루는 규모다. 격자를 두 배로 촘촘히 하면
+ * 복셀이 절반이 되므로 같은 구조가 두 배 해상도로 나오고, **확산 길이도 물리
+ * 시간 그대로 두면 자동으로 맞는다**. 예전에는 dt를 격자 제곱으로 손보정했다.
+ */
+const REF_NM = 25;
+
 function scaleOf(grid: GridSpec): Scale {
-  const k = grid.nz / 72; // 기준 격자
   return {
     grid,
+    nm: (REF_NM * 72) / grid.nz,
     L: (f) => Math.max(1, Math.round(grid.nz * f)),
     ox: (condition, thickness) => Math.max(1, Math.round(dealGroveTime(condition, thickness))),
     etch: (etchant, depth) => {
       const r = DEFAULT_LIBRARY.proc.byId.etchant[etchant]?.baseRate ?? 1;
       return Math.max(1, Math.round(depth / (r > 0 ? r : 1)));
     },
-    dt: (base) => Math.round(base * k * k * 4) / 4,
   };
 }
 
 /** 직선 체인 하나를 프로젝트로. 대부분의 레시피가 직선이다. */
-function chain(name: string, grid: GridSpec, steps: Step[], masks: Project["masks"] = []): Project {
+function chain(
+  name: string,
+  grid: GridSpec,
+  steps: Step[],
+  masks: Project["masks"] = [],
+  nmPerVoxel = (REF_NM * 72) / grid.nz,
+): Project {
   const p = newProject(name, grid);
+  p.nmPerVoxel = Math.round(nmPerVoxel * 100) / 100;
   p.masks = masks;
   const nodes: RecipeNode[] = [];
   let prev: string | undefined;
@@ -270,7 +283,7 @@ function nmos(): Project {
       mask: "sd",
       note: "게이트가 이온을 막아 채널이 자동으로 정렬된다",
     },
-    { type: "anneal", params: { steps: 4, dt: s.dt(2) }, note: "비소는 거의 안 퍼진다 — 얕은 접합" },
+    { type: "anneal", params: { temperature: 1000, seconds: 1800 }, note: "비소는 거의 안 퍼진다 — 같은 1000도 30분에 붕소의 1/3도 못 간다" },
     { type: "deposit", params: { material: "Ti", thickness: s.L(0.055), method: "sputter", coverage: -1 } },
     {
       type: "silicide",
@@ -304,7 +317,7 @@ function allOps(): Project {
     { type: "etch", params: { etchant: "hot_phosphoric", seconds: s.etch("hot_phosphoric", s.L(0.19)) } },
     { type: "etch", params: { etchant: "BOE", seconds: s.etch("BOE", s.L(0.14)) } },
     { type: "implant", params: { species: "B", rp: s.L(0.097), drp: 2.0, dose: 1 } },
-    { type: "anneal", params: { steps: 4, dt: s.dt(2) } },
+    { type: "anneal", params: { temperature: 1000, seconds: 1800 } },
     { type: "deposit", params: { material: "Metal", thickness: s.L(0.055), method: "LPCVD", coverage: 1 } },
     { type: "silicide", params: { recipe: "generic", thickness: s.L(0.042) } },
     { type: "cmp", params: { amount: s.L(0.125), slurry: "slurry_tungsten" } },

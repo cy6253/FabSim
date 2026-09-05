@@ -147,12 +147,17 @@ export function opAnneal(
   conc: Float32Array[],
   steps: number,
   dt: number,
+  /**
+   * 종별 상대 확산계수. 안 주면 라이브러리의 `relD`를 쓴다 — 예전 거동 그대로다.
+   * 온도 노브가 붙으면서 이 값이 **온도에 따라 달라지므로** 호출자가 넘긴다.
+   */
+  rel?: Float64Array,
 ): void {
   const { NX, NY, NZ, N, S } = s;
   s.concDirty = true;
   const a = S.ta, b = S.tb, c = S.tc, d = S.td, x = S.tx, cp = S.cp, dp = S.dp;
   const dm = S.fa;
-  const { relD } = s.lib.sp;
+  const relD = rel ?? s.lib.sp.relD;
   const dfac = s.lib.mat.diffusionFactor;
   // 호출자가 준 필드만큼만 돈다. 종 표보다 많이 주면 relD가 없으므로 거부한다.
   if (conc.length > s.lib.sp.count)
@@ -200,6 +205,75 @@ export function opAnneal(
       }
     }
   }
+}
+
+/* ---------------------------------------------------------------- 온도 */
+
+/** 볼츠만 상수 [eV/K]. */
+const KB = 8.617333e-5;
+
+/** 아레니우스 확산계수 D(T) [cm²/s]. */
+export function diffusivity(D0: number, Ea: number, tempC: number): number {
+  return D0 * Math.exp(-Ea / (KB * (tempC + 273.15)));
+}
+
+/**
+ * 기준 온도. D0·Ea가 없는 종(사용자가 편집한 표)은 relD를 이 온도의 배수로 본다.
+ */
+const REF_C = 1000;
+
+export interface AnnealPlan {
+  /** ADI 스텝 수와 스텝당 시간. 사용자에게 안 보이는 수치 파라미터다. */
+  steps: number;
+  dt: number;
+  /** 종별 상대 확산계수 (가장 빠른 종이 1). */
+  rel: Float64Array;
+  /** 가장 빠른 종의 Dt [복셀²]. 확산 폭 σ = √(2Dt) 가 여기서 나온다. */
+  Dt: number;
+}
+
+/**
+ * 온도와 시간을 ADI가 먹을 수 있는 수치로 바꾼다.
+ *
+ * 노브를 `steps`·`dt`로 두는 것은 솔버의 내부 사정을 사용자에게 떠넘기는 것이다.
+ * 학생이 아는 것은 **몇 도에서 몇 초**이고, 표에는 이미 D0·Ea가 "온도 노브를
+ * 붙일 때 쓴다"고 적힌 채 놀고 있었다.
+ *
+ * D(T) = D0·exp(−Ea/kT) 는 cm²/s 이므로 복셀²로 옮기려면 복셀의 물리 크기가
+ * 필요하다 — 그래서 프로젝트가 `nmPerVoxel`을 든다. 격자를 촘촘히 하면 복셀이
+ * 작아지고, 같은 물리 시간이 **더 많은 복셀**을 퍼진다. 해상도를 올려도 구조가
+ * 같게 유지되는 이유가 이것이다.
+ *
+ * 스텝 수는 코어가 정한다. CN은 무조건 안정하고 검증에서 Dt=8을 2스텝으로
+ * 풀었으므로 dt ≤ 4를 기준으로 잡되, 아주 긴 확산에서 스텝이 무한정 늘지 않게
+ * 상한을 둔다.
+ */
+export function annealPlan(
+  sp: { count: number; relD: Float64Array; D0?: Float64Array; Ea?: Float64Array },
+  tempC: number,
+  seconds: number,
+  nmPerVoxel: number,
+): AnnealPlan {
+  const cm = Math.max(1e-9, nmPerVoxel) * 1e-7; // 복셀 한 변 [cm]
+  const kappa = 1 / (cm * cm); // cm² → 복셀²
+  const refD0 = 0.76, refEa = 3.46; // 붕소 — relD가 1일 때의 기준
+  const dRef = diffusivity(refD0, refEa, REF_C);
+
+  const d = new Float64Array(sp.count);
+  let dMax = 0;
+  for (let i = 0; i < sp.count; i++) {
+    const a = sp.D0?.[i] ?? 0, b = sp.Ea?.[i] ?? 0;
+    d[i] = a > 0 && b > 0 ? diffusivity(a, b, tempC) : sp.relD[i] * dRef;
+    if (d[i] > dMax) dMax = d[i];
+  }
+  const rel = new Float64Array(sp.count);
+  if (dMax > 0) for (let i = 0; i < sp.count; i++) rel[i] = d[i] / dMax;
+
+  const Dt = dMax * Math.max(0, seconds) * kappa;
+  const MAX_STEPS = 48;
+  let steps = Math.max(1, Math.ceil(Dt / 4));
+  if (steps > MAX_STEPS) steps = MAX_STEPS;
+  return { steps, dt: Dt / steps, rel, Dt };
 }
 
 /** 종별 확산계수 지도. 진단·시각화용. */
