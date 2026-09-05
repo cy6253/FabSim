@@ -188,6 +188,50 @@ describe("표면 메시", () => {
     expect(disagree, "감김과 법선이 어긋난 삼각형").toBe(0);
   });
 
+  it("잘린 단면의 재질 경계가 복셀보다 잘게 움직인다", () => {
+    // y를 따라 반 칸씩 오르는 Si/SiO2 경계. 재질을 복셀 눈금에서 그대로 읽으면
+    // 경계는 0 아니면 1칸씩만 뛴다 — 바깥 껍질은 매끄러운데 잘린 단면만 계단이
+    // 되는 이유가 그것이다. 재질장도 같은 커널로 흐리면 실제 기울기를 따라간다.
+    const g = { nx: 16, ny: 24, nz: 16 };
+    const s = createSim(g.nx, g.ny, g.nz);
+    const mat = newMat(s);
+    for (let z = 0; z < 12; z++)
+      for (let y = 0; y < g.ny; y++)
+        for (let x = 0; x < g.nx; x++)
+          mat[x + g.nx * (y + g.ny * z)] = z < 5 + y * 0.5 ? SI : OX;
+
+    const cut = 10;
+    const m = buildSmoothMesh(mat, { ...g, smooth: 2, cutX: cut });
+    const si = MATCOL[SI].map((v) => v / 255);
+
+    // 절단면 위 삼각형만 모아, y칸마다 Si로 칠해진 가장 높은 곳을 경계로 본다.
+    const top = new Map<number, number>();
+    for (let t = 0; t < m.position.length; t += 9) {
+      const k = t / 3;
+      if (Math.abs(m.normal[k * 3]) < 0.85) continue;
+      const cx = (m.position[t] + m.position[t + 3] + m.position[t + 6]) / 3;
+      if (Math.abs(cx - (cut - 0.5)) > 0.75) continue;
+      if (Math.abs(m.color[t] - si[0]) > 0.01 || Math.abs(m.color[t + 1] - si[1]) > 0.01) continue;
+      const cy = (m.position[t + 1] + m.position[t + 4] + m.position[t + 7]) / 3;
+      const cz = (m.position[t + 2] + m.position[t + 5] + m.position[t + 8]) / 3;
+      const b = Math.round(cy);
+      top.set(b, Math.max(top.get(b) ?? -Infinity, cz));
+    }
+
+    // 경계가 격자 천장에 닿기 전, 기울기가 살아 있는 구간만 본다.
+    const ys = [...top.keys()].sort((a, b) => a - b).slice(0, 9);
+    expect(ys.length, "절단면에서 읽은 y칸").toBe(9);
+    ys.forEach((y, i) => expect(y, "y칸이 이어져 있다").toBe(ys[0] + i));
+    const zs = ys.map((y) => top.get(y)!);
+    let fractional = 0;
+    for (let i = 1; i < zs.length; i++) {
+      const d = zs[i] - zs[i - 1];
+      expect(d, "경계가 한 칸을 통째로 뛰었다").toBeLessThan(0.9);
+      if (d > 0.2 && d < 0.8) fractional++;
+    }
+    expect(fractional, "반 칸짜리 걸음").toBeGreaterThanOrEqual(6);
+  });
+
   it("빈 격자는 삼각형이 없다", () => {
     const s = createSim(8, 4, 8);
     const m = buildMesh(newMat(s), { nx: 8, ny: 4, nz: 8 });

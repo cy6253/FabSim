@@ -231,12 +231,17 @@ export function buildSmoothMesh(mat: Uint8Array, o: MeshOptions): Mesh {
    * 절단면은 물리적 표면이 아니라 "여기서 잘라 보겠다"는 시선이므로 날카로워야 한다.
    */
   const field = new Float32Array(n);
+  /** 재질마다 따로 모은 점유도. EMPTY 키는 보이드를 뜻한다. */
+  const labelField = new Map<number, Float32Array>();
   let x0 = nx, x1 = -1, y0 = ny, y1 = -1, z0 = nz, z1 = -1;
   for (let i = 0; i < n; i++) {
     const m = mat[i];
     const drawn = m !== EMPTY ? !hidden?.has(m) : voids ? voids[i] === 1 : false;
     if (!drawn) continue;
     field[i] = 1;
+    let lf = labelField.get(m);
+    if (!lf) { lf = new Float32Array(n); labelField.set(m, lf); }
+    lf[i] = 1;
     const x = i % nx;
     if (x >= cut) continue; // 경계 상자는 보이는 부분만으로 잡는다
     const y = ((i / nx) | 0) % ny, z = (i / (nx * ny)) | 0;
@@ -286,44 +291,184 @@ export function buildSmoothMesh(mat: Uint8Array, o: MeshOptions): Mesh {
   for (let i = 0; i < position.length; i++) position[i] -= P;
 
   /**
-   * 4) 색은 **삼각형마다 하나**로 칠한다.
+   * 4) 재질 경계도 **바깥 면과 같은 세기로** 흐린다.
    *
-   * 꼭짓점마다 칠하면 삼각형 안에서 보간돼 Si/SiO2 경계가 그라데이션으로 번진다.
-   * 잘린 단면에서 층이 어디까지인지 읽을 수 없게 되는데, 그게 이 화면의 요점이다.
-   * 세 꼭짓점에 같은 색을 넣으면 경계가 삼각형 변에 딱 떨어진다.
+   * 바깥 껍질만 완화하고 안쪽 재질은 원본 복셀을 그대로 읽으면, 표면은 매끈한데
+   * 잘린 단면 안쪽만 복셀 계단으로 남는다 — 같은 구조를 두 해상도로 보는 셈이라
+   * 그 대비 때문에 안쪽이 유난히 각져 보인다.
    *
-   * 표본은 무게중심에서 법선 반대쪽으로 반 칸 들어간 자리에서 뜬다 — 표면
-   * 자리에서 그냥 뜨면 절반은 진공이 잡힌다.
+   * 재질마다 점유도를 같은 커널로 흐린 뒤 그 자리에서 가장 큰 재질을 고르면,
+   * 경계가 복셀 격자를 벗어나 껍질과 같은 매끄러운 곡선을 따라간다. 고르는 것은
+   * 여전히 하나뿐이라 경계 자체는 흐려지지 않고 위치만 정밀해진다.
    */
-  const color = new Float32Array(position.length);
+  const labels: number[] = [];
+  const fields: Float32Array[] = [];
+  for (const [m, f] of labelField) {
+    labels.push(m);
+    fields.push(blurField(f, { nx, ny, nz, passes }));
+  }
+
+  /** 흐린 재질장을 삼선형으로 재고 가장 큰 재질을 고른다. 아무것도 없으면 -1. */
+  const labelAt = (sx: number, sy: number, sz: number): number => {
+    const ax = Math.max(0, Math.min(cut - 1, sx));
+    const ay = Math.max(0, Math.min(ny - 1, sy));
+    const az = Math.max(0, Math.min(nz - 1, sz));
+    const xi = Math.floor(ax), yi = Math.floor(ay), zi = Math.floor(az);
+    const fx = ax - xi, fy = ay - yi, fz = az - zi;
+    const xa = Math.max(0, Math.min(cut - 1, xi)), xb = Math.max(0, Math.min(cut - 1, xi + 1));
+    const ya = Math.max(0, Math.min(ny - 1, yi)), yb = Math.max(0, Math.min(ny - 1, yi + 1));
+    const za = Math.max(0, Math.min(nz - 1, zi)), zb = Math.max(0, Math.min(nz - 1, zi + 1));
+    const ra = nx * ya, rb = nx * yb, la = nx * ny * za, lb = nx * ny * zb;
+    const i000 = xa + ra + la, i100 = xb + ra + la, i010 = xa + rb + la, i110 = xb + rb + la;
+    const i001 = xa + ra + lb, i101 = xb + ra + lb, i011 = xa + rb + lb, i111 = xb + rb + lb;
+    const gx = 1 - fx, gy = 1 - fy, gz = 1 - fz;
+    const w000 = gx * gy * gz, w100 = fx * gy * gz, w010 = gx * fy * gz, w110 = fx * fy * gz;
+    const w001 = gx * gy * fz, w101 = fx * gy * fz, w011 = gx * fy * fz, w111 = fx * fy * fz;
+    let best = -1, bestV = 0;
+    for (let L = 0; L < fields.length; L++) {
+      const f = fields[L];
+      const v =
+        f[i000] * w000 + f[i100] * w100 + f[i010] * w010 + f[i110] * w110 +
+        f[i001] * w001 + f[i101] * w101 + f[i011] * w011 + f[i111] * w111;
+      if (v > bestV) { bestV = v; best = labels[L]; }
+    }
+    return best;
+  };
+
+  /** 흐린 장이 아무 말도 안 해 줄 때를 위한 원본 복셀 조회. */
   const nb = [1, -1, nx, -nx, nx * ny, -(nx * ny)];
-  for (let t = 0; t < position.length; t += 9) {
-    const cxp = (position[t] + position[t + 3] + position[t + 6]) / 3;
-    const cyp = (position[t + 1] + position[t + 4] + position[t + 7]) / 3;
-    const czp = (position[t + 2] + position[t + 5] + position[t + 8]) / 3;
-    const k = t / 3;
-    const sx = cxp - net.normal[k * 3] * 0.6;
-    const sy = cyp - net.normal[k * 3 + 1] * 0.6;
-    const sz = czp - net.normal[k * 3 + 2] * 0.6;
+  const nearestAt = (sx: number, sy: number, sz: number): number => {
     const vx = Math.max(0, Math.min(cut - 1, Math.round(sx)));
     const vy = Math.max(0, Math.min(ny - 1, Math.round(sy)));
     const vz = Math.max(0, Math.min(nz - 1, Math.round(sz)));
-
     let idx = vx + nx * (vy + ny * vz);
-    let m = mat[idx];
+    const m = mat[idx];
     if ((m === EMPTY && !(voids && voids[idx])) || (m !== EMPTY && hidden?.has(m))) {
       for (const d of nb) {
-        const j = idx + d;
-        if (j >= 0 && j < n && mat[j] !== EMPTY && !hidden?.has(mat[j])) { idx = j; m = mat[j]; break; }
+        const j2 = idx + d;
+        if (j2 >= 0 && j2 < n && mat[j2] !== EMPTY && !hidden?.has(mat[j2])) return mat[j2];
       }
     }
-    const c = m === EMPTY ? VOIDCOL : MATCOL[m] ?? [200, 200, 200];
+    return m;
+  };
+
+  /**
+   * 5) 평평한 경계면은 잘게 쪼갠다.
+   *
+   * 색은 삼각형마다 하나다 — 꼭짓점마다 칠하면 삼각형 안에서 보간돼 층 경계가
+   * 그라데이션으로 번지고, 층이 어디까지인지 읽을 수 없게 된다. 그런데 등위면은
+   * 칸마다 꼭짓점을 하나만 놓으므로 삼각형이 복셀만 하다. 즉 절단면처럼 평평한
+   * 면에서는 색이 복셀 단위로만 바뀐다 — 경계를 아무리 정밀하게 구해도 그릴
+   * 자리가 없다.
+   *
+   * 그래서 절단면·상자 면에 놓인 삼각형만 한 변을 넷으로 갈라 16조각으로 만든다.
+   * 조각마다 제 무게중심에서 색을 뜨므로 경계가 복셀의 1/4까지 내려간다. 굽은
+   * 껍질은 그대로 둔다 — 거기는 삼각형이 이미 촘촘하고 대개 한 재질뿐이다.
+   */
+  const NSUB = 4;
+  const flatFace = (t: number): boolean => {
+    const k = t / 3;
+    const anx = Math.abs(net.normal[k * 3]);
+    const any = Math.abs(net.normal[k * 3 + 1]);
+    const anz = Math.abs(net.normal[k * 3 + 2]);
+    const on = (o: number, plane: number) =>
+      Math.abs(position[t + o] - plane) < 0.75 &&
+      Math.abs(position[t + 3 + o] - plane) < 0.75 &&
+      Math.abs(position[t + 6 + o] - plane) < 0.75;
+    if (anx > 0.85 && (on(0, cut - 0.5) || on(0, -0.5))) return true;
+    if (any > 0.85 && (on(1, -0.5) || on(1, ny - 0.5))) return true;
+    if (anz > 0.85 && (on(2, -0.5) || on(2, nz - 0.5))) return true;
+    return false;
+  };
+
+  /**
+   * 다만 평평하다고 다 쪼개면 헛일이 크다 — 절단면의 대부분은 한 재질로 넓게
+   * 이어져 있고, 거기서는 조각을 아무리 늘려도 같은 색만 열여섯 번 칠한다.
+   * 실제로 전부 쪼갰더니 삼각형이 12배(7만 → 87만)로 뛰었다.
+   * 그래서 재질이 실제로 바뀌는 삼각형만 고른다 — 경계를 따라난 띠 하나뿐이다.
+   */
+  const varies = (t: number): boolean => {
+    const k = t / 3;
+    const dx = (net.normal[k * 3] + net.normal[k * 3 + 3] + net.normal[k * 3 + 6]) / 3;
+    const dy = (net.normal[k * 3 + 1] + net.normal[k * 3 + 4] + net.normal[k * 3 + 7]) / 3;
+    const dz = (net.normal[k * 3 + 2] + net.normal[k * 3 + 5] + net.normal[k * 3 + 8]) / 3;
+    const cx = (position[t] + position[t + 3] + position[t + 6]) / 3;
+    const cy = (position[t + 1] + position[t + 4] + position[t + 7]) / 3;
+    const cz = (position[t + 2] + position[t + 5] + position[t + 8]) / 3;
+    const first = labelAt(cx - dx * 0.6, cy - dy * 0.6, cz - dz * 0.6);
     for (let v = 0; v < 3; v++) {
-      color[t + v * 3] = c[0] / 255;
-      color[t + v * 3 + 1] = c[1] / 255;
-      color[t + v * 3 + 2] = c[2] / 255;
+      const m = labelAt(
+        position[t + v * 3] - dx * 0.6,
+        position[t + v * 3 + 1] - dy * 0.6,
+        position[t + v * 3 + 2] - dz * 0.6,
+      );
+      if (m !== first) return true;
     }
+    return false;
+  };
+
+  const flat = new Uint8Array(net.triangles);
+  let split = 0;
+  for (let t = 0, ti = 0; t < position.length; t += 9, ti++)
+    if (flatFace(t) && varies(t)) { flat[ti] = 1; split++; }
+
+  const total = net.triangles + split * (NSUB * NSUB - 1);
+  const outPos = new Float32Array(total * 9);
+  const outNor = new Float32Array(total * 9);
+  const color = new Float32Array(total * 9);
+  let w = 0;
+
+  /** 삼각형 하나를 쓰고, 무게중심에서 반 칸 안쪽 색을 세 꼭짓점에 똑같이 넣는다. */
+  const emit = (v: number[], nrm: number[]) => {
+    for (let q = 0; q < 9; q++) { outPos[w + q] = v[q]; outNor[w + q] = nrm[q]; }
+    const cx = (v[0] + v[3] + v[6]) / 3, cy = (v[1] + v[4] + v[7]) / 3, cz = (v[2] + v[5] + v[8]) / 3;
+    // 표면 자리에서 그냥 뜨면 절반은 진공이 잡힌다 — 법선 반대로 조금 들어간다.
+    const dx = (nrm[0] + nrm[3] + nrm[6]) / 3, dy = (nrm[1] + nrm[4] + nrm[7]) / 3;
+    const dz = (nrm[2] + nrm[5] + nrm[8]) / 3;
+    const sx = cx - dx * 0.6, sy = cy - dy * 0.6, sz = cz - dz * 0.6;
+    let m = labelAt(sx, sy, sz);
+    if (m < 0) m = nearestAt(sx, sy, sz);
+    const c = m === EMPTY ? VOIDCOL : MATCOL[m] ?? [200, 200, 200];
+    for (let v2 = 0; v2 < 3; v2++) {
+      color[w + v2 * 3] = c[0] / 255;
+      color[w + v2 * 3 + 1] = c[1] / 255;
+      color[w + v2 * 3 + 2] = c[2] / 255;
+    }
+    w += 9;
+  };
+
+  const tri = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+  const trn = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+  /** 무게중심 좌표 (a, b)로 부모 삼각형 위의 점과 그 법선을 구한다. */
+  const lerp = (t: number, a: number, b: number, off: number) => {
+    for (let d = 0; d < 3; d++) {
+      const p0 = position[t + d], p1 = position[t + 3 + d], p2 = position[t + 6 + d];
+      tri[off + d] = p0 + (p1 - p0) * a + (p2 - p0) * b;
+      const k = t / 3;
+      const q0 = net.normal[k * 3 + d], q1 = net.normal[k * 3 + 3 + d], q2 = net.normal[k * 3 + 6 + d];
+      trn[off + d] = q0 + (q1 - q0) * a + (q2 - q0) * b;
+    }
+  };
+
+  for (let t = 0, ti = 0; t < position.length; t += 9, ti++) {
+    if (!flat[ti]) {
+      const k = t / 3;
+      for (let q = 0; q < 9; q++) { tri[q] = position[t + q]; trn[q] = net.normal[k * 3 + q]; }
+      emit(tri, trn);
+      continue;
+    }
+    // 무게중심 격자로 쪼갠다. 감김은 부모와 같은 방향으로 유지된다.
+    for (let a = 0; a < NSUB; a++)
+      for (let b = 0; b + a < NSUB; b++) {
+        const u = a / NSUB, v = b / NSUB, u1 = (a + 1) / NSUB, v1 = (b + 1) / NSUB;
+        lerp(t, u, v, 0); lerp(t, u1, v, 3); lerp(t, u, v1, 6);
+        emit(tri, trn);
+        if (b + a + 1 < NSUB) {
+          lerp(t, u1, v, 0); lerp(t, u1, v1, 3); lerp(t, u, v1, 6);
+          emit(tri, trn);
+        }
+      }
   }
 
-  return { position, normal: net.normal, color, triangles: net.triangles };
+  return { position: outPos, normal: outNor, color, triangles: total };
 }
