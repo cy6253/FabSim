@@ -18,6 +18,9 @@ export interface MaskDesignerProps {
   onClose: () => void;
 }
 
+/** 겹쳐 보는 마스크의 색. 편집 중인 마스크(밝은 상아색)와 안 겹치게 골랐다. */
+const REF_COLORS = ["#4a9edd", "#c98a3f", "#63b58a", "#b07ad0", "#d0655f", "#5fb8c9"];
+
 /** 화면 표시 배율 — 마스크는 격자 하나가 1픽셀이라 그대로 두면 너무 작다. */
 function pickScale(w: number, h: number): number {
   return Math.max(2, Math.min(8, Math.floor(900 / Math.max(w, 1)), Math.floor(420 / Math.max(h, 1))));
@@ -30,11 +33,28 @@ export function MaskDesigner({ project, onChange, onClose }: MaskDesignerProps) 
   const [subtract, setSubtract] = useState(false);
   const [drag, setDrag] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
   const [poly, setPoly] = useState<[number, number][]>([]);
+  /** 밑에 깔아 볼 다른 마스크들. 정렬의 기준이 되므로 기본은 전부 켜 둔다. */
+  const [refsOff, setRefsOff] = useState<Set<string>>(new Set());
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const asset = project.masks.find((m) => m.id === selId) ?? null;
   const px = useMemo(() => (asset ? unpackMask(asset) : null), [asset]);
   const scale = asset ? pickScale(asset.w, asset.h) : 4;
+
+  /**
+   * 겹쳐 볼 마스크들.
+   *
+   * 정렬 오차 실습을 하려면 **무엇에 맞추는지**가 보여야 한다. 게이트를 액티브
+   * 영역에 맞추는 것이 리소그래피가 하는 일인데, 한 장씩 따로 그리면 그 관계가
+   * 화면 어디에도 없다. 밑에 깔아 두기만 하고 원본은 서로 안 섞는다.
+   */
+  const refs = useMemo(
+    () =>
+      project.masks
+        .filter((m) => m.id !== selId && !refsOff.has(m.id))
+        .map((m, i) => ({ m, px: unpackMask(m), color: REF_COLORS[i % REF_COLORS.length] })),
+    [project.masks, selId, refsOff],
+  );
 
   /** 편집 결과를 프로젝트에 되돌린다. */
   const commit = (next: Uint8Array) => {
@@ -59,7 +79,22 @@ export function MaskDesigner({ project, onChange, onClose }: MaskDesignerProps) 
     ctx.fillStyle = "#10151d";
     ctx.fillRect(0, 0, cv.width, cv.height);
 
-    // 열린 곳(1)이 빛이 지나가는 곳이다.
+    // ① 참조 마스크를 먼저 깐다. 크기가 다르면 최근접으로 늘려 맞춘다 —
+    //    실행할 때 코어가 하는 것과 같은 방식이라 화면과 결과가 어긋나지 않는다.
+    for (const r of refs) {
+      ctx.fillStyle = r.color;
+      ctx.globalAlpha = 0.28;
+      for (let y = 0; y < asset.h; y++) {
+        const sy = Math.min(r.m.h - 1, Math.floor((y * r.m.h) / asset.h));
+        for (let x = 0; x < asset.w; x++) {
+          const sx = Math.min(r.m.w - 1, Math.floor((x * r.m.w) / asset.w));
+          if (r.px[sx + r.m.w * sy]) ctx.fillRect(x * scale, y * scale, scale, scale);
+        }
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // ② 열린 곳(1)이 빛이 지나가는 곳이다. 편집 중인 마스크가 맨 위에 온다.
     ctx.fillStyle = "#e8e3d4";
     for (let y = 0; y < asset.h; y++)
       for (let x = 0; x < asset.w; x++)
@@ -95,7 +130,7 @@ export function MaskDesigner({ project, onChange, onClose }: MaskDesignerProps) 
         ctx.fillRect(x * scale - 2, y * scale - 2, 5, 5);
       }
     }
-  }, [asset, px, scale, snap, drag, poly, subtract]);
+  }, [asset, px, scale, snap, drag, poly, subtract, refs]);
 
   /* ------------------------------------------------------------------ 입력 */
   const toGrid = (e: React.MouseEvent<HTMLCanvasElement>): [number, number] => {
@@ -271,6 +306,35 @@ export function MaskDesigner({ project, onChange, onClose }: MaskDesignerProps) 
                 />
               </label>
             </div>
+
+            {project.masks.length > 1 && (
+              <div className="masktools refbar">
+                <span className="hint">겹쳐 보기</span>
+                {project.masks
+                  .filter((m) => m.id !== selId)
+                  .map((m, i) => {
+                    const on = !refsOff.has(m.id);
+                    return (
+                      <button
+                        key={m.id}
+                        className={`chip${on ? "" : " off"}`}
+                        title={on ? "숨깁니다" : "다시 깝니다"}
+                        onClick={() =>
+                          setRefsOff((prev) => {
+                            const n = new Set(prev);
+                            if (n.has(m.id)) n.delete(m.id);
+                            else n.add(m.id);
+                            return n;
+                          })
+                        }
+                      >
+                        <i style={{ background: REF_COLORS[i % REF_COLORS.length] }} />
+                        {m.name}
+                      </button>
+                    );
+                  })}
+              </div>
+            )}
 
             <div className="maskcanvas">
               <canvas

@@ -50,6 +50,7 @@ export function App() {
   const [sliceY, setSliceY] = useState(-1);
   const [probeX, setProbeX] = useState(-1);
   const [cutX, setCutX] = useState(-1);
+  const [cutAxis, setCutAxis] = useState<0 | 1 | 2>(0);
   const [smooth, setSmooth] = useState(2);
   const [mode, setMode] = useState<"smooth" | "voxel">("smooth");
   const [meshStats, setMeshStats] = useState<{ triangles: number; ms: number } | null>(null);
@@ -66,7 +67,9 @@ export function App() {
   const px = probeX >= 0 ? probeX : Math.floor(project.grid.nx / 2);
   // 절단면 기본값은 격자의 62% — 처음부터 층 구조가 보이게 한다. 꽉 채워 두면
   // 마지막에 증착한 재질 하나만 보여서 3D가 아무것도 안 알려 준다.
-  const cut = cutX >= 0 ? cutX : Math.round(project.grid.nx * 0.62);
+  const cutDim =
+    cutAxis === 0 ? project.grid.nx : cutAxis === 1 ? project.grid.ny : project.grid.nz;
+  const cut = cutX >= 0 ? Math.min(cutX, cutDim) : Math.round(cutDim * 0.62);
   const nmPerVoxel = nmPerVoxelOf(project);
 
   /** 지금 보고 있는 단계 = 지금 선택된 노드. 둘은 같은 것이다. */
@@ -407,10 +410,26 @@ export function App() {
                 />
               </label>
             )}
-            <label className="slider" title={`이 x보다 오른쪽을 잘라 내부를 봅니다 (${lengthLabel(cut, nmPerVoxel)})`}>
-              절단 {cut}
+            <label
+              className="slider"
+              title={`이 면보다 바깥을 잘라 내부를 봅니다 (${lengthLabel(cut, nmPerVoxel)})`}
+            >
+              절단
+              <select
+                value={cutAxis}
+                // 축을 바꾸면 값의 범위가 달라진다. 자동으로 되돌려 놔야
+                // 새 축에서도 층 구조가 보이는 자리에서 시작한다.
+                onChange={(e) => { setCutAxis(Number(e.target.value) as 0 | 1 | 2); setCutX(-1); }}
+                onClick={(e) => e.preventDefault()}
+                title="어느 축으로 자를지"
+              >
+                <option value={0}>x</option>
+                <option value={1}>y</option>
+                <option value={2}>z</option>
+              </select>
+              {cut}
               <input
-                type="range" min={1} max={project.grid.nx} value={cut}
+                type="range" min={1} max={cutDim} value={cut}
                 onChange={(e) => setCutX(Number(e.target.value))}
               />
             </label>
@@ -420,6 +439,7 @@ export function App() {
             <View3D
               view={sim.view}
               cutX={cut}
+              cutAxis={cutAxis}
               showVoids={showVoids}
               hidden={hidden}
               smooth={smooth}

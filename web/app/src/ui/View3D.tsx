@@ -15,8 +15,10 @@ import type { ViewData } from "./useSimulation";
 
 export interface View3DProps {
   view: ViewData;
-  /** 이 x보다 큰 쪽을 잘라낸다. */
+  /** 이 좌표보다 큰 쪽을 잘라낸다. */
   cutX: number;
+  /** 절단 축. 0=x, 1=y, 2=z. */
+  cutAxis: 0 | 1 | 2;
   showVoids: boolean;
   hidden: Set<number>;
   /** 흐리기 반복 횟수. 클수록 부드럽고, 너무 크면 얇은 층이 뭉개진다. */
@@ -194,6 +196,7 @@ export function View3D(p: View3DProps) {
     const opts = {
       nx, ny, nz,
       cutX: p.cutX,
+      cutAxis: p.cutAxis,
       voids: p.showVoids ? p.view.voids : undefined,
       hidden: p.hidden,
       smooth: p.smooth,
@@ -234,7 +237,7 @@ export function View3D(p: View3DProps) {
     s.radius = 0.5 * Math.hypot(nx, ny, nz);
     (s as unknown as { place?: () => void }).place?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [p.view, p.cutX, p.showVoids, p.hidden, p.smooth, p.mode, p.doping, p.diff]);
+  }, [p.view, p.cutX, p.cutAxis, p.showVoids, p.hidden, p.smooth, p.mode, p.doping, p.diff]);
 
   return <div className="view3d" ref={hostRef} />;
 }

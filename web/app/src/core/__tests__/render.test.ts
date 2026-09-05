@@ -400,4 +400,29 @@ describe("등위면 표면 (Surface Nets)", () => {
     const s = createSim(8, 4, 8);
     expect(buildSmoothMesh(newMat(s), { nx: 8, ny: 4, nz: 8, smooth: 2 }).triangles).toBe(0);
   });
+
+  it("세 축 어느 쪽으로도 자를 수 있다", () => {
+    // 절단면은 "여기서 잘라 보겠다"는 시선이다. x로만 자를 수 있으면 y·z 방향
+    // 단면은 아예 못 본다.
+    const { mat } = wafer();
+    const dims = [G.nx, G.ny, G.nz];
+    for (const axis of [0, 1, 2] as const) {
+      const half = Math.floor(dims[axis] / 2);
+      for (const build of [buildMesh, buildSmoothMesh]) {
+        const m = build(mat, { ...G, smooth: 1, cutAxis: axis, cutX: half });
+        expect(m.triangles, `축 ${axis}`).toBeGreaterThan(0);
+        let hi = -Infinity;
+        for (let i = axis; i < m.position.length; i += 3) hi = Math.max(hi, m.position[i]);
+        // 잘린 쪽 너머로는 아무것도 안 나온다 (등위면은 반 칸 여유).
+        expect(hi, `축 ${axis} 상한`).toBeLessThanOrEqual(half + 0.5);
+      }
+    }
+  });
+
+  it("자르지 않으면 축을 바꿔도 같은 메시다", () => {
+    const { mat } = wafer();
+    const base = buildSmoothMesh(mat, { ...G, smooth: 2 });
+    for (const axis of [1, 2] as const)
+      expect(buildSmoothMesh(mat, { ...G, smooth: 2, cutAxis: axis }).triangles).toBe(base.triangles);
+  });
 });

@@ -112,11 +112,11 @@ await shot("06-nmos-doping");
 await page.locator('.toggle:has-text("도핑") input').uncheck();
 
 // 표면 표현 바꾸기 — 등위면 vs 복셀
-await page.selectOption(".viewtools select", "voxel");
+await page.selectOption(".viewtools > select", "voxel");
 await page.waitForTimeout(1500);
 console.log("7) 복셀 표현: " + (await line(".stepbar")).split("·").slice(-2).join("·").trim());
 await shot("07-voxel");
-await page.selectOption(".viewtools select", "smooth");
+await page.selectOption(".viewtools > select", "smooth");
 await page.locator('.slider:has-text("완화") input').fill("5");
 await page.waitForTimeout(2000);
 console.log("   완화 5: " + (await line(".stepbar")).split("·").slice(-2).join("·").trim());

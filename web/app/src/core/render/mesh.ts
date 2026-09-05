@@ -49,8 +49,13 @@ export interface MeshOptions {
   nx: number;
   ny: number;
   nz: number;
-  /** 이 x보다 큰 쪽은 잘라낸다 — 내부 보이드를 보기 위한 절단면. */
+  /**
+   * 이 좌표보다 큰 쪽은 잘라낸다 — 내부를 보기 위한 절단면.
+   * 어느 축으로 자를지는 `cutAxis`가 정한다 (0=x, 1=y, 2=z).
+   */
   cutX?: number;
+  /** 절단 축. 0=x(기본), 1=y, 2=z. */
+  cutAxis?: 0 | 1 | 2;
   /** 봉인된 보이드도 그린다. */
   voids?: Uint8Array;
   /**
@@ -83,11 +88,15 @@ export interface MeshOptions {
  */
 export function buildMesh(mat: Uint8Array, o: MeshOptions): Mesh {
   const { nx, ny, nz } = o;
-  const cut = o.cutX ?? nx;
+  const axis = o.cutAxis ?? 0;
+  const dim = axis === 0 ? nx : axis === 1 ? ny : nz;
+  const cut = Math.min(o.cutX ?? dim, dim);
   const voids = o.voids;
   const hidden = o.hidden;
 
   const at = (x: number, y: number, z: number) => x + nx * (y + ny * z);
+  /** 절단 축 위의 좌표. */
+  const cutCoord = (x: number, y: number, z: number) => (axis === 0 ? x : axis === 1 ? y : z);
   /** 이 칸이 그려질 대상인가 (재질 또는 보이드). */
   const drawn = (i: number): boolean => {
     if (i < 0) return false;
@@ -95,19 +104,23 @@ export function buildMesh(mat: Uint8Array, o: MeshOptions): Mesh {
     if (m !== EMPTY) return !hidden?.has(m);
     return voids ? voids[i] === 1 : false;
   };
-  const visible = (x: number, y: number, z: number) => x < cut && drawn(at(x, y, z));
+  // 격자 밖과 절단면 너머를 한 자리에서 걸러 낸다 — 면을 낼지 판정하는 여섯
+  // 곳이 전부 이걸 부르므로, 축이 무엇이든 잘린 면이 저절로 닫힌다.
+  const visible = (x: number, y: number, z: number) =>
+    x >= 0 && x < nx && y >= 0 && y < ny && z >= 0 && z < nz &&
+    cutCoord(x, y, z) < cut && drawn(at(x, y, z));
 
   let faces = 0;
   for (let z = 0; z < nz; z++)
     for (let y = 0; y < ny; y++)
-      for (let x = 0; x < cut && x < nx; x++) {
+      for (let x = 0; x < nx; x++) {
         if (!visible(x, y, z)) continue;
-        if (x + 1 >= cut || x + 1 >= nx || !visible(x + 1, y, z)) faces++;
-        if (x === 0 || !visible(x - 1, y, z)) faces++;
-        if (y + 1 >= ny || !visible(x, y + 1, z)) faces++;
-        if (y === 0 || !visible(x, y - 1, z)) faces++;
-        if (z + 1 >= nz || !visible(x, y, z + 1)) faces++;
-        if (z === 0 || !visible(x, y, z - 1)) faces++;
+        if (!visible(x + 1, y, z)) faces++;
+        if (!visible(x - 1, y, z)) faces++;
+        if (!visible(x, y + 1, z)) faces++;
+        if (!visible(x, y - 1, z)) faces++;
+        if (!visible(x, y, z + 1)) faces++;
+        if (!visible(x, y, z - 1)) faces++;
       }
 
   const position = new Float32Array(faces * 18); // 사각형 = 삼각형 2개 = 꼭짓점 6개
@@ -132,7 +145,7 @@ export function buildMesh(mat: Uint8Array, o: MeshOptions): Mesh {
 
   for (let z = 0; z < nz; z++)
     for (let y = 0; y < ny; y++)
-      for (let x = 0; x < cut && x < nx; x++) {
+      for (let x = 0; x < nx; x++) {
         const i = at(x, y, z);
         if (!visible(x, y, z)) continue;
         const m = mat[i];
@@ -141,12 +154,12 @@ export function buildMesh(mat: Uint8Array, o: MeshOptions): Mesh {
             ? dopingColor(netDoping(dope.conc, dope.donors, dope.acceptors, i), peak)
             : m === EMPTY ? VOIDCOL : MATCOL[m] ?? [200, 200, 200];
         if (o.diff) col = mixDiff(col, o.diff[i]);
-        if (x + 1 >= cut || x + 1 >= nx || !visible(x + 1, y, z)) emit(x, y, z, 0, col);
-        if (x === 0 || !visible(x - 1, y, z)) emit(x, y, z, 1, col);
-        if (y + 1 >= ny || !visible(x, y + 1, z)) emit(x, y, z, 2, col);
-        if (y === 0 || !visible(x, y - 1, z)) emit(x, y, z, 3, col);
-        if (z + 1 >= nz || !visible(x, y, z + 1)) emit(x, y, z, 4, col);
-        if (z === 0 || !visible(x, y, z - 1)) emit(x, y, z, 5, col);
+        if (!visible(x + 1, y, z)) emit(x, y, z, 0, col);
+        if (!visible(x - 1, y, z)) emit(x, y, z, 1, col);
+        if (!visible(x, y + 1, z)) emit(x, y, z, 2, col);
+        if (!visible(x, y - 1, z)) emit(x, y, z, 3, col);
+        if (!visible(x, y, z + 1)) emit(x, y, z, 4, col);
+        if (!visible(x, y, z - 1)) emit(x, y, z, 5, col);
       }
 
   const mesh: Mesh = { position, normal, color, triangles: faces * 2 };
@@ -249,7 +262,13 @@ export function smoothMesh(m: Mesh, iterations: number, lambda = 0.5): Mesh {
 export function buildSmoothMesh(mat: Uint8Array, o: MeshOptions): Mesh {
   const { nx, ny, nz } = o;
   const n = nx * ny * nz;
-  const cut = Math.min(o.cutX ?? nx, nx);
+  const axis = o.cutAxis ?? 0;
+  const cutDim = axis === 0 ? nx : axis === 1 ? ny : nz;
+  const cut = Math.min(o.cutX ?? cutDim, cutDim);
+  /** 절단 축 위의 좌표. */
+  const cutCoord = (x: number, y: number, z: number) => (axis === 0 ? x : axis === 1 ? y : z);
+  /** 축마다 다른 상한 — 절단 축만 cut에서 잘린다. */
+  const limX = axis === 0 ? cut : nx, limY = axis === 1 ? cut : ny, limZ = axis === 2 ? cut : nz;
   const voids = o.voids;
   const hidden = o.hidden;
   const passes = Math.max(0, o.smooth ?? 2);
@@ -273,8 +292,8 @@ export function buildSmoothMesh(mat: Uint8Array, o: MeshOptions): Mesh {
     if (!lf) { lf = new Float32Array(n); labelField.set(m, lf); }
     lf[i] = 1;
     const x = i % nx;
-    if (x >= cut) continue; // 경계 상자는 보이는 부분만으로 잡는다
     const y = ((i / nx) | 0) % ny, z = (i / (nx * ny)) | 0;
+    if (cutCoord(x, y, z) >= cut) continue; // 경계 상자는 보이는 부분만으로 잡는다
     if (x < x0) x0 = x; if (x > x1) x1 = x;
     if (y < y0) y0 = y; if (y > y1) y1 = y;
     if (z < z0) z0 = z; if (z > z1) z1 = z;
@@ -300,9 +319,9 @@ export function buildSmoothMesh(mat: Uint8Array, o: MeshOptions): Mesh {
   const P = 2;
   const px = nx + 2 * P, py = ny + 2 * P, pz = nz + 2 * P;
   const padded = new Float32Array(px * py * pz);
-  for (let z = 0; z < nz; z++)
-    for (let y = 0; y < ny; y++)
-      for (let x = 0; x < cut; x++)
+  for (let z = 0; z < limZ; z++)
+    for (let y = 0; y < limY; y++)
+      for (let x = 0; x < limX; x++)
         padded[x + P + px * (y + P + py * (z + P))] = blurred[x + nx * (y + ny * z)];
 
   const pad = passes + 2;
@@ -342,14 +361,14 @@ export function buildSmoothMesh(mat: Uint8Array, o: MeshOptions): Mesh {
   const WI = new Int32Array(8);
   const WW = new Float64Array(8);
   const weigh = (sx: number, sy: number, sz: number) => {
-    const ax = Math.max(0, Math.min(cut - 1, sx));
-    const ay = Math.max(0, Math.min(ny - 1, sy));
-    const az = Math.max(0, Math.min(nz - 1, sz));
+    const ax = Math.max(0, Math.min(limX - 1, sx));
+    const ay = Math.max(0, Math.min(limY - 1, sy));
+    const az = Math.max(0, Math.min(limZ - 1, sz));
     const xi = Math.floor(ax), yi = Math.floor(ay), zi = Math.floor(az);
     const fx = ax - xi, fy = ay - yi, fz = az - zi;
-    const xa = Math.max(0, Math.min(cut - 1, xi)), xb = Math.max(0, Math.min(cut - 1, xi + 1));
-    const ya = Math.max(0, Math.min(ny - 1, yi)), yb = Math.max(0, Math.min(ny - 1, yi + 1));
-    const za = Math.max(0, Math.min(nz - 1, zi)), zb = Math.max(0, Math.min(nz - 1, zi + 1));
+    const xa = Math.max(0, Math.min(limX - 1, xi)), xb = Math.max(0, Math.min(limX - 1, xi + 1));
+    const ya = Math.max(0, Math.min(limY - 1, yi)), yb = Math.max(0, Math.min(limY - 1, yi + 1));
+    const za = Math.max(0, Math.min(limZ - 1, zi)), zb = Math.max(0, Math.min(limZ - 1, zi + 1));
     const ra = nx * ya, rb = nx * yb, la = nx * ny * za, lb = nx * ny * zb;
     WI[0] = xa + ra + la; WI[1] = xb + ra + la; WI[2] = xa + rb + la; WI[3] = xb + rb + la;
     WI[4] = xa + ra + lb; WI[5] = xb + ra + lb; WI[6] = xa + rb + lb; WI[7] = xb + rb + lb;
@@ -390,9 +409,9 @@ export function buildSmoothMesh(mat: Uint8Array, o: MeshOptions): Mesh {
   /** 흐린 장이 아무 말도 안 해 줄 때를 위한 원본 복셀 조회. */
   const nb = [1, -1, nx, -nx, nx * ny, -(nx * ny)];
   const nearestAt = (sx: number, sy: number, sz: number): number => {
-    const vx = Math.max(0, Math.min(cut - 1, Math.round(sx)));
-    const vy = Math.max(0, Math.min(ny - 1, Math.round(sy)));
-    const vz = Math.max(0, Math.min(nz - 1, Math.round(sz)));
+    const vx = Math.max(0, Math.min(limX - 1, Math.round(sx)));
+    const vy = Math.max(0, Math.min(limY - 1, Math.round(sy)));
+    const vz = Math.max(0, Math.min(limZ - 1, Math.round(sz)));
     let idx = vx + nx * (vy + ny * vz);
     const m = mat[idx];
     if ((m === EMPTY && !(voids && voids[idx])) || (m !== EMPTY && hidden?.has(m))) {
@@ -427,9 +446,9 @@ export function buildSmoothMesh(mat: Uint8Array, o: MeshOptions): Mesh {
       Math.abs(position[t + o] - plane) < 0.75 &&
       Math.abs(position[t + 3 + o] - plane) < 0.75 &&
       Math.abs(position[t + 6 + o] - plane) < 0.75;
-    if (anx > 0.85 && (on(0, cut - 0.5) || on(0, -0.5))) return true;
-    if (any > 0.85 && (on(1, -0.5) || on(1, ny - 0.5))) return true;
-    if (anz > 0.85 && (on(2, -0.5) || on(2, nz - 0.5))) return true;
+    if (anx > 0.85 && (on(0, limX - 0.5) || on(0, -0.5))) return true;
+    if (any > 0.85 && (on(1, limY - 0.5) || on(1, -0.5))) return true;
+    if (anz > 0.85 && (on(2, limZ - 0.5) || on(2, -0.5))) return true;
     return false;
   };
 
@@ -486,9 +505,9 @@ export function buildSmoothMesh(mat: Uint8Array, o: MeshOptions): Mesh {
         : m === EMPTY ? VOIDCOL : MATCOL[m] ?? [200, 200, 200];
     if (o.diff) {
       // 변경분은 있고 없고뿐이라 섞을 것이 없다 — 가장 가까운 칸을 그대로 읽는다.
-      const vx = Math.max(0, Math.min(cut - 1, Math.round(sx)));
-      const vy = Math.max(0, Math.min(ny - 1, Math.round(sy)));
-      const vz = Math.max(0, Math.min(nz - 1, Math.round(sz)));
+      const vx = Math.max(0, Math.min(limX - 1, Math.round(sx)));
+      const vy = Math.max(0, Math.min(limY - 1, Math.round(sy)));
+      const vz = Math.max(0, Math.min(limZ - 1, Math.round(sz)));
       c = mixDiff(c, o.diff[vx + nx * (vy + ny * vz)]);
     }
     for (let v2 = 0; v2 < 3; v2++) {
