@@ -24,7 +24,7 @@ import { newProject, validateProject } from "../project/serialize";
 import { defaultParams } from "../project/nodes";
 import { Executor } from "../runner/executor";
 import { EMPTY, SI, OX, NIT, PR, MET, MSI, B, P_, AS, DG, DREL, SEG_M } from "../materials";
-import { DEFAULT_LIBRARY, removalOf, stopLayersOf } from "../library";
+import { DEFAULT_LIBRARY, removalOf, stopLayersOf, selectivityOf } from "../library";
 import { annealPlan, diffusivity, dealGrove, dealGroveTime, opOxidize, opSilicide, opDeposit, opEtch, opPRCoat, opExpose, opDevelop, opCMP, opImplant, opAnneal } from "../ops";
 import { columnTop, countOf, sumOf, surfaceZ } from "../measure";
 import { stripeMask, fullMask } from "../masks";
@@ -682,6 +682,35 @@ describe("증착 방식 — 커버리지 하나로 갈리지 않는다", () => {
     const a = stepCoverage(1, 1), b = stepCoverage(1, 12);
     expect(a.side).toBe(b.side);
     expect(a.ratio).toBe(1);
+  });
+});
+
+describe("하드마스크 — 레지스트가 못 버티는 식각을 대신 받는다", () => {
+  /** 실리콘 위 두께 10 마스크막에 실리콘 RIE를 걸고, 남은 비율을 돌려준다. */
+  function survives(matId: string, seconds: number) {
+    const NX = 40, NY = 8, NZ = 50, T = 10;
+    const s2 = createSim(NX, NY, NZ);
+    const mat = newMat(s2), phi = newPhi(s2);
+    const m = DEFAULT_LIBRARY.mat.index[matId];
+    for (let z = 0; z < 20; z++)
+      for (let y = 0; y < NY; y++) for (let x = 0; x < NX; x++) mat[at(s2, x, y, z)] = SI;
+    for (let z = 20; z < 20 + T; z++)
+      for (let y = 0; y < NY; y++) for (let x = 0; x < NX; x++) mat[at(s2, x, y, z)] = m;
+    s2.phiDirty = true;
+    opEtch(s2, mat, phi, selectivityOf(DEFAULT_LIBRARY, "RIE_silicon"), seconds, 0.97);
+    let left = 0;
+    for (let i = 0; i < s2.N; i++) if (mat[i] === m) left++;
+    return left / (NX * NY * T);
+  }
+
+  it("긴 식각에서 레지스트는 사라지고 하드마스크는 남는다", () => {
+    // 이게 하드마스크가 있는 이유 전부다. 같은 두께, 같은 식각에서 60초면
+    // 레지스트는 흔적도 없고 탄소·질화막·산화막은 대부분 살아 있다.
+    expect(survives("PR", 60), "레지스트").toBe(0);
+    for (const id of ["aC", "SiON", "Si3N4", "SiO2", "TiN"])
+      expect(survives(id, 60), `${id}`).toBeGreaterThan(0.5);
+    // 짧은 식각에서는 레지스트도 버틴다 — 하드마스크가 늘 필요한 것은 아니다.
+    expect(survives("PR", 10)).toBeGreaterThan(0.5);
   });
 });
 

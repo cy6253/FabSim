@@ -22,7 +22,7 @@
       "phase": "dry",
       "anisotropy": 0.9,
       "baseRate": 1.0,
-      "selectivity": { "SiO2": 1.0, "Si3N4": 0.3, "Si": 0.1, "polySi": 0.1, "PR": 0.25 },
+      "selectivity": { "SiO2": 1.0, "SiON": 0.8, "Si3N4": 0.3, "Si": 0.1, "polySi": 0.1, "PR": 0.25, "aC": 0.06 },
       "teaches": "콘택 홀 — 이방성이 높아야 수직 벽이 선다"
     },
     {
@@ -31,7 +31,7 @@
       "phase": "dry",
       "anisotropy": 0.85,
       "baseRate": 1.0,
-      "selectivity": { "Si3N4": 1.0, "SiO2": 0.1, "Si": 0.15, "polySi": 0.15, "PR": 0.2 },
+      "selectivity": { "Si3N4": 1.0, "SiON": 0.7, "SiO2": 0.1, "Si": 0.15, "polySi": 0.15, "PR": 0.2, "aC": 0.05 },
       "teaches": "하부 산화막을 남기고 질화막만 여는 패턴 전사"
     },
     {
@@ -40,7 +40,7 @@
       "phase": "dry",
       "anisotropy": 0.95,
       "baseRate": 1.0,
-      "selectivity": { "polySi": 1.0, "Si": 0.9, "SiO2": 0.01, "Si3N4": 0.05, "PR": 0.3 },
+      "selectivity": { "polySi": 1.0, "Si": 0.9, "SiO2": 0.01, "Si3N4": 0.05, "SiON": 0.04, "PR": 0.3, "aC": 0.03 },
       "teaches": "게이트 식각 — 얇은 게이트 산화막에서 멈춰야 한다 (선택비 100:1)"
     },
     {
@@ -49,7 +49,7 @@
       "phase": "dry",
       "anisotropy": 0.97,
       "baseRate": 1.0,
-      "selectivity": { "Si": 1.0, "polySi": 1.0, "SiO2": 0.02, "Si3N4": 0.05, "PR": 0.25 },
+      "selectivity": { "Si": 1.0, "polySi": 1.0, "SiO2": 0.02, "Si3N4": 0.05, "SiON": 0.04, "PR": 0.25, "aC": 0.03 },
       "teaches": "STI 트렌치 — 깊은 수직 식각"
     },
     {
@@ -62,12 +62,21 @@
       "teaches": "배선 패터닝"
     },
     {
+      "id": "RIE_carbon",
+      "name": "탄소 하드마스크 RIE (O2/N2)",
+      "phase": "dry",
+      "anisotropy": 0.92,
+      "baseRate": 1.0,
+      "selectivity": { "aC": 1.0, "PR": 0.9, "PR_exposed": 0.9, "SiON": 0.08, "SiO2": 0.05, "Si3N4": 0.05, "Si": 0.02, "polySi": 0.02 },
+      "teaches": "레지스트가 거의 같은 속도로 깎인다 — 그래서 하드마스크는 얇게, 레지스트는 두껍게"
+    },
+    {
       "id": "BOE",
       "name": "BOE (완충 HF, 습식)",
       "phase": "wet",
       "anisotropy": 0.0,
       "baseRate": 3.0,
-      "selectivity": { "SiO2": 1.0, "Si3N4": 0.01, "Si": 0.001, "polySi": 0.001, "PR": 0.05 },
+      "selectivity": { "SiO2": 1.0, "SiON": 0.3, "Si3N4": 0.01, "Si": 0.001, "polySi": 0.001, "PR": 0.05, "aC": 0.0 },
       "teaches": "등방이라 마스크 아래로 파고든다 — 언더컷"
     },
     {
@@ -76,7 +85,7 @@
       "phase": "wet",
       "anisotropy": 0.0,
       "baseRate": 2.0,
-      "selectivity": { "Si3N4": 1.0, "SiO2": 0.025, "Si": 0.01, "polySi": 0.01 },
+      "selectivity": { "Si3N4": 1.0, "SiON": 0.5, "SiO2": 0.025, "Si": 0.01, "polySi": 0.01 },
       "teaches": "LOCOS에서 필드 산화막을 남기고 질화막만 벗긴다"
     },
     {
@@ -99,12 +108,12 @@
     },
     {
       "id": "piranha_strip",
-      "name": "PR 제거 (애싱/피라냐)",
+      "name": "애싱 (레지스트·탄소 제거)",
       "phase": "wet",
       "anisotropy": 0.0,
       "baseRate": 5.0,
-      "selectivity": { "PR": 1.0, "PR_exposed": 1.0 },
-      "teaches": "다른 재질을 건드리지 않고 레지스트만 제거"
+      "selectivity": { "PR": 1.0, "PR_exposed": 1.0, "aC": 1.0 },
+      "teaches": "산소가 유기물을 태운다 — 레지스트와 탄소 하드마스크가 같이 없어진다"
     }
   ],
 
@@ -158,7 +167,7 @@
       "id": "slurry_oxide",
       "name": "산화막 슬러리",
       "baseRate": 1.0,
-      "removal": { "SiO2": 1.0, "Si3N4": 0.15, "polySi": 0.5, "W": 0.3 },
+      "removal": { "SiO2": 1.0, "SiON": 0.9, "Si3N4": 0.15, "polySi": 0.5, "W": 0.3, "aC": 0.6 },
       "stopOn": ["Si3N4"],
       "teaches": "STI — 질화막에서 멈춘다"
     },
@@ -166,7 +175,7 @@
       "id": "slurry_tungsten",
       "name": "텅스텐 슬러리",
       "baseRate": 1.0,
-      "removal": { "W": 1.0, "TiN": 0.8, "Metal": 1.0, "Ti": 0.9, "MetalSi": 0.25, "TiSi2": 0.2, "SiO2": 0.1 },
+      "removal": { "W": 1.0, "TiN": 0.8, "Metal": 1.0, "Ti": 0.9, "MetalSi": 0.25, "TiSi2": 0.2, "SiO2": 0.1, "SiON": 0.1, "aC": 0.5 },
       "stopOn": ["SiO2"],
       "teaches": "플러그 — 산화막 위 금속만 걷어내 콘택만 남긴다"
     },
@@ -174,7 +183,7 @@
       "id": "slurry_poly",
       "name": "폴리 슬러리",
       "baseRate": 1.0,
-      "removal": { "polySi": 1.0, "Si": 1.0, "SiO2": 0.05, "Si3N4": 0.02 },
+      "removal": { "polySi": 1.0, "Si": 1.0, "SiO2": 0.05, "SiON": 0.05, "Si3N4": 0.02, "aC": 0.4 },
       "stopOn": ["SiO2"],
       "teaches": "다마신 계열"
     }

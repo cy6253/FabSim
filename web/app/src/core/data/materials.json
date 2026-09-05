@@ -13,7 +13,12 @@
     "exposure: transparent(광선이 지나감) | resist(노광됨) | opaque(막음)",
     "carriesOxidant: 산화제가 이 재질을 통해 이동할 수 있는가. 진공과 산화막만.",
     "oxidizesTo: 산화되면 무엇이 되는가. null이면 산화 안 됨.",
-    "expansion: 산화 부피비. 실리콘 1이 산화막 2.17이 된다."
+    "expansion: 산화 부피비. 실리콘 1이 산화막 2.17이 된다.",
+    "",
+    "하드마스크: 레지스트가 못 버티는 긴 식각을 대신 받는 막이다. 질화막·산화막·TiN이",
+    "  이미 그 일을 하고 있고, aC(비정질 탄소)와 SiON을 전용으로 더했다. 하드마스크가",
+    "  하드마스크이려면 ①제 식각액으로는 잘 깎이고 ②일하는 식각에서는 거의 안 깎여야",
+    "  한다 — 그 두 조건이 공정 표의 선택비에 들어 있다."
   ],
   "version": 1,
   "materials": [
@@ -161,6 +166,24 @@
       "color": [198, 112, 62],
       "diffusionFactor": 0.01,
       "exposure": "opaque"
+    },
+    {
+      "id": "aC",
+      "name": "탄소 하드마스크",
+      "kind": "insulator",
+      "color": [62, 64, 72],
+      "diffusionFactor": 0.004,
+      "exposure": "opaque",
+      "_note": "비정질 탄소(APF). 깊은 식각에서 PR 대신 버티고, 끝나면 산소 애싱으로 태워 없앤다"
+    },
+    {
+      "id": "SiON",
+      "name": "SiON",
+      "kind": "insulator",
+      "color": [196, 186, 120],
+      "diffusionFactor": 0.004,
+      "exposure": "opaque",
+      "_note": "산질화막. 하드마스크 겸 반사방지막"
     }
   ],
   "species": [

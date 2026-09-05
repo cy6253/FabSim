@@ -208,3 +208,52 @@ describe("재질이 데이터라는 증거 — 연산자를 안 고치고 다른
     expect(sumOf(s, conc[B])).toBeCloseTo(before, 4);
   });
 });
+
+describe("하드마스크 — 재질만 있고 쓸 수 없으면 안 된다", () => {
+  const L = DEFAULT_LIBRARY;
+  const sel = (etchant: string, mat: string) =>
+    L.proc.byId.etchant[etchant]?.selectivity[mat] ?? 0;
+  /** 하드마스크 노릇을 하라고 넣은 재질들. */
+  const HARD = ["Si3N4", "SiO2", "TiN", "aC", "SiON"];
+
+  it("하드마스크로 쓰는 재질이 전부 표에 있다", () => {
+    for (const id of HARD) expect(L.mat.index[id], id).toBeDefined();
+  });
+
+  it("① 제 식각액으로는 잘 깎이고 ② 일하는 식각에서는 거의 안 깎인다", () => {
+    // 이 두 조건이 하드마스크를 하드마스크이게 한다. 하나라도 빠지면 패터닝을
+    // 못 하거나(①), 막아 줘야 할 식각에서 같이 사라진다(②).
+    for (const id of HARD) {
+      const best = Math.max(...L.proc.etchants.map((e) => e.selectivity[id] ?? 0));
+      expect(best, `${id}를 벗길 수단`).toBeGreaterThanOrEqual(0.7);
+      // 깊은 식각 **하나 이상**에서 PR보다 나아야 마스크로 쓸 값어치가 있다.
+      // 전부는 아니다 — 질화막은 산화막 RIE에서 0.3으로 PR(0.25)보다도 빨리
+      // 깎인다. 실제로 그렇고, 깊은 콘택 식각에 질화막 대신 탄소를 쓰는 이유다.
+      const deep = ["RIE_silicon", "RIE_oxide"].filter((et) => !(id === "SiO2" && et === "RIE_oxide"));
+      const survives = deep.filter((et) => sel(et, id) < sel(et, "PR"));
+      expect(survives.length, `${id}가 견디는 깊은 식각`).toBeGreaterThan(0);
+    }
+  });
+
+  it("질화막은 산화막 RIE를 못 견딘다 — 그래서 탄소 하드마스크가 있다", () => {
+    // 이건 결함이 아니라 값이다. 표에 그렇게 적혀 있고, 그 차이가 재질을
+    // 골라야 하는 이유를 만든다.
+    expect(sel("RIE_oxide", "Si3N4"), "질화막").toBeGreaterThan(sel("RIE_oxide", "PR"));
+    expect(sel("RIE_oxide", "aC"), "탄소").toBeLessThan(sel("RIE_oxide", "PR") / 3);
+  });
+
+  it("새 재질도 슬러리가 갈 수 있다 — 표에 없으면 패드가 올라탄다", () => {
+    for (const id of ["aC", "SiON"]) {
+      const best = Math.max(...L.proc.slurries.map((s2) => s2.removal[id] ?? 0));
+      expect(best, `${id}를 연마할 슬러리`).toBeGreaterThan(0);
+    }
+  });
+
+  it("공정 표가 가리키는 재질은 전부 존재한다", () => {
+    // buildLibrary가 이미 터뜨리지만, 새 재질을 넣다 오타를 내면 여기서 먼저 걸린다.
+    for (const e of L.proc.etchants)
+      for (const k of Object.keys(e.selectivity)) expect(L.mat.index[k], `${e.id}:${k}`).toBeDefined();
+    for (const s2 of L.proc.slurries)
+      for (const k of Object.keys(s2.removal)) expect(L.mat.index[k], `${s2.id}:${k}`).toBeDefined();
+  });
+});
