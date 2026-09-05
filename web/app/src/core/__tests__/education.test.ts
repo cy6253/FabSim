@@ -27,6 +27,22 @@ function runWithDiagnostics(id: string, tweak?: (p: ReturnType<typeof exampleByI
   return { p, ex, frames, diags: analyze(frames, chain, ex.library) };
 }
 
+describe("예제가 실제로 그 공정을 해내는가", () => {
+  // 진단이 이미 교재의 결함을 두 번 잡았다(M4). 여기는 그 자리를 상설로 만든 것 —
+  // "레시피가 끝났을 때 구조가 실제로 그 모양인가"를 셀 수로 못 박는다.
+  it("LOCOS·allops: 인산 제거 뒤 질화막이 한 셀도 남지 않는다", () => {
+    // 남았던 이유는 식각이 약해서가 아니라 **질화막 위에 산화막이 자라서**였다.
+    // 그 캡의 SiO2 선택비가 0.025라 인산이 뚫지 못했다. 성장 자리를 고친 뒤 0.
+    for (const id of ["locos", "allops"]) {
+      const { ex, frames } = runWithDiagnostics(id);
+      const last = ex.materialOf(frames[frames.length - 1]);
+      let nit = 0;
+      for (let i = 0; i < last.length; i++) if (last[i] === NIT) nit++;
+      expect(nit, `${id} 최종 질화막`).toBe(0);
+    }
+  });
+});
+
 describe("진단 — 문제를 잡아낸다", () => {
   it("나쁜 커버리지의 보이드를 경고하고, 컨포멀이면 조용하다", () => {
     const bad = runWithDiagnostics("trench");

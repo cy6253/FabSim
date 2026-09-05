@@ -186,6 +186,66 @@ describe("열공정 — 파이썬이 확인한 주장을 TS가 재현한다", ()
     expect(encroach).toBeLessThan(s.NX - EDGE); // 마스크 전 구간을 먹지 않는다
   });
 
+  it("성장 자리: 질화막 마스크 **위**에는 산화막이 자라지 않는다", () => {
+    // 성장을 "소비가 일어난 컬럼"으로 걸렀을 때의 결함. 산화제가 패드 산화막을
+    // 타고 마스크 밑으로 기어들어가 컬럼을 열면, 같은 컬럼의 진공 — 질화막
+    // 윗면 — 에 산화막이 깔렸다. 실측으로 LOCOS 성장분의 27%가 마스크 위였고,
+    // 그 캡이 인산 제거를 막아 질화막이 살아남았다.
+    const { s, mat, phi, conc } = flatWafer(48, 12, 40, 20);
+    for (let z = 20; z < 22; z++)
+      for (let y = 0; y < s.NY; y++) for (let x = 0; x < s.NX; x++) mat[at(s, x, y, z)] = OX;
+    for (let z = 22; z < 25; z++)
+      for (let y = 0; y < s.NY; y++)
+        for (let x = EDGE; x < s.NX; x++) mat[at(s, x, y, z)] = NIT;
+    s.phiDirty = true;
+
+    opOxidize(s, mat, phi, conc, "wet1000", 40);
+
+    // 컬럼마다 질화막 꼭대기를 찾고 그보다 위에 있는 산화막을 센다.
+    let aboveMask = 0;
+    for (let y = 0; y < s.NY; y++)
+      for (let x = 0; x < s.NX; x++) {
+        let top = -1;
+        for (let z = s.NZ - 1; z >= 0; z--) if (mat[at(s, x, y, z)] === NIT) { top = z; break; }
+        if (top < 0) continue;
+        for (let z = top + 1; z < s.NZ; z++) if (mat[at(s, x, y, z)] === OX) aboveMask++;
+      }
+    expect(aboveMask, "질화막 위에 생긴 산화막").toBe(0);
+    // 그러면서 창 쪽은 여전히 자라야 한다 — 막기만 하면 고친 게 아니다.
+    expect(surfaceZ(s, mat, 2, 6)).toBeGreaterThan(21);
+  });
+
+  it("성장 자리: 수직 벽에서는 옆으로 자란다", () => {
+    // 컬럼 게이트의 반대쪽 증상. 벽 옆 진공은 그 컬럼에 소비된 Si가 없어서
+    // 산화막이 안 생겼다 — 트렌치 라이너·게이트 측벽 재산화가 그 경우다.
+    const { s, mat, phi, conc } = flatWafer(40, 12, 40, 10);
+    const W0 = 18, W1 = 22, TOP = 26;
+    for (let z = 10; z < TOP; z++)
+      for (let y = 0; y < s.NY; y++)
+        for (let x = W0; x < W1; x++) mat[at(s, x, y, z)] = SI;
+    s.phiDirty = true;
+
+    const r = opOxidize(s, mat, phi, conc, "wet1000", 40);
+    expect(r.c).toBeGreaterThan(0);
+    // 벽 허리 높이에서 양옆으로 산화막이 나와야 한다.
+    const zMid = (10 + TOP) >> 1;
+    expect(mat[at(s, W0 - 1, 6, zMid)], "벽 왼쪽").toBe(OX);
+    expect(mat[at(s, W1, 6, zMid)], "벽 오른쪽").toBe(OX);
+  });
+
+  it("성장 자리: 패드 산화막 위에는 자란다", () => {
+    // 최근접 고체가 산화막이면 통과시켜야 한다. 이걸 막으면 두 번째 산화가
+    // 아예 두꺼워지지 않는다.
+    const { s, mat, phi, conc } = flatWafer(24, 12, 40, 20);
+    for (let z = 20; z < 23; z++)
+      for (let y = 0; y < s.NY; y++) for (let x = 0; x < s.NX; x++) mat[at(s, x, y, z)] = OX;
+    s.phiDirty = true;
+    const before = surfaceZ(s, mat, 6, 6);
+    const r = opOxidize(s, mat, phi, conc, "wet1100", 200);
+    expect(r.g, "패드 위 성장").toBeGreaterThan(0);
+    expect(surfaceZ(s, mat, 6, 6)).toBeGreaterThan(before);
+  });
+
   it("segregation: 붕소는 고갈, 비소는 파일업, 총량은 보존", () => {
     const { s, mat, phi, conc } = flatWafer(24, 12, 40, 20);
     for (let i = 0; i < s.N; i++)

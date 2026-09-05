@@ -748,7 +748,8 @@ function oxidantReach(mat,lOx){
 function opOxidize(mat,phi,conc,key,seconds){
   const x=dealGrove(key,seconds);
   const cd=x*CONSUME, gd=x*GROW;
-  const reach=oxidantReach(mat,Math.max(1,Math.round(x)));
+  const lOx=Math.max(1,Math.round(x));
+  const reach=oxidantReach(mat,lOx);
   const oxid=S.u8a,isSi=S.u8b;
   let anyO=false,anySi=false;
   for(let i=0;i<N;i++){
@@ -768,14 +769,32 @@ function opOxidize(mat,phi,conc,key,seconds){
   // not from the silicon. Measuring from silicon only works on a bare wafer:
   // once a pad oxide covers it the vacuum is too far from any Si, so the
   // surface stops rising while the silicon keeps being eaten.
-  const active=new Uint8Array(NX*NY);
-  for(const i of consumed)active[XOF(i)+NX*YOF(i)]=1;
+  //
+  // 2026-09-05: WHERE it attaches is a distance question, not a column one.
+  // Gating on "a column where consumption happened" grew oxide ON TOP OF THE
+  // NITRIDE MASK -- the oxidant crawls under the mask through the pad oxide,
+  // eats silicon there, and that opens the whole column including the vacuum
+  // above the mask. Measured on the LOCOS example: 27% of the grown cells sat
+  // above the nitride in a 9-12 voxel cap, and that cap then shielded the
+  // nitride from the phosphoric strip. Three local conditions instead; the
+  // last uses the EDT feature transform rather than "first solid below",
+  // which would bring the column assumption back and would also miss oxide
+  // growing sideways off a vertical wall.
+  const cons=S.u8a;                     // oxid is spent once dIn is out
+  cons.fill(0);
+  for(const i of consumed)cons[i]=1;
+  const dC=edt3(cons,false,S.d1);       // dIn is no longer needed
   const solid=S.u8b;
   for(let i=0;i<N;i++)solid[i]=mat[i]!==EMPTY?1:0;
-  const dOff=edt3(solid,false,S.d2);
+  const dOff=edt3(solid,true,S.d2);
+  const feat=S.feat, outer=gd+lOx;
   const grown=[];
-  for(let i=0;i<N;i++)
-    if(mat[i]===EMPTY&&reach[i]&&dOff[i]<=gd&&active[XOF(i)+NX*YOF(i)])grown.push(i);
+  for(let i=0;i<N;i++){
+    if(mat[i]!==EMPTY||!reach[i])continue;
+    if(dOff[i]>gd||dC[i]>outer)continue;
+    const f=feat[i];
+    if(cons[f]||mat[f]===OX)grown.push(i);
+  }
   segregate(mat,conc,consumed);
   if(consumed.length)concDirty=true;
   for(const i of consumed)mat[i]=OX;

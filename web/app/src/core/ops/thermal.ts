@@ -122,10 +122,11 @@ export function opOxidize(
   ambience: string,
   seconds: number,
 ): OxidizeResult {
-  const { NX, NY, N, S } = s;
-  const { carriesOxidant, oxidizesTo, expansion } = s.lib.mat;
+  const { N, S } = s;
+  const { carriesOxidant, oxidantPermeable, oxidizesTo, expansion } = s.lib.mat;
   const x = dealGrove(ambience, seconds, 0, dgTable(s));
-  const reach = oxidantReach(s, mat, Math.max(1, Math.round(x)));
+  const lOx = Math.max(1, Math.round(x));
+  const reach = oxidantReach(s, mat, lOx);
 
   const oxid = S.u8a,
     src = S.u8b;
@@ -152,16 +153,44 @@ export function opOxidize(
   const consumed: number[] = [];
   for (let i = 0; i < N; i++) if (src[i] && dIn[i] <= cd) consumed.push(i);
 
-  // 실제로 소비된 컬럼에서만 위로 자란다.
-  const active = new Uint8Array(NX * NY);
-  for (const i of consumed) active[XOF(s, i) + NX * YOF(s, i)] = 1;
+  /**
+   * 새 산화막이 **어디에** 붙는가 — 컬럼이 아니라 거리로 고른다.
+   *
+   * 예전에는 "소비가 일어난 컬럼"으로 걸렀다. LOCOS에서 산화제는 패드 산화막을
+   * 타고 질화막 **아래로** 기어 들어가 그 아래 Si를 먹는다. 그러면 그 컬럼이
+   * 열리고, 같은 컬럼의 진공 — 즉 **질화막 윗면** — 에 산화막이 깔렸다.
+   * 실측으로 LOCOS 성장분의 27%가 마스크 위였고, 그 캡이 인산 제거를 막아
+   * 질화막이 5,120셀 살아남았다. 마스크가 하는 일을 마스크 위에 자란 것이
+   * 지워 버린 셈이다.
+   *
+   * 세 조건으로 바꾼다:
+   *  - `dOff ≤ gd`  지금 고체 표면에서 자랄 만큼만 (예전과 같다)
+   *  - `dC ≤ gd + lOx`  **소비가 실제로 일어난 근처**에서만. 산화막을 건너오는
+   *    여유가 lOx다 — 산화제가 그만큼밖에 못 지나가므로 그 너머는 소비도 없다.
+   *  - 최근접 고체가 **산화막이거나 지금 소비되는 칸**일 것. 새 산화막은 계면에
+   *    생겨 위를 밀어올리므로, 밀려 올라갈 것이 산화막이어야 한다. 질화막
+   *    윗면은 최근접 고체가 질화막이라 여기서 걸린다.
+   *
+   * 마지막 조건을 "바로 아래 첫 고체"로 두면 컬럼 가정이 되살아난다. EDT의
+   * feature transform은 같은 판정을 방향과 무관하게 해 주고, 덤으로 **수직
+   * 벽에서 옆으로 자라는 산화막**(트렌치 라이너, 게이트 측벽 재산화)이 맞게 된다.
+   */
+  const cons = S.u8a; // oxid는 dIn을 뽑는 데 다 썼다
+  cons.fill(0);
+  for (const i of consumed) cons[i] = 1;
+  const dC = edt3(s, cons, false, S.d1); // dIn은 더 안 쓴다
   const solid = S.u8b;
   for (let i = 0; i < N; i++) solid[i] = mat[i] !== EMPTY ? 1 : 0;
-  const dOff = edt3(s, solid, false, S.d2);
+  const dOff = edt3(s, solid, true, S.d2);
+  const feat = S.feat;
+  const outer = gd + lOx;
   const grown: number[] = [];
-  for (let i = 0; i < N; i++)
-    if (mat[i] === EMPTY && reach[i] && dOff[i] <= gd && active[XOF(s, i) + NX * YOF(s, i)])
-      grown.push(i);
+  for (let i = 0; i < N; i++) {
+    if (mat[i] !== EMPTY || !reach[i]) continue;
+    if (dOff[i] > gd || dC[i] > outer) continue;
+    const f = feat[i];
+    if (cons[f] || oxidantPermeable[mat[f]] || mat[f] === product) grown.push(i);
+  }
 
   segregate(s, mat, conc, consumed, srcMat);
   if (consumed.length) s.concDirty = true;

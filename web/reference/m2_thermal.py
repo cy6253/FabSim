@@ -121,7 +121,8 @@ def op_oxidize(mat, conc, ambience, temp, seconds):
     x = deal_grove(ambience, temp, seconds)
     consume_d, grow_d = x * CONSUME_FRAC, x * GROW_FRAC
 
-    reach = oxidant_reach(mat, max(1.0, x))
+    l_ox = max(1.0, x)
+    reach = oxidant_reach(mat, l_ox)
     oxidant = [reach[i] and mat[i] in (EMPTY, OX) for i in range(N)]
     if not any(oxidant):
         return 0, 0, x
@@ -139,15 +140,38 @@ def op_oxidize(mat, conc, ambience, temp, seconds):
     # from the silicon. Measuring from silicon works only on a bare wafer -- as
     # soon as a pad oxide covers it, the vacuum is too far from any Si and the
     # surface stops rising while the silicon keeps being eaten.
-    active = set()
+    #
+    # WHERE it attaches is a distance question, not a column question. Gating on
+    # "a column where consumption happened" put oxide on TOP OF THE NITRIDE MASK:
+    # the oxidant crawls under the mask through the pad oxide, consumes silicon
+    # there, and that opens the whole column including the vacuum above the mask.
+    # Measured in the browser core on the LOCOS example: 24,576 of 90,624 grown
+    # cells (27%) sat above the nitride, in a 9-12 voxel cap, and that cap then
+    # shielded the nitride from the phosphoric strip so 5,120 nitride cells
+    # survived the step whose entire purpose is removing them.
+    #
+    # Three local conditions instead:
+    #   d_off <= grow_d          grow only as far out as the thickness allows
+    #   d_cons <= grow_d + l_ox  only NEAR real consumption; the oxidant cannot
+    #                            reach further than l_ox through oxide anyway
+    #   nearest solid is oxide, or is being consumed -- new oxide forms at the
+    #                            interface and lifts what is above it, so the
+    #                            thing being lifted has to be oxide. The top of
+    #                            the nitride fails here.
+    # The last one uses the EDT feature transform rather than "first solid
+    # below", which would reintroduce the column assumption and would also miss
+    # oxide growing sideways off a vertical wall.
+    cons_mask = [False] * N
     for i in consumed:
-        xx, yy, _ = xyz(i)
-        active.add(xx + NX * yy)
+        cons_mask[i] = True
+    d_cons = edt_from(cons_mask)
     solid = [mat[i] != EMPTY for i in range(N)]
-    d_off_solid = edt_from(solid)
+    d_off_solid, feat = edt3(solid, want_feature=True)
+    outer = grow_d + l_ox
     grown = [i for i in range(N)
-             if mat[i] == EMPTY and reach[i] and d_off_solid[i] <= grow_d
-             and (xyz(i)[0] + NX * xyz(i)[1]) in active]
+             if mat[i] == EMPTY and reach[i]
+             and d_off_solid[i] <= grow_d and d_cons[i] <= outer
+             and (cons_mask[feat[i]] or mat[feat[i]] == OX)]
 
     redistribute(mat, conc, consumed)
     for i in consumed:
