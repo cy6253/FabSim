@@ -257,3 +257,77 @@ describe("하드마스크 — 재질만 있고 쓸 수 없으면 안 된다", ()
       for (const k of Object.keys(s2.removal)) expect(L.mat.index[k], `${s2.id}:${k}`).toBeDefined();
   });
 });
+
+/* ---------------------------------------------------------------------- 색 */
+
+/**
+ * 화면에서 실제로 구별되는가.
+ *
+ * RGB 거리로는 눈이 느끼는 차이를 못 잰다 — 초록의 1은 파랑의 1보다 훨씬 크게
+ * 보인다. CIE Lab으로 옮겨 재야 "이 둘은 다른 색이다"가 숫자가 된다. ΔE 20이면
+ * 나란히 놓지 않아도 갈린다.
+ *
+ * 이 절이 있는 이유: 예전 표에서 질화막과 Co가 ΔE 6.9였다. 둘 다 청록이라
+ * 실리사이드 공정 화면에서 무엇이 무엇인지 알 수가 없었다.
+ */
+function lab([r, g, b]: readonly number[]): [number, number, number] {
+  const f = (u: number) => {
+    const v = u / 255;
+    return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  };
+  const [R, G, B2] = [f(r), f(g), f(b)];
+  const X = (0.4124 * R + 0.3576 * G + 0.1805 * B2) / 0.95047;
+  const Y = 0.2126 * R + 0.7152 * G + 0.0722 * B2;
+  const Z = (0.0193 * R + 0.1192 * G + 0.9505 * B2) / 1.08883;
+  const h = (t: number) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116);
+  const [fx, fy, fz] = [h(X), h(Y), h(Z)];
+  return [116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)];
+}
+
+function deltaE(a: readonly number[], b: readonly number[]): number {
+  const [l1, a1, b1] = lab(a);
+  const [l2, a2, b2] = lab(b);
+  return Math.hypot(l1 - l2, a1 - a2, b1 - b2);
+}
+
+/** 눈이 갈라 보는 최소선. 이보다 가까우면 같은 색으로 읽힌다. */
+const MIN_DE = 20;
+
+describe("색 — 나란히 놓지 않아도 갈린다", () => {
+  it("재질끼리 ΔE 20 이상 떨어져 있다", () => {
+    const L = DEFAULT_LIBRARY;
+    const ids = L.mat.key.map((_, i) => i).filter((i) => L.mat.key[i] !== "vacuum");
+    let worst = { d: Infinity, a: "", b: "" };
+    for (const i of ids)
+      for (const j of ids) {
+        if (j <= i) continue;
+        const d = deltaE(L.mat.color[i], L.mat.color[j]);
+        if (d < worst.d) worst = { d, a: L.mat.key[i], b: L.mat.key[j] };
+      }
+    expect(worst.d, `가장 가까운 쌍 ${worst.a}/${worst.b}`).toBeGreaterThanOrEqual(MIN_DE);
+  });
+
+  it("이온끼리도 갈린다 — 부호만 보이면 P와 As가 같은 색이 된다", () => {
+    const sp = DEFAULT_LIBRARY.sp;
+    for (let i = 0; i < sp.count; i++)
+      for (let j = i + 1; j < sp.count; j++)
+        expect(deltaE(sp.color[i], sp.color[j]), `${sp.key[i]}/${sp.key[j]}`).toBeGreaterThanOrEqual(MIN_DE);
+  });
+
+  it("이온 색은 형을 배신하지 않는다 — 억셉터는 따뜻하게, 도너는 차갑게", () => {
+    // a*가 양수면 붉은 쪽, b*가 양수면 노란 쪽. 억셉터는 붉고 도너는 푸르러야
+    // 이온 색을 넣어도 "n형이냐 p형이냐"를 여전히 한눈에 읽는다.
+    const sp = DEFAULT_LIBRARY.sp;
+    for (let i = 0; i < sp.count; i++) {
+      const [, a, b] = lab(sp.color[i]);
+      const acceptor = sp.key[i] === "B";
+      if (acceptor) expect(a, `${sp.key[i]} a*`).toBeGreaterThan(20);
+      else expect(b, `${sp.key[i]} b*`).toBeLessThan(0);
+    }
+  });
+
+  it("진성 회색에서 충분히 멀다 — 옅은 도핑도 색이 보인다", () => {
+    for (const c of DEFAULT_LIBRARY.sp.color)
+      expect(deltaE(c, [45, 45, 45]), `${c}`).toBeGreaterThan(40);
+  });
+});

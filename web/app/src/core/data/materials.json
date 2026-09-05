@@ -18,7 +18,15 @@
     "하드마스크: 레지스트가 못 버티는 긴 식각을 대신 받는 막이다. 질화막·산화막·TiN이",
     "  이미 그 일을 하고 있고, aC(비정질 탄소)와 SiON을 전용으로 더했다. 하드마스크가",
     "  하드마스크이려면 ①제 식각액으로는 잘 깎이고 ②일하는 식각에서는 거의 안 깎여야",
-    "  한다 — 그 두 조건이 공정 표의 선택비에 들어 있다."
+    "  한다 — 그 두 조건이 공정 표의 선택비에 들어 있다.",
+    "",
+    "color: 재질끼리 CIE Lab 거리(ΔE)를 20 이상 벌려 놓았다. 예전에는 질화막과 Co가",
+    "  ΔE 6.9, 실리사이드 셋이 10~17이라 화면에서 구분이 안 됐다. 뜻이 굳은 색",
+    "  (산화막 호박, 레지스트 보라 한 쌍, Al 은백, Cu 구리, 탄소 흑)은 붙들어 두고",
+    "  나머지를 그 재질다운 색상 띠 안에서 가장 멀리 떨어지게 골랐다.",
+    "",
+    "species.color: 도핑 보기의 색. 부호만 보이면 P와 As를 구별할 수 없어서 이온마다",
+    "  색을 준다. 억셉터는 따뜻한 쪽, 도너는 차가운 쪽에 두어 n/p는 여전히 한눈에 든다."
   ],
   "version": 1,
   "materials": [
@@ -55,7 +63,7 @@
       "id": "Si3N4",
       "name": "Nitride",
       "kind": "insulator",
-      "color": [63, 154, 140],
+      "color": [50, 134, 103],
       "diffusionFactor": 0.004,
       "exposure": "opaque"
     },
@@ -63,7 +71,7 @@
       "id": "PR",
       "name": "PR",
       "kind": "resist",
-      "color": [185, 138, 212],
+      "color": [190, 140, 214],
       "diffusionFactor": 0.01,
       "exposure": "resist",
       "exposedForm": "PR_exposed"
@@ -72,7 +80,7 @@
       "id": "PR_exposed",
       "name": "노광 PR",
       "kind": "resist",
-      "color": [124, 95, 168],
+      "color": [118, 86, 164],
       "diffusionFactor": 0.01,
       "exposure": "transparent",
       "unexposedForm": "PR"
@@ -81,7 +89,7 @@
       "id": "Metal",
       "name": "Metal",
       "kind": "metal",
-      "color": [185, 190, 201],
+      "color": [164, 166, 173],
       "diffusionFactor": 0.01,
       "exposure": "opaque"
     },
@@ -89,7 +97,7 @@
       "id": "MetalSi",
       "name": "MetalSi",
       "kind": "silicide",
-      "color": [200, 110, 140],
+      "color": [212, 125, 151],
       "diffusionFactor": 0.2,
       "exposure": "opaque"
     },
@@ -97,7 +105,7 @@
       "id": "polySi",
       "name": "폴리실리콘",
       "kind": "semiconductor",
-      "color": [128, 168, 118],
+      "color": [79, 171, 77],
       "diffusionFactor": 1,
       "exposure": "opaque",
       "oxidizesTo": "SiO2",
@@ -107,7 +115,7 @@
       "id": "W",
       "name": "W",
       "kind": "metal",
-      "color": [112, 84, 100],
+      "color": [124, 101, 80],
       "diffusionFactor": 0.01,
       "exposure": "opaque"
     },
@@ -115,7 +123,7 @@
       "id": "TiN",
       "name": "TiN",
       "kind": "metal",
-      "color": [105, 105, 105],
+      "color": [149, 134, 59],
       "diffusionFactor": 0.01,
       "exposure": "opaque"
     },
@@ -123,7 +131,7 @@
       "id": "Ti",
       "name": "Ti",
       "kind": "metal",
-      "color": [138, 170, 194],
+      "color": [104, 192, 202],
       "diffusionFactor": 0.01,
       "exposure": "opaque"
     },
@@ -131,7 +139,7 @@
       "id": "TiSi2",
       "name": "TiSi2",
       "kind": "silicide",
-      "color": [180, 80, 120],
+      "color": [113, 61, 97],
       "diffusionFactor": 0.2,
       "exposure": "opaque"
     },
@@ -139,7 +147,7 @@
       "id": "Co",
       "name": "Co",
       "kind": "metal",
-      "color": [86, 156, 148],
+      "color": [59, 59, 186],
       "diffusionFactor": 0.01,
       "exposure": "opaque"
     },
@@ -147,7 +155,7 @@
       "id": "CoSi2",
       "name": "CoSi2",
       "kind": "silicide",
-      "color": [150, 70, 110],
+      "color": [143, 50, 53],
       "diffusionFactor": 0.2,
       "exposure": "opaque"
     },
@@ -155,7 +163,7 @@
       "id": "Al",
       "name": "Al",
       "kind": "metal",
-      "color": [222, 226, 232],
+      "color": [228, 232, 238],
       "diffusionFactor": 0.01,
       "exposure": "opaque"
     },
@@ -163,7 +171,7 @@
       "id": "Cu",
       "name": "Cu",
       "kind": "metal",
-      "color": [198, 112, 62],
+      "color": [204, 102, 50],
       "diffusionFactor": 0.01,
       "exposure": "opaque"
     },
@@ -171,7 +179,7 @@
       "id": "aC",
       "name": "탄소 하드마스크",
       "kind": "insulator",
-      "color": [62, 64, 72],
+      "color": [52, 54, 62],
       "diffusionFactor": 0.004,
       "exposure": "opaque",
       "_note": "비정질 탄소(APF). 깊은 식각에서 PR 대신 버티고, 끝나면 산소 애싱으로 태워 없앤다"
@@ -180,7 +188,7 @@
       "id": "SiON",
       "name": "SiON",
       "kind": "insulator",
-      "color": [196, 186, 120],
+      "color": [211, 217, 161],
       "diffusionFactor": 0.004,
       "exposure": "opaque",
       "_note": "산질화막. 하드마스크 겸 반사방지막"
@@ -191,6 +199,7 @@
       "id": "B",
       "name": "붕소",
       "type": "acceptor",
+      "color": [206, 78, 58],
       "relD": 1.0,
       "segregation": 0.3,
       "D0": 0.76,
@@ -201,6 +210,7 @@
       "id": "P",
       "name": "인",
       "type": "donor",
+      "color": [58, 108, 214],
       "relD": 0.6,
       "segregation": 4.0,
       "D0": 3.85,
@@ -210,6 +220,7 @@
       "id": "As",
       "name": "비소",
       "type": "donor",
+      "color": [46, 176, 168],
       "relD": 0.18,
       "segregation": 10.0,
       "D0": 0.066,

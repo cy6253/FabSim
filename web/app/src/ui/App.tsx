@@ -91,8 +91,8 @@ export function App() {
    * 만들게 되므로 메모해 둔다.
    */
   const dopingData = useMemo(
-    () => (doping && sim.view ? { conc: sim.view.conc, donors, acceptors } : undefined),
-    [doping, sim.view, donors, acceptors],
+    () => (doping && sim.view ? { conc: sim.view.conc, donors, acceptors, colors: lib.sp.color } : undefined),
+    [doping, sim.view, donors, acceptors, lib],
   );
 
   const present = useMemo(() => {
@@ -247,6 +247,7 @@ export function App() {
                   if (sim.view)
                     exportSlicePNG(project.name, sim.step, {
                       view: sim.view, sliceY: y, doping, donors, acceptors, hidden,
+                      spColors: lib.sp.color,
                       diff: showDiff ? sim.view.diff : undefined,
                     });
                   setMenu(false);
@@ -358,6 +359,7 @@ export function App() {
           <div className="viewtools">
             <Legend
               lib={lib}
+              doping={doping}
               present={present}
               hidden={hidden}
               voidCount={voidCount}
@@ -375,7 +377,7 @@ export function App() {
               <input type="checkbox" checked={showVoids} onChange={(e) => setShowVoids(e.target.checked)} />
               보이드
             </label>
-            <label className="toggle" title="재질 대신 도펀트 농도를 색으로 — n형은 파랑, p형은 붉은색">
+            <label className="toggle" title="재질 대신 도펀트 농도를 색으로 — 이온마다 제 색이 있고, 접합면에서 회색을 지난다">
               <input type="checkbox" checked={doping} onChange={(e) => setDoping(e.target.checked)} />
               도핑
             </label>

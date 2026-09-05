@@ -47,6 +47,8 @@ export interface SpeciesDef {
   id: string;
   name: string;
   type: "donor" | "acceptor";
+  /** 도핑 보기에서 이 이온을 칠하는 색. 없으면 형에 따른 기본색. */
+  color?: [number, number, number];
   /** 코어가 실제로 쓰는 상대 확산계수. */
   relD: number;
   /** 계면 편석 계수 m = C_Si / C_oxide. */
@@ -154,6 +156,8 @@ export interface SpeciesTable {
   key: string[];
   index: Record<string, number>;
   name: string[];
+  /** 도핑 보기 색. 농도가 짙을수록 이 색에 가까워진다. */
+  color: [number, number, number][];
   relD: Float64Array;
   segregation: Float64Array;
   /** 아레니우스 계수. 없으면 0 — 그러면 relD를 기준 온도의 배수로 본다. */
@@ -256,6 +260,8 @@ export function resolveSpecies(defs: SpeciesDef[]): SpeciesTable {
     key: defs.map((d) => d.id),
     index,
     name: defs.map((d) => d.name),
+    // 색을 안 준 종도 화면에는 나와야 한다. 억셉터는 붉은 쪽, 도너는 푸른 쪽.
+    color: defs.map((d) => d.color ?? (d.type === "acceptor" ? [195, 75, 65] : [45, 85, 195])),
     relD: new Float64Array(n),
     segregation: new Float64Array(n),
     D0: new Float64Array(n),

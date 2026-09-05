@@ -11,6 +11,7 @@
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { buildMesh, buildSmoothMesh } from "../core/render/mesh";
+import type { DopingField } from "../core/render/slice";
 import type { ViewData } from "./useSimulation";
 
 export interface View3DProps {
@@ -26,7 +27,7 @@ export interface View3DProps {
   /** 부드러운 등위면으로 그릴지, 복셀 면 그대로 그릴지. */
   mode: "smooth" | "voxel";
   /** 재질 대신 net doping을 칠한다. */
-  doping?: { conc: Float32Array[]; donors: number[]; acceptors: number[] };
+  doping?: DopingField;
   /** 변경분 하이라이트. 1 = 이번 단계가 더한 곳, 2 = 없앤 곳. */
   diff?: Uint8Array;
   /**

@@ -25,6 +25,8 @@ export interface SliceExportOptions {
   doping: boolean;
   donors: number[];
   acceptors: number[];
+  /** 이온별 색 — 화면과 PNG가 같은 색이어야 보고서에 붙일 수 있다. */
+  spColors?: [number, number, number][];
   hidden: Set<number>;
   diff?: Uint8Array;
   /** 복셀 하나를 몇 픽셀로. 보고서에 붙일 것이라 크게 뽑는다. */
@@ -41,7 +43,7 @@ export function exportSlicePNG(name: string, step: number, o: SliceExportOptions
     hidden: o.hidden,
     diff: o.diff,
     doping: o.doping
-      ? { conc: view.conc, donors: o.donors, acceptors: o.acceptors }
+      ? { conc: view.conc, donors: o.donors, acceptors: o.acceptors, colors: o.spColors }
       : undefined,
   });
 

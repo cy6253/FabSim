@@ -18,7 +18,7 @@ export interface SliceOptions {
   /** 봉인된 보이드를 붉게 칠한다. */
   voids?: Uint8Array;
   /** 도핑 보기 — 재질 대신 net doping을 칠한다. */
-  doping?: { conc: Float32Array[]; donors: number[]; acceptors: number[] };
+  doping?: DopingField;
   hidden?: Set<number>;
   /**
    * 변경분 하이라이트 — 1은 이번 단계가 더한 곳, 2는 없앤 곳.
@@ -73,14 +73,68 @@ export function netDoping(
   return net;
 }
 
-/** net doping을 색으로. 로그 네 자릿수, n형은 파랑 p형은 붉은색, 진성은 회색. */
-export function dopingColor(net: number, peak: number): [number, number, number] {
+/** 색을 안 준 라이브러리를 위한 기본 한 쌍. 예전 화면이 쓰던 파랑/붉은색 그대로다. */
+const NCOL: [number, number, number] = [45, 85, 195];
+const PCOL: [number, number, number] = [195, 75, 65];
+
+/**
+ * 그 칸을 실제로 지배하는 이온을 고른다.
+ *
+ * 부호만 칠하면 P를 넣은 자리와 As를 넣은 자리가 똑같은 파랑이 되어, 화면이
+ * "n형이다"까지만 말하고 만다. 어느 이온인지가 확산 깊이와 접합 모양을 정하는
+ * 바로 그 값이므로 그것을 색으로 보인다.
+ *
+ * 고르는 범위는 **부호가 정한 쪽**뿐이다. 보상된 자리에서 소수 캐리어 쪽 색이
+ * 나오면 그건 거짓말이 된다.
+ */
+export function dopantHue(
+  conc: Float32Array[],
+  group: number[],
+  colors: [number, number, number][] | undefined,
+  fallback: [number, number, number],
+  i: number,
+): [number, number, number] {
+  if (!colors) return fallback;
+  let best = -1;
+  let bv = 0;
+  for (const s of group) {
+    const v = conc[s][i];
+    if (v > bv) { bv = v; best = s; }
+  }
+  return best < 0 ? fallback : colors[best] ?? fallback;
+}
+
+/**
+ * net doping을 색으로. 로그 네 자릿수.
+ *
+ * 진성(t=0)은 회색이고 짙어질수록 그 이온의 색에 다가간다. 접합면에서 net이
+ * 0을 지나므로 색이 회색을 통과한다 — 접합 깊이가 그대로 눈에 보인다.
+ */
+export function dopingColor(
+  net: number,
+  peak: number,
+  hue: [number, number, number] = net >= 0 ? NCOL : PCOL,
+): [number, number, number] {
   const a = Math.abs(net);
   const t = a <= 0 || peak <= 0 ? 0 : Math.max(0, Math.min(1, (Math.log10(a / peak) + 4) / 4));
   const base = 45;
-  return net >= 0
-    ? [base, base + 40 * t, base + 150 * t]
-    : [base + 150 * t, base + 30 * t, base + 20 * t];
+  return [base + (hue[0] - base) * t, base + (hue[1] - base) * t, base + (hue[2] - base) * t];
+}
+
+/** 도핑 보기가 필요로 하는 것 전부. 단면·3D·내보내기가 같은 모양을 쓴다. */
+export interface DopingField {
+  conc: Float32Array[];
+  donors: number[];
+  acceptors: number[];
+  /** 이온별 색. 없으면 n형 파랑 / p형 붉은색 한 쌍으로만 칠한다. */
+  colors?: [number, number, number][];
+}
+
+/** 한 칸의 최종 도핑 색 — 세기는 net이, 색상은 지배 이온이 정한다. */
+export function dopingTint(d: DopingField, i: number, peak: number, net?: number): [number, number, number] {
+  const v = net ?? netDoping(d.conc, d.donors, d.acceptors, i);
+  const hue = dopantHue(d.conc, v >= 0 ? d.donors : d.acceptors, d.colors, v >= 0 ? NCOL : PCOL, i);
+  return dopingColor(v, peak, hue);
 }
 
 /**
@@ -109,7 +163,7 @@ export function renderSlice(mat: Uint8Array, o: SliceOptions): ImageDataLike {
       let c: [number, number, number];
 
       if (dope && m !== EMPTY && peak > 0) {
-        c = dopingColor(netDoping(dope.conc, dope.donors, dope.acceptors, i), peak);
+        c = dopingTint(dope, i, peak);
       } else if (m === EMPTY) {
         c = o.voids?.[i] ? VOIDCOL : BG;
       } else if (o.hidden?.has(m)) {

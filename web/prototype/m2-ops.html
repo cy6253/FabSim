@@ -150,8 +150,9 @@ code{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;
 "use strict";
 const INF=1e20;
 const EMPTY=0,SI=1,OX=2,NIT=3,PR=4,EPR=5,MET=6,MSI=7;
-const MATCOL={1:[100,116,143],2:[232,163,61],3:[63,154,140],
-              4:[185,138,212],5:[124,95,168],6:[185,190,201],7:[168,134,86]};
+// 색은 앱과 같은 표를 쓴다 — 같은 구조를 두 화면이 다른 색으로 그리면 대조가 안 된다.
+const MATCOL={1:[100,116,143],2:[232,163,61],3:[50,134,103],
+              4:[190,140,214],5:[118,86,164],6:[164,166,173],7:[212,125,151]};
 const MATNAME={1:"Si",2:"SiO2",3:"Nitride",4:"PR",5:"노광 PR",6:"Metal",7:"MetalSi"};
 const VOIDCOL=[227,90,77];
 const PRESETS=[[96,48,60],[160,80,72],[240,100,64]];

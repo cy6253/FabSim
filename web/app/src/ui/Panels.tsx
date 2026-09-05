@@ -22,8 +22,34 @@ export function Legend(p: {
   hidden: Set<number>;
   onToggle: (m: number) => void;
   voidCount: number;
+  /** 도핑 보기 중인가. 그때는 화면에 재질 색이 하나도 안 나온다. */
+  doping?: boolean;
 }) {
   const items = [...p.present].filter((m) => m !== EMPTY).sort((a, b) => a - b);
+
+  /**
+   * 도핑 보기에서는 모든 재질이 농도 색으로 덮이므로 재질 범례가 거짓이 된다.
+   * 대신 이온 범례를 보인다 — 어떤 파랑이 P고 어떤 청록이 As인지 여기서만 안다.
+   */
+  if (p.doping)
+    return (
+      <div className="legend">
+        {p.lib.sp.key.map((k, i) => {
+          const c = p.lib.sp.color[i];
+          return (
+            <span key={k} className="chip" title={`${p.lib.sp.name[i]} — 짙을수록 이 색에 가깝습니다`}>
+              <i style={{ background: `rgb(${c[0]},${c[1]},${c[2]})` }} />
+              {k}
+            </span>
+          );
+        })}
+        <span className="chip" title="도너와 억셉터가 상쇄된 곳 — 접합면이 여기를 지납니다">
+          <i style={{ background: "rgb(45,45,45)" }} />
+          진성·접합
+        </span>
+      </div>
+    );
+
   return (
     <div className="legend">
       {items.map((m) => {

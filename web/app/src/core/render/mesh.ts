@@ -11,7 +11,7 @@
  */
 import { EMPTY, MATCOL, VOIDCOL } from "../materials";
 import { blurField, surfaceNets } from "./surfaceNets";
-import { dopingColor, mixDiff, netDoping } from "./slice";
+import { dopingTint, mixDiff, netDoping, type DopingField } from "./slice";
 
 export interface Mesh {
   position: Float32Array;
@@ -37,7 +37,7 @@ const FACES: { n: [number, number, number]; v: [number, number, number][] }[] = 
 function dopingPeak(
   mat: Uint8Array,
   n: number,
-  d: { conc: Float32Array[]; donors: number[]; acceptors: number[] },
+  d: DopingField,
 ): number {
   let peak = 0;
   for (let i = 0; i < n; i++)
@@ -62,7 +62,7 @@ export interface MeshOptions {
    * 재질 대신 net doping을 칠한다. 색 규칙은 단면과 공유한다 — 같은 양을 두
    * 화면이 다르게 칠하면 그것만으로 틀린 화면이 된다.
    */
-  doping?: { conc: Float32Array[]; donors: number[]; acceptors: number[] };
+  doping?: DopingField;
   /** 변경분 하이라이트. 1 = 이번 단계가 더한 곳, 2 = 없앤 곳. */
   diff?: Uint8Array;
   /** 이 재질은 숨긴다 (재질별 토글). */
@@ -151,7 +151,7 @@ export function buildMesh(mat: Uint8Array, o: MeshOptions): Mesh {
         const m = mat[i];
         let col: [number, number, number] =
           dope && m !== EMPTY && peak > 0
-            ? dopingColor(netDoping(dope.conc, dope.donors, dope.acceptors, i), peak)
+            ? dopingTint(dope, i, peak)
             : m === EMPTY ? VOIDCOL : MATCOL[m] ?? [200, 200, 200];
         if (o.diff) col = mixDiff(col, o.diff[i]);
         if (!visible(x + 1, y, z)) emit(x, y, z, 0, col);
@@ -499,17 +499,17 @@ export function buildSmoothMesh(mat: Uint8Array, o: MeshOptions): Mesh {
     const sx = cx - dx * 0.6, sy = cy - dy * 0.6, sz = cz - dz * 0.6;
     let m = labelAt(sx, sy, sz);
     if (m < 0) m = nearestAt(sx, sy, sz);
+    // 이온 색과 변경분은 섞을 것이 아니라 고르는 것이라 가장 가까운 칸을 쓴다.
+    const vx = Math.max(0, Math.min(limX - 1, Math.round(sx)));
+    const vy = Math.max(0, Math.min(limY - 1, Math.round(sy)));
+    const vz = Math.max(0, Math.min(limZ - 1, Math.round(sz)));
+    const vi = vx + nx * (vy + ny * vz);
     let c: [number, number, number] =
       dope && m !== EMPTY && peak > 0
-        ? dopingColor(netAt(sx, sy, sz), peak)
+        ? // 세기는 삼선형으로(접합면이 복셀 계단 없이 번진다), 색상은 그 칸의 이온으로.
+          dopingTint(dope, vi, peak, netAt(sx, sy, sz))
         : m === EMPTY ? VOIDCOL : MATCOL[m] ?? [200, 200, 200];
-    if (o.diff) {
-      // 변경분은 있고 없고뿐이라 섞을 것이 없다 — 가장 가까운 칸을 그대로 읽는다.
-      const vx = Math.max(0, Math.min(limX - 1, Math.round(sx)));
-      const vy = Math.max(0, Math.min(limY - 1, Math.round(sy)));
-      const vz = Math.max(0, Math.min(limZ - 1, Math.round(sz)));
-      c = mixDiff(c, o.diff[vx + nx * (vy + ny * vz)]);
-    }
+    if (o.diff) c = mixDiff(c, o.diff[vi]);
     for (let v2 = 0; v2 < 3; v2++) {
       color[w + v2 * 3] = c[0] / 255;
       color[w + v2 * 3 + 1] = c[1] / 255;
