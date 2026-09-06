@@ -162,6 +162,40 @@ await shot("10-graph");
 await page.locator(".modal-box header button", { hasText: "닫기" }).click();
 await page.waitForTimeout(400);
 
+// 기판 단계가 다이·격자의 집이다. 여기 없으면 어디에도 없다.
+await page.locator(".step").first().click();
+await settle();
+await page.waitForTimeout(800);
+const grid = page.locator(".stepinspector .gridblock");
+console.log(`10b) 기판 단계의 다이·격자: ${(await grid.count()) ? await line(".gridblock .dim") : "⚠ 없음!"}`);
+if (!(await grid.count())) console.log("   ⚠ 기판 인스펙터에 격자 편집기가 없다");
+
+// 값은 끌어서만이 아니라 쳐 넣어서도 들어가야 한다. 소수점이 있는 자동 노브가
+// 가장 까다롭다 — 한 글자 칠 때마다 자동이 풀리고 칸이 다시 그려지면 거기서 끊긴다.
+for (let i = 0; i < (await page.locator(".step").count()); i++) {
+  if ((await page.locator(".step").nth(i).innerText()).includes("식각")) {
+    await page.locator(".step").nth(i).click();
+    break;
+  }
+}
+await settle();
+await page.waitForTimeout(800);
+const knob = page
+  .locator(".stepinspector .field")
+  .filter({ has: page.locator(".numrow") })
+  .filter({ hasText: "이방성" });
+const auto = knob.locator("button");
+if (await auto.count()) { await auto.click(); await page.waitForTimeout(600); }
+const box = knob.locator("input[type=number]");
+await box.click();
+await box.type("0.35", { delay: 60 });
+await settle();
+await page.waitForTimeout(1200);
+const typed = await box.inputValue();
+console.log(`10c) 숫자 직접 입력: "${typed}" · ${await line(".stepbar")}`);
+if (typed !== "0.35") console.log(`   ⚠ 소수점 입력이 "${typed}"에서 끊겼다`);
+await shot("10c-typed");
+
 // ---- 학생처럼 험하게 다뤄 본다 ----
 console.log("11) UI 스트레스");
 await page.locator(".step").first().click();

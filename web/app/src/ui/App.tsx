@@ -36,7 +36,6 @@ import { Legend, StepBar } from "./Panels";
 import { exportSlicePNG, exportStepsCSV } from "./exports";
 import { MaskDesigner } from "./MaskDesigner";
 import { LibraryEditor } from "./LibraryEditor";
-import { GridFields } from "./GridFields";
 import { loadState, saveState } from "./persist";
 import "./styles.css";
 
@@ -323,26 +322,10 @@ export function App() {
                 단계표 CSV 내보내기
               </button>
               <hr />
-              {/* 마스크가 덮는 영역이 곧 이 필드다. 크기를 여기서 정한다. */}
-              <label
-                className="menurow"
-                title="시뮬레이션하는 웨이퍼 조각의 가로 폭. 마스크가 덮는 넓이가 이것이고, 어닐의 확산 길이도 여기서 나온다"
-              >
-                다이 폭
-                <input
-                  type="number"
-                  min={0.05}
-                  step={0.1}
-                  value={Math.round((project.grid.nx * nmPerVoxel) / 10) / 100}
-                  onChange={(e) => {
-                    const um = Number(e.target.value);
-                    if (um > 0)
-                      setProject({ ...project, nmPerVoxel: (um * 1000) / project.grid.nx });
-                  }}
-                />
-                µm
-              </label>
-              <GridFields project={project} onChange={setProject} showZ />
+              {/* 다이 크기와 격자는 기판 단계에 있다. 웨이퍼의 성질이지 메뉴 설정이 아니다. */}
+              <div className="menurow dim">
+                다이 크기·격자는 <b>기판</b> 단계에서 정합니다
+              </div>
             </div>
           )}
         </div>

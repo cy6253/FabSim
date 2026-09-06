@@ -1,5 +1,5 @@
 /**
- * 격자 크기 편집 — 프리셋과 직접 입력.
+ * 다이와 격자 편집 — 이 웨이퍼 조각이 얼마나 크고, 얼마나 잘게 쪼개져 있는가.
  *
  * 프리셋만 있으면 그 목록에 없는 조합은 만들 수가 없다. 평면을 넓히려고 만든
  * 레이아웃 프리셋은 nz를 56으로 깎아 두께가 절반이 되는데, "평면도 넓고 두께도
@@ -9,7 +9,10 @@
  * **크기(다이 폭)** 둘이고, 두께는 nz × 다이 폭 / nx 로 따라온다. 그 값을 바로
  * 옆에 찍어 두는 이유가 그것이다 — 골라 놓고 나중에 좁다는 걸 알게 되면 늦다.
  *
- * 메뉴와 마스크 디자이너가 같이 쓴다. 두 군데에 따로 두면 규칙이 갈라진다.
+ * **기판 단계가 이것의 집이다.** 예전에는 마스크 디자이너와 메뉴 두 곳에 있었다.
+ * 마스크를 그리다가 칸이 굵어 답답하면 거기서 늘릴 수 있어 편하긴 했지만, 다이
+ * 크기는 마스크의 성질이 아니라 **웨이퍼의 성질**이다. 웨이퍼를 까는 자리에서
+ * 정하는 것이 맞고, 그래야 "어디서 정해지는 값인가"를 한 번만 배우면 된다.
  */
 import { GRID_PRESETS } from "../core/project/serialize";
 import { fieldLabel, nmForGrid, nmPerVoxelOf, type GridSpec, type Project } from "../core/project/types";
@@ -25,12 +28,13 @@ const HEAVY = 4_000_000;
 export function GridFields(p: {
   project: Project;
   onChange: (next: Project) => void;
-  /** 높이(nz)도 만질지. 마스크 디자이너는 평면만 본다. */
+  /** 높이(nz)도 만질지. 평면만 보는 자리를 위해 남겨 둔다. */
   showZ?: boolean;
 }) {
   const g = p.project.grid;
   const nm = nmPerVoxelOf(p.project);
   const voxels = g.nx * g.ny * g.nz;
+  const umWide = Math.round((g.nx * nm) / 10) / 100;
 
   /** 격자를 바꾼다. 다이 폭은 붙들어 두므로 칸을 늘리면 칸이 잘아진다. */
   const setGrid = (next: GridSpec) => {
@@ -56,8 +60,26 @@ export function GridFields(p: {
 
   return (
     <>
+      <label
+        className="menurow"
+        title="시뮬레이션하는 웨이퍼 조각의 가로 폭. 마스크가 덮는 넓이가 이것이고, 어닐의 확산 길이도 여기서 나온다"
+      >
+        <b className="rowlabel">다이 폭</b>
+        <input
+          type="number"
+          min={0.05}
+          step={0.1}
+          value={umWide}
+          onChange={(e) => {
+            const um = Number(e.target.value);
+            if (um > 0) p.onChange({ ...p.project, nmPerVoxel: (um * 1000) / g.nx });
+          }}
+        />
+        µm
+      </label>
+
       <label className="menurow" title="자주 쓰는 조합. 여기서 시작해 아래 숫자로 다듬는다">
-        프리셋
+        <b className="rowlabel">프리셋</b>
         <select
           value=""
           onChange={(e) => {
@@ -75,7 +97,7 @@ export function GridFields(p: {
       </label>
 
       <div className="menurow gridfields">
-        격자
+        <b className="rowlabel">격자</b>
         {axes.map(([k, label]) => (
           <label key={k} title={label}>
             <span>{label}</span>

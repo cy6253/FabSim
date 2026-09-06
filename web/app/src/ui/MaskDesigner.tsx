@@ -8,8 +8,9 @@
  * 마스크는 프로젝트에 함께 저장되므로 여기서 만든 것이 파일 하나로 배포된다.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { packMask, unpackMask, type MaskAsset, type Project } from "../core/project/types";
-import { GridFields } from "./GridFields";
+import {
+  fieldLabel, nmPerVoxelOf, packMask, unpackMask, type MaskAsset, type Project,
+} from "../core/project/types";
 
 type Tool = "rect" | "poly";
 
@@ -280,12 +281,12 @@ export function MaskDesigner({ project, onChange, onClose }: MaskDesignerProps) 
         </header>
 
         <div className="masktools">
-          {/* 마스크 한 칸 = 격자 한 칸이다. 더 잘게 그리려면 격자를 늘리는 수밖에
-              없는데, 그 설정이 다른 메뉴에 있으면 여기서 막힌 사람은 못 찾는다.
-              평면만 만진다 — 높이는 그리는 것과 상관이 없다. */}
-          <div className="gridwrap">
-            <GridFields project={project} onChange={onChange} />
-          </div>
+          {/* 마스크 한 칸 = 격자 한 칸이다. 예전에는 여기서 격자를 늘릴 수 있었는데,
+              다이 크기는 마스크가 아니라 웨이퍼의 성질이라 기판 단계로 옮겼다.
+              대신 지금 무엇을 그리고 있는지는 여기서 바로 보여야 한다. */}
+          <span className="menurow dim" title="다이 크기와 격자는 기판 단계에서 정합니다">
+            {project.grid.nx}×{project.grid.ny} 칸 · {fieldLabel(project.grid, nmPerVoxelOf(project))}
+          </span>
           <span className="spacer" />
           <select value={selId ?? ""} onChange={(e) => setSelId(e.target.value || null)}>
             {project.masks.length === 0 && <option value="">(마스크 없음)</option>}
