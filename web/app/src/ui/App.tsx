@@ -339,6 +339,12 @@ export function App() {
               <hr />
               <button onClick={() => { setModal("mask"); setMenu(false); }}>마스크 편집</button>
               <button onClick={() => { setModal("library"); setMenu(false); }}>재질·공정 표</button>
+              <button
+                onClick={() => { setModal("graph"); setMenu(false); }}
+                title="분기를 만들거나 연결을 직접 고칠 때"
+              >
+                공정 그래프
+              </button>
               <hr />
               <button
                 disabled={!sim.view}
@@ -444,7 +450,6 @@ export function App() {
             onMove={(id, dir) =>
               setProject(dir < 0 ? moveStepUp(project, id) : moveStepDown(project, id))
             }
-            onOpenGraph={() => setModal("graph")}
             issues={issues}
           />
         </section>

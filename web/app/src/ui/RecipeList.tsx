@@ -10,8 +10,11 @@
  *    단계"가 따로 놀아서 사용자가 둘을 각각 조작해야 했다. 목록에서 한 줄을
  *    누르면 그게 곧 선택이자 시점이다.
  *
- * 분기는 여전히 만들 수 있다 — "그래프" 버튼이 노드 에디터를 연다. 자유로운
- * 공정 순서 설계가 제품의 본질이므로 없애지 않고, 기본 경로에서 비켰을 뿐이다.
+ * 분기는 여전히 만들 수 있다 — 노드 에디터가 `⋯` 메뉴의 "공정 그래프"에 있다.
+ * 자유로운 공정 순서 설계가 제품의 본질이므로 없애지 않고, 기본 경로에서
+ * 비켰을 뿐이다. 여기 헤더에 두었던 버튼은 뺐다 — 목록 위에 있으니 "이 목록을
+ * 그래프로 본다"처럼 읽혔는데, 실제로는 편집 화면을 여는 것이라 결이 달랐다.
+ * 다른 모달(마스크·재질 표)과 같은 자리에 두는 편이 찾기도 쉽다.
  */
 import { useState } from "react";
 import { NODE_SPECS, summarize } from "../core/project/nodes";
@@ -29,7 +32,6 @@ export interface RecipeListProps {
   onAdd: (type: string) => void;
   onRemove: (id: string) => void;
   onMove: (id: string, dir: -1 | 1) => void;
-  onOpenGraph: () => void;
   /** 단계별 진단 수 — 문제가 있는 줄에 표시한다. */
   issues: Record<number, { error: number; warn: number }>;
 }
@@ -50,9 +52,6 @@ export function RecipeList(p: RecipeListProps) {
     <div className="recipe">
       <header>
         <h2>레시피</h2>
-        <button className="ghost" onClick={p.onOpenGraph} title="분기를 만들거나 연결을 직접 고칠 때">
-          그래프
-        </button>
       </header>
 
       <ol className="steps">
