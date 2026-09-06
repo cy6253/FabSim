@@ -31,7 +31,6 @@ import { DEFAULT_LIBRARY } from "../library";
 import {
   packMask,
   type Project,
-  type ProjectView,
   type RecipeNode,
   type GridSpec,
   type ParamValue,
@@ -83,16 +82,6 @@ function scaleOf(grid: GridSpec): Scale {
     },
   };
 }
-
-/**
- * 이 예제를 열었을 때 어디서부터 보게 할지.
- *
- * 예제가 가르치려는 것이 안쪽에 있으면 겉만 보이는 화면으로 여는 것은 그
- * 예제를 반쯤 감추는 것이다. 3D NAND가 그랬다 — 채널홀도 워드라인도 전부
- * 적층 안에 있는데 절단 기본값이 끝까지라, 열면 매끈한 상자 하나가 나오고
- * "절단 슬라이더를 줄여 보세요"를 따로 말해 줘야 했다.
- */
-const lookAt = (p: Project, view: ProjectView): Project => ({ ...p, view });
 
 /** 직선 체인 하나를 프로젝트로. 대부분의 레시피가 직선이다. */
 function chain(
@@ -153,39 +142,7 @@ function twoWindows(id: string, name: string, g: GridSpec, inset: number, gap: n
   return packMask(id, name, g.nx, g.ny, px);
 }
 
-/** 같은 폭의 띠 여러 개. 블록을 가르는 슬릿처럼 규칙적으로 놓인 것들. */
-function stripes(id: string, name: string, g: GridSpec, centers: number[], wf: number) {
-  const px = new Uint8Array(g.nx * g.ny);
-  const w = Math.max(2, Math.round(g.nx * wf));
-  for (const c of centers) {
-    const x0 = Math.round(g.nx * c) - (w >> 1);
-    for (let y = 0; y < g.ny; y++)
-      for (let x = Math.max(0, x0); x < Math.min(g.nx, x0 + w); x++) px[x + g.nx * y] = 1;
-  }
-  return packMask(id, name, g.nx, g.ny, px);
-}
 
-/**
- * 원형 창 여러 개.
- *
- * 다른 마스크는 전부 y로 쭉 뻗은 띠라 단면 하나로 다 설명된다. 3D NAND의
- * 채널홀은 그렇지 않다 — 진짜 구멍이고, 그 구멍이 원통 채널이 된다. 띠로
- * 흉내 내면 정작 3D로 볼 이유가 사라진다.
- */
-function holes(id: string, name: string, g: GridSpec, fx: number[], fy: number[], rf: number) {
-  const px = new Uint8Array(g.nx * g.ny);
-  const r = Math.max(2, Math.round(Math.min(g.nx, g.ny) * rf));
-  for (const a of fx)
-    for (const b of fy) {
-      const x0 = Math.round(g.nx * a), y0 = Math.round(g.ny * b);
-      for (let y = y0 - r; y <= y0 + r; y++)
-        for (let x = x0 - r; x <= x0 + r; x++) {
-          if (x < 0 || y < 0 || x >= g.nx || y >= g.ny) continue;
-          if ((x - x0) ** 2 + (y - y0) ** 2 <= r * r) px[x + g.nx * y] = 1;
-        }
-    }
-  return packMask(id, name, g.nx, g.ny, px);
-}
 
 /* ------------------------------------------------------------------ 레시피 */
 
@@ -195,8 +152,7 @@ function trenchFill(): Project {
   // 종횡비가 보이드의 조건이다. 폭 28(종횡비 1.3)에서는 스퍼터 막이 입구를
   // 다 못 닫아 위까지 열린 홈으로 남았다 — 22(1.6)로 좁혀야 실제로 갇힌다.
   const m = stripe("trench", "트렌치 창", s.grid, 0.44, 0.56);
-  // 보이드는 트렌치 **안**에 갇힌 것이라 조금 잘라야 보인다.
-  return lookAt(chain("트렌치 증착 — 보이드는 왜 생기나", s.grid, [
+  return chain("트렌치 증착 — 보이드는 왜 생기나", s.grid, [
     { type: "substrate", params: { material: "Si", thickness: s.L(0.42) } },
     { type: "prCoat", params: { thickness: s.L(0.11), planarization: 1 } },
     { type: "expose", mask: "trench", note: "창 하나만 연다" },
@@ -212,7 +168,7 @@ function trenchFill(): Project {
       params: { material: "SiO2", thickness: s.L(0.22), method: "sputter", coverage: -1 },
       note: "여기가 핵심. 커버리지를 0.3 → 1.0으로 올리면 보이드가 사라진다",
     },
-  ], [m]), { cutAxis: 0, cutX: 0.6, smooth: 3 });
+  ], [m]);
 }
 
 /** ② LOCOS — 질화막 마스크와 bird's beak. */
@@ -384,149 +340,6 @@ function allOps(): Project {
   ], [m]);
 }
 
-/**
- * ⑥ 3D NAND — 층을 쌓고, 한 번에 뚫고, 질화막을 빼내 그 자리에 워드라인을 넣는다.
- *
- * 평면 미세화가 한계에 닿자 업계가 택한 길이다. 층을 늘리는 데는 리소가 한 번도
- * 더 안 든다 — 채널홀 한 번이 모든 층을 동시에 지난다. 그것이 이 구조의 전부다.
- *
- * 여기서 볼 것 셋:
- *   ① **한 번 뚫어 전 층을 지난다.** 층수를 늘려도 리소 횟수는 그대로다.
- *   ② **질화막은 자리를 맡아 두는 임시 재료다.** 마지막에 통째로 빼내고 그
- *      빈자리에 금속을 넣는다 (replacement gate). 층 사이로 금속을 바로 넣을
- *      길이 없기 때문이다.
- *   ③ **순서가 구조를 만든다.** 채널을 먼저 채워 놓지 않고 질화막을 빼면
- *      적층을 붙들 것이 없다. 채널이 곧 기둥이다.
- *
- * 실제 제품은 200층이 넘고 계단(스테어케이스)으로 층마다 콘택을 낸다. 계단은
- * 레지스트를 조금씩 깎아 내며 같은 식각을 반복해 만드는데, 그 "레지스트 트림"
- * 연산자가 아직 없어서 여기서는 뺐다.
- */
-function nand3d(): Project {
-  const s = scaleOf({ nx: 112, ny: 64, nz: 112 });
-  const PAIRS = 5;
-  const LAYER = s.L(0.036);
-  const stack = PAIRS * 2 * LAYER;
-
-  const hole = holes("hole", "채널홀", s.grid, [0.2, 0.35, 0.65, 0.8], [0.3, 0.7], 0.06);
-  // 슬릿 셋이 블록 둘을 만든다. 실제 구조가 그렇고, 동시에 질화막이 옆으로
-  // 빠져나갈 거리를 절반으로 줄인다 — 그 거리가 곧 산화막이 함께 녹는 양이다.
-  // 폭은 워드라인 틈(4)보다 넉넉히 넓어야 한다. 좁으면 금속이 입구를 먼저
-  // 막아 안쪽 공동이 빈 채로 봉인된다.
-  const slit = stripes("slit", "워드라인 슬릿", s.grid, [0.06, 0.5, 0.94], 0.08);
-
-  const pairs: Step[] = [];
-  for (let i = 0; i < PAIRS; i++) {
-    pairs.push({
-      type: "deposit",
-      params: { material: "SiO2", thickness: LAYER, method: "LPCVD", coverage: 1 },
-      ...(i === 0 ? { note: "적층 시작. 산화막은 끝까지 남아 워드라인 사이를 절연한다" } : {}),
-    });
-    pairs.push({
-      type: "deposit",
-      params: { material: "Si3N4", thickness: LAYER, method: "LPCVD", coverage: 1 },
-      ...(i === 0
-        ? {
-            note:
-              "질화막은 **남을 재료가 아니다**. 나중에 빼낼 자리를 맡아 두는 것뿐이고, " +
-              "그 자리가 워드라인이 된다. 이 쌍을 반복한 수가 곧 층수다",
-          }
-        : i === PAIRS - 1
-          ? { note: `여기까지 ${PAIRS}쌍. 층을 더 얹어도 아래 리소 횟수는 안 늘어난다 — 그것이 3D NAND다` }
-          : {}),
-    });
-  }
-
-  /**
-   * 하드마스크 한 벌 — 깔고, 레지스트로 패턴을 옮기고, 레지스트는 버린다.
-   *
-   * 채널홀과 슬릿 둘 다 이 적층을 통째로 지나야 해서 식각이 길다. 레지스트는
-   * ON 식각에 선택비 0.5라 그 시간을 못 버티고, 다 타 버리면 마스크 없는 식각이
-   * 되어 구조 전체가 깎인다. 그래서 두 번 다 탄소가 받는다.
-   */
-  const hardmask = (mask: string, why: string): Step[] => [
-    { type: "deposit", params: { material: "aC", thickness: s.L(0.1), method: "LPCVD", coverage: 1 }, note: why },
-    // 레지스트를 두껍게 깐다. RIE_carbon은 레지스트도 0.9로 깎아서, 얇으면
-    // 하드마스크를 다 뚫기 전에 레지스트가 먼저 사라진다.
-    { type: "prCoat", params: { thickness: s.L(0.13), planarization: 1 } },
-    { type: "expose", mask },
-    { type: "develop", params: { tone: "positive" } },
-    {
-      type: "etch",
-      params: { etchant: "RIE_carbon", seconds: s.etch("RIE_carbon", s.L(0.13)), anisotropy: 0.92 },
-      note: "레지스트의 패턴을 하드마스크로 옮긴다. 레지스트가 할 일은 여기까지다",
-    },
-    { type: "strip" },
-  ];
-
-  /** 일을 마친 탄소를 태워 없앤다. 남기면 다음 식각이 여기서 막힌다. */
-  const ash = (note: string): Step => ({
-    type: "etch",
-    params: { etchant: "piranha_strip", seconds: s.etch("piranha_strip", s.L(0.16)) },
-    note,
-  });
-
-  // 종횡비가 크면 바닥까지 내려가는 이온이 줄어 실제 속도가 떨어진다(ARDE).
-  // 기하학적 깊이만 주면 절반쯤에서 멈춘다 — 재 보니 1.6배가 있어야 닿는다.
-  const deep = (extra: number) => s.etch("RIE_ON", Math.round((stack + s.L(extra)) * 1.6));
-
-  // 채널홀도 워드라인도 전부 적층 안에 있다. 반을 잘라야 이 예제가 보인다.
-  return lookAt(chain("3D NAND — 한 번 뚫어 모든 층을 지난다", s.grid, [
-    { type: "substrate", params: { material: "Si", thickness: s.L(0.09) }, note: "소스 플레이트" },
-    ...pairs,
-    ...hardmask("hole", "탄소 하드마스크. 이 깊이의 식각을 레지스트로는 못 버틴다"),
-    {
-      type: "etch",
-      params: { etchant: "RIE_ON", seconds: deep(0.06), anisotropy: 0.98 },
-      note:
-        "**한 번에 전 층을 지난다.** 산화막과 질화막을 같은 속도로 깎아야 벽이 " +
-        "매끈하다. 깊이만큼의 시간으로는 못 뚫는다 — 구멍이 깊을수록 바닥에 닿는 " +
-        "이온이 줄어(ARDE) 1.6배를 줘야 한다. 층을 더 쌓기 어려운 이유가 여기 있다",
-    },
-    ash("채널홀을 뚫으라고 넣은 막이 이번에는 방해물이다. 태워 없앤다"),
-    {
-      type: "deposit",
-      params: { material: "SiO2", thickness: s.L(0.018), method: "ALD", coverage: 1 },
-      note: "구멍 벽에 터널/블로킹 산화막. 깊은 구멍이라 ALD가 아니면 바닥까지 안 간다",
-    },
-    {
-      type: "deposit",
-      params: { material: "polySi", thickness: s.L(0.027), method: "ALD", coverage: 1 },
-      note: "채널. 여기가 실제로 전류가 흐르는 길이고, 동시에 적층을 붙드는 기둥이 된다",
-    },
-    ...hardmask("slit", "슬릿도 같은 깊이를 지나야 한다 — 하드마스크를 한 번 더 깐다"),
-    {
-      type: "etch",
-      params: { etchant: "RIE_ON", seconds: deep(0.12), anisotropy: 0.98 },
-      note: "슬릿. 질화막을 빼내려면 약이 들어갈 입구가 있어야 한다",
-    },
-    ash("슬릿 하드마스크도 태운다"),
-    {
-      type: "etch",
-      params: { etchant: "hot_phosphoric", seconds: s.etch("hot_phosphoric", s.L(0.23)) },
-      note:
-        "**질화막 뽑기.** 슬릿으로 들어간 인산이 층을 따라 옆으로 파고들어 질화막만 " +
-        "통째로 빼낸다 (산화막 선택비 40:1). 남은 것은 산화막 선반과 그것을 " +
-        "떠받치는 채널 기둥뿐이다 — 채널을 먼저 안 세웠으면 여기서 무너진다. " +
-        "시간을 늘려 보면 산화막이 위아래 양면에서 같이 녹아 선반이 얇아진다",
-    },
-    {
-      type: "deposit",
-      params: { material: "W", thickness: s.L(0.027), method: "ALD", coverage: 1 },
-      note:
-        "빈 자리를 텅스텐으로 채운다. 이것이 워드라인이다. 층 사이에 금속을 " +
-        "**바로** 넣을 길이 없어서, 자리를 질화막으로 맡아 뒀다가 바꿔 끼운 것이다",
-    },
-    {
-      type: "etch",
-      params: { etchant: "RIE_metal", seconds: s.etch("RIE_metal", s.L(0.42)), anisotropy: 0.9 },
-      note:
-        "슬릿 안의 금속을 걷어낸다. 안 걷으면 층마다 따로 걸어야 할 워드라인이 " +
-        "세로로 다 이어져 버린다",
-    },
-  ], [hole, slit]), { cutAxis: 0, cutX: 0.5, smooth: 3 });
-}
-
 export interface ExampleRecipe {
   id: string;
   title: string;
@@ -575,12 +388,6 @@ export const EXAMPLES: ExampleRecipe[] = [
     title: "NMOS",
     summary: "게이트가 이온 주입 마스크가 되어 채널이 자동 정렬된다",
     build: nmos,
-  },
-  {
-    id: "nand3d",
-    title: "3D NAND",
-    summary: "층을 쌓아 한 번에 뚫고, 질화막을 빼낸 자리에 워드라인을 넣는다",
-    build: nand3d,
   },
   {
     id: "cmos",

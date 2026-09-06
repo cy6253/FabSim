@@ -253,7 +253,7 @@ function counts(ex: Executor, f: ReturnType<Executor["run"]>[number]) {
  * 예제 한 벌을 돌려 놓고 나눠 쓴다.
  *
  * 예제 여섯 개를 "끝까지 도는가"에서 한 번, 그다음 개별 검사에서 또 한 번씩
- * 돌리고 있었다. 3D NAND 한 벌이 8초, allops가 8초라 그 중복만으로 파일이
+ * 돌리고 있었다. 무거운 예제 한 벌이 8초라 그 중복만으로 파일이
  * 두 배가 된다. 아래 검사들은 결과를 읽기만 하고 — materialOf는 매번 새 배열을
  * 준다 — 프로젝트를 고치는 검사는 exampleById로 제 것을 따로 만든다.
  */
@@ -321,45 +321,6 @@ describe("예제 레시피가 실제로 그것을 가르치는가", () => {
     expect(perColOut, `액티브 ${perColIn.toFixed(0)}/열 vs 필드 ${perColOut.toFixed(0)}/열`)
       .toBeGreaterThan(perColIn * 1.8);
     expect(nz).toBeGreaterThan(0);
-  });
-
-  it("3D NAND — 질화막이 통째로 빠지고 그 자리에 워드라인이 층층이 선다", () => {
-    // 이 레시피의 주장은 하나다: 질화막은 **자리를 맡아 두는 재료**이고, 마지막에
-    // 통째로 빠진 뒤 그 자리에 금속이 들어간다. 그 두 가지가 실제로 일어나는지만
-    // 본다 — 하나라도 어긋나면 레시피가 가르치는 것이 거짓이 된다.
-    const { p, ex, frames } = sharedRun("nand3d");
-    const last = frames[frames.length - 1];
-    const L = ex.library.mat.index;
-
-    expect(last.counts[L.Si3N4] ?? 0, "질화막이 한 칸도 남으면 안 된다").toBe(0);
-    expect(last.counts[L.W] ?? 0, "그 자리에 텅스텐이 들어와 있어야 한다").toBeGreaterThan(0);
-
-    // 산화막 선반이 남아 있어야 워드라인끼리 절연된다. 인산이 오래 머물면
-    // 위아래 양면에서 같이 녹아 선반이 사라진다 — 그때를 잡는 단언이다.
-    // 처음부터 0인 앞쪽 단계가 아니라, 있다가 없어진 그 단계를 찾는다.
-    const iPull = frames.findIndex(
-      (f, i) => i > 0 && (frames[i - 1].counts[L.Si3N4] ?? 0) > 0 && (f.counts[L.Si3N4] ?? 0) === 0,
-    );
-    expect(iPull, "질화막이 사라지는 단계가 있어야 한다").toBeGreaterThan(0);
-    const before = frames[iPull - 1];
-    const lost = 1 - (frames[iPull].counts[L.SiO2] ?? 0) / (before.counts[L.SiO2] ?? 1);
-    expect(lost, `질화막 뽑기에서 산화막이 ${(lost * 100).toFixed(0)}% 녹았다`).toBeLessThan(0.05);
-
-    // 워드라인은 층마다 **따로** 서야 한다. 세로로 이어지면 한 줄만 있는 셈이다.
-    const mat = ex.materialOf(last);
-    const g = p.grid;
-    const x = Math.round(g.nx * 0.3), y = g.ny >> 1;
-    let bands = 0, prev = false;
-    for (let z = 0; z < g.nz; z++) {
-      const on = mat[x + g.nx * (y + g.ny * z)] === L.W;
-      if (on && !prev) bands++;
-      prev = on;
-    }
-    expect(bands, "워드라인 층이 서로 떨어져 있어야 한다").toBeGreaterThanOrEqual(4);
-
-    // 슬릿이 금속으로 막히면 안쪽 공동이 빈 채 봉인된다. 실제로 겪은 실패다 —
-    // 슬릿을 워드라인 틈만큼 좁게 두면 여기서 보이드 수만 개가 잡힌다.
-    expect(last.voidCount, "봉인된 보이드가 없어야 한다").toBe(0);
   });
 
   it("STI — CMP가 질화막 정지층에서 멈춘다", () => {
@@ -521,22 +482,23 @@ describe("노브 상한이 격자를 따라간다", () => {
 });
 
 describe("예제가 어디를 볼지 들고 있다", () => {
-  it("3D NAND와 트렌치는 잘라 놓은 화면으로 열린다", () => {
+  it("예제는 자르지 않은 온전한 형상으로 연다", () => {
     /*
-     * 예제가 가르치려는 것이 안쪽에 있으면 겉만 보이는 화면으로 여는 것은
-     * 그 예제를 반쯤 감추는 것이다. 3D NAND는 채널홀도 워드라인도 전부 적층
-     * 안에 있어서, 절단 없이 열면 매끈한 상자 하나가 나온다.
+     * 한동안 몇몇 예제가 반쯤 잘린 채로 열렸다. 안쪽을 보여 주려던 것인데,
+     * 처음 보는 사람에게는 "왜 반만 있지"가 먼저 온다 — 잘린 그림이 그 사람이
+     * 이 도구에서 처음 보는 화면이 되는 것이다. 자를지 말지는 보는 사람이
+     * 정하고, 도구줄의 절단 칸이 한 번 눌러 오갈 수 있게 해 준다.
      */
-    for (const id of ["nand3d", "trench"]) {
-      const v = exampleById(id).view;
-      expect(v, `${id}에 시점이 없다`).toBeDefined();
-      expect(v!.cutX).toBeGreaterThan(0);
-      expect(v!.cutX).toBeLessThan(1);
+    for (const e of EXAMPLES) {
+      const v = exampleById(e.id).view;
+      if (!v || v.cutX === undefined) continue; // 시점이 없으면 화면 기본값 = 전체
+      expect(v.cutX, `${e.id}가 잘린 채로 열린다`).toBe(1);
     }
   });
 
-  it("시점은 저장하고 다시 읽어도 그대로다 — 절단은 비율이라 격자를 바꿔도 산다", () => {
-    const p = exampleById("nand3d");
+  it("시점은 저장하고 다시 읽어도 그대로다", () => {
+    const p = exampleById("cmos");
+    expect(p.view, "CMOS는 절연막을 접고 연다").toBeDefined();
     const back = parseProject(serializeProject(p));
     expect(back.view).toEqual(p.view);
   });

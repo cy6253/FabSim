@@ -134,8 +134,16 @@ await shot("05-probe");
  * 시험 환경의 성질이다. 그래서 숫자는 찍되 문턱은 "메인에서 메시를 만들던
  * 시절(565ms)로 되돌아갔는가"만 잡을 만큼 느슨하게 둔다.
  */
-const perfInit = () =>
-  page.evaluate(() => {
+const perfInit = async () => {
+  /*
+   * 비우기 전에 한 박자 쉰다.
+   *
+   * PerformanceObserver의 콜백은 **비동기**다. 앞 구간에서 생긴 항목이 배열을
+   * 비운 뒤에 도착하면 다음 구간의 것으로 세어진다 — 실제로 단계 이동에서 난
+   * 245ms가 절단 구간에 얹혀 거짓 경고가 났다. 밀린 콜백을 흘려보낸 뒤 비운다.
+   */
+  await page.waitForTimeout(600);
+  await page.evaluate(() => {
     window.__long = [];
     if (!window.__lo) {
       window.__lo = new PerformanceObserver((l) => {
@@ -144,7 +152,11 @@ const perfInit = () =>
       window.__lo.observe({ entryTypes: ["longtask"] });
     }
   });
-const perfRead = () => page.evaluate(() => window.__long.slice().sort((a, b) => b - a));
+};
+const perfRead = async () => {
+  await page.waitForTimeout(600); // 마지막 항목이 도착할 틈
+  return page.evaluate(() => window.__long.slice().sort((a, b) => b - a));
+};
 
 await perfInit();
 for (let i = 0; i < (await page.locator(".step").count()); i++) {
