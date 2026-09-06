@@ -20,6 +20,7 @@ import {
   opAnneal,
   opOxidize,
   opSilicide,
+  dopantFollowsMaterial,
 } from "../ops";
 import type { OpCall } from "./opList";
 import { hashBytes } from "./hash";
@@ -95,6 +96,8 @@ export function applyOp(st: ApplyState, c: OpCall): void {
       carve(s, mat, c.x0, c.x1, c.y0, c.y1, c.zFloor);
       break;
   }
+  // 재질이 없어진 칸의 도펀트도 같이 내보낸다 — 실행기와 같은 규칙이다.
+  dopantFollowsMaterial(s, mat, conc);
 }
 
 /** 목록을 통째로 실행하고 단계마다 재질 지문을 남긴다. */

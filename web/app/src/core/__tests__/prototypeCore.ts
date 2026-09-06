@@ -46,6 +46,8 @@ export interface PrototypeCore {
   opExpose(mat: Uint8Array, mask: Uint8Array, dx: number, dy: number): number;
   opDevelop(mat: Uint8Array, phi: Float32Array, positive: boolean): number;
   opStrip(mat: Uint8Array, phi: Float32Array): number;
+  /** 재질이 없어진 칸의 도펀트도 같이 내보낸다 — TS 쪽 실행기와 같은 규칙. */
+  dopantFollowsMaterial(mat: Uint8Array, conc: Float32Array[]): void;
   opCMP(
     mat: Uint8Array,
     phi: Float32Array,
@@ -120,6 +122,7 @@ return {
   newPhi:()=>new Float32Array(N),
   newConc:()=>[new Float32Array(N),new Float32Array(N),new Float32Array(N)],
   opSubstrate,opDeposit,opEtch,opPRCoat,opExpose,opDevelop,opStrip,opCMP,
+  dopantFollowsMaterial,
   opImplant,opAnneal,opOxidize,opSilicide,
   stripeMask,fullMask,voidMask,columnTop,countOf,surfaceZ,carve,
   edtCount:()=>edtCount,

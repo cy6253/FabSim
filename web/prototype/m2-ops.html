@@ -704,6 +704,28 @@ function opStrip(mat,phi){
 }
 
 /* P3 vertical descent */
+// 2026-09-06: dopant leaves with the material it was in.
+//
+// Doping is a field that lives alongside the material, so etching silicon away
+// used to leave its concentration floating in the vacuum -- and whatever was
+// deposited into that cell later inherited it. On screen, freshly deposited
+// oxide and metal layers showed doping bands nobody ever implanted. Measured:
+// implant 256, etch 6 voxels, and 216 of it stayed behind and moved into the
+// oxide put down on top.
+//
+// Clearing empty cells is enough. A deposit fills an empty cell, so if the
+// dopant left when the cell emptied, the cell is already clean when refilled.
+// Oxidation and silicide convert a cell rather than emptying it, so they do not
+// come through here -- segregate handles that redistribution.
+function dopantFollowsMaterial(mat,conc){
+  let changed=false;
+  for(const f of conc)
+    for(let i=0;i<N;i++)
+      if(mat[i]===EMPTY&&f[i]!==0){f[i]=0;changed=true;}
+  // Say so, or the snapshot keeps pointing at the array from before the clear.
+  if(changed)concDirty=true;
+}
+
 function opCMP(mat,phi,amount,protect){
   const top=columnTop(mat);
   let gmax=0;
@@ -1275,6 +1297,7 @@ async function run(){
     statEl.textContent=tag+" …";await sleep();
     const t0=performance.now();
     const r=fn()||{};
+    dopantFollowsMaterial(mat,conc);
     const ms=performance.now()-t0;
     log.push({tag,ms,note:r.note||"",chk:r.chk||"",ok:r.ok!==false});
     snaps.push(mat.slice());

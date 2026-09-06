@@ -27,6 +27,7 @@ import { selectivityOf, stopLayersOf, removalOf, silicideOf, type Library } from
 import {
   opSubstrate, opDeposit, opEtch, opPRCoat, opExpose, opDevelop,
   opStrip, opCMP, opImplant, opAnneal, annealPlan, opOxidize, opSilicide,
+  dopantFollowsMaterial,
 } from "../ops";
 import { NODE_SPEC_BY_TYPE } from "../project/nodes";
 import { chainTo, indexGraph, type GraphIndex } from "../project/graph";
@@ -283,6 +284,9 @@ export class Executor {
       const before = cached ? null : mat.slice();
       const t0 = Date.now();
       const note = this.apply(node, mat, phi, conc);
+      // 재질이 없어진 칸의 도펀트도 같이 내보낸다. 연산자마다 넣으면 하나
+      // 빠뜨렸을 때 조용히 틀리므로, 모든 단계가 지나는 이 한 자리에서 한다.
+      dopantFollowsMaterial(s, mat, conc);
       const ms = Date.now() - t0;
 
       const concChanged = s.concDirty;

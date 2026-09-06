@@ -21,7 +21,9 @@ import { dirname, resolve } from "node:path";
 
 import { createSim, newMat, newPhi, newConc, at, XOF, ZOF, type Sim } from "../grid";
 import { newProject, validateProject } from "../project/serialize";
+import type { ParamValue, RecipeNode } from "../project/types";
 import { defaultParams } from "../project/nodes";
+import { defaultLeaf } from "../project/graph";
 import { Executor } from "../runner/executor";
 import { EMPTY, SI, OX, NIT, PR, MET, MSI, POLY, B, P_, AS, DG, DREL, SEG_M } from "../materials";
 import { DEFAULT_LIBRARY, removalOf, stopLayersOf, selectivityOf, semiconductorsOf } from "../library";
@@ -1134,5 +1136,60 @@ describe("salicide — 게이트 폴리와 소스·드레인이 같이 반응한
     expect(before, "폴리가 깔려 있어야 한다").toBeGreaterThan(0);
     expect(countOf(s, mat, POLY), "폴리가 줄어야 한다").toBeLessThan(before);
     expect(r.si, "반응한 반도체").toBeGreaterThan(0);
+  });
+});
+
+/* ------------------------------------------- 도펀트는 재질을 따라 나간다 */
+
+describe("도펀트가 재질 없는 자리에 남지 않는다", () => {
+  /*
+   * 도핑은 재질과 따로 사는 필드라, 실리콘을 깎아 내도 그 자리 농도가 남았다.
+   * 그리고 나중에 그 칸을 채운 산화막·금속이 그 도펀트를 물려받았다 — 화면에서는
+   * 아무 데도 주입한 적 없는 배선층에 도핑 띠가 가로로 깔려 보인다.
+   *
+   * 사용자가 만든 93단계 CMOS에서 그렇게 드러났다. 층마다 띠가 하나씩.
+   */
+  const chainOf = (steps: { type: string; params?: Record<string, ParamValue> }[]) => {
+    const p = newProject("t", { nx: 32, ny: 8, nz: 40 });
+    const nodes: RecipeNode[] = [];
+    let prev: string | undefined;
+    steps.forEach((st, i) => {
+      const id = `n${i}`;
+      nodes.push({ id, type: st.type, params: { ...defaultParams(st.type), ...(st.params ?? {}) } });
+      if (prev) p.edges.push({ from: prev, to: id, port: "state" });
+      prev = id;
+    });
+    p.nodes = nodes;
+    return p;
+  };
+
+  it("깎아 낸 자리의 도펀트는 사라지고, 그 위에 깐 막은 깨끗하다", () => {
+    const p = chainOf([
+      { type: "substrate", params: { material: "Si", thickness: 20 } },
+      { type: "implant", params: { species: "B", rp: 4, drp: 1.5, dose: 1 } },
+      { type: "etch", params: { etchant: "RIE_silicon", seconds: 6, anisotropy: 0.95 } },
+      { type: "deposit", params: { material: "SiO2", thickness: 8, method: "ALD", coverage: 1 } },
+    ]);
+    const ex = new Executor(p);
+    const frames = ex.run(defaultLeaf(p)!);
+    const OXID = ex.library.mat.index.SiO2;
+    const totals = frames.map((f) => {
+      const mat = ex.materialOf(f);
+      let vac = 0, ox = 0, solid = 0;
+      for (let i = 0; i < mat.length; i++) {
+        let c = 0;
+        for (let k = 0; k < ex.library.sp.count; k++) c += f.conc[k][i];
+        if (c <= 0) continue;
+        if (mat[i] === EMPTY) vac += c;
+        else if (mat[i] === OXID) ox += c;
+        else solid += c;
+      }
+      return { vac, ox, solid };
+    });
+    expect(totals[1].solid, "주입은 고체에 들어간다").toBeGreaterThan(0);
+    expect(totals[2].vac, "깎아 낸 자리에 도펀트가 떠 있으면 안 된다").toBe(0);
+    expect(totals[3].ox, "새로 깐 산화막에는 도펀트가 없어야 한다").toBe(0);
+    expect(totals[3].solid, "안 깎인 실리콘의 도펀트는 남아야 한다").toBeGreaterThan(0);
+    expect(totals[3].solid, "깎인 만큼은 줄어야 한다").toBeLessThan(totals[1].solid);
   });
 });

@@ -39,6 +39,8 @@ function applyProto(
     case "cmp": P.opCMP(mat, phi, c.amount, c.protect); break;
     case "carve": P.carve(mat, c.x0, c.x1, c.y0, c.y1, c.zFloor); break;
   }
+  // 원본 페이지의 단계 루프가 매 단계 부르는 것 — 여기서도 같이 불러야 같은 경로다.
+  P.dopantFollowsMaterial(mat, conc);
 }
 
 interface Trace {

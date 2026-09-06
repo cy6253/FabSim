@@ -213,6 +213,38 @@ export function opAnneal(
 const KB = 8.617333e-5;
 
 /** 아레니우스 확산계수 D(T) [cm²/s]. */
+/**
+ * 도펀트는 재질을 따라간다 — 재질이 없어진 칸은 도펀트도 없앤다.
+ *
+ * 도핑은 재질과 **따로** 사는 필드다. 그래서 실리콘을 깎아 내도 그 자리의
+ * 농도는 그대로 남았고, 나중에 그 칸을 덮은 산화막·금속이 그 도펀트를 물려받았다.
+ * 화면에서는 아무 데도 주입한 적 없는 배선층에 도핑 띠가 가로로 깔려 보인다.
+ * (실측: 6복셀을 깎으면 주입량 256 중 216이 허공에 남고, 그 위에 산화막을 덮는
+ * 순간 그 216이 통째로 산화막의 도핑이 됐다.)
+ *
+ * 빈 칸만 비우면 충분하다. 증착은 빈 칸을 채우는 것이라, 없어질 때 비워 두면
+ * 채워질 때는 이미 0이다. 순서가 그렇게 맞물린다.
+ *
+ * 산화·실리사이드는 칸을 비우지 않고 **바꾸는** 것이라 여기 안 걸린다 — 그쪽
+ * 도펀트 재분배는 segregate가 따로 한다.
+ */
+export function dopantFollowsMaterial(s: Sim, mat: Uint8Array, conc: Float32Array[]): void {
+  const { N } = s;
+  let changed = false;
+  for (const f of conc)
+    for (let i = 0; i < N; i++)
+      if (mat[i] === EMPTY && f[i] !== 0) { f[i] = 0; changed = true; }
+  /*
+   * 지웠으면 **지웠다고 말해야 한다.**
+   *
+   * 실행기는 도핑이 안 바뀐 단계에서 이전 단계의 배열을 그대로 가리켜 메모리를
+   * 아낀다. 식각은 도핑을 건드리는 연산자가 아니라서 그 표시를 안 켜는데, 여기서
+   * 도펀트를 빼내 놓고 표시를 안 켜면 프레임이 **빼내기 전 배열**을 계속 가리킨다.
+   * 계산은 맞는데 화면만 옛날 것을 보는, 찾기 고약한 어긋남이 된다.
+   */
+  if (changed) s.concDirty = true;
+}
+
 export function diffusivity(D0: number, Ea: number, tempC: number): number {
   return D0 * Math.exp(-Ea / (KB * (tempC + 273.15)));
 }
