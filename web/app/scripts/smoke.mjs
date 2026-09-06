@@ -232,6 +232,76 @@ console.log(`10c) 숫자 직접 입력: "${typed}" · ${await line(".stepbar")}`
 if (typed !== "0.35") console.log(`   ⚠ 소수점 입력이 "${typed}"에서 끊겼다`);
 await shot("10c-typed");
 
+/*
+ * 되돌리기. 노브·단계·마스크가 **한 역사**에 들어가는지가 요점이다 —
+ * 화면마다 따로 두면 어디서 되돌려지는지 아무도 모른다.
+ */
+const undoBtn = page.locator(".undogroup button").first();
+const redoBtn = page.locator(".undogroup button").last();
+const stepCount = () => page.locator(".step").count();
+
+// (a) 슬라이더는 값을 수십 번 던진다. 되돌리기 한 번에 끌기 전으로 와야 한다.
+await page.locator(".step").nth(0).click();
+await settle();
+await page.waitForTimeout(700);
+const knobBox = page.locator(".stepinspector .numrow input[type=number]").first();
+const knob0 = await knobBox.inputValue();
+await page.locator(".stepinspector .numrow input[type=range]").first().fill("55");
+await settle();
+await page.waitForTimeout(1000);
+const knob1 = await knobBox.inputValue();
+await undoBtn.click();
+await settle();
+await page.waitForTimeout(1000);
+const knob2 = await knobBox.inputValue();
+console.log(`10d) 되돌리기 — 노브 ${knob0} → ${knob1} → ${knob2}`);
+if (knob2 !== knob0) console.log(`   ⚠ 끌기가 한 번에 안 되돌아왔다 (${knob2})`);
+
+// (b) 단계 삭제와 다시 실행
+const s0 = await stepCount();
+await page.locator(".step").nth(1).click();
+await page.waitForTimeout(500);
+await page.locator(".step.on button").last().click();
+await settle();
+await page.waitForTimeout(1200);
+const s1 = await stepCount();
+await undoBtn.click(); await settle(); await page.waitForTimeout(1200);
+const s2 = await stepCount();
+await redoBtn.click(); await settle(); await page.waitForTimeout(1200);
+const s3 = await stepCount();
+console.log(`   단계 ${s0} → 삭제 ${s1} → 되돌리기 ${s2} → 다시 실행 ${s3}`);
+if (s2 !== s0 || s3 !== s1) console.log("   ⚠ 단계 되돌리기/다시 실행이 어긋난다");
+
+// (c) 마스크 그림도 같은 역사에 들어간다
+await page.locator(".topbar .menuwrap > button").click();
+await page.locator(".menu button", { hasText: "마스크 편집" }).click();
+await page.waitForTimeout(1200);
+const areaNow = async () =>
+  Number(((await page.locator(".hint").last().innerText()).match(/열린 면적 ([\d,]+)/) ?? [0, "0"])[1].replace(/,/g, ""));
+const m0 = await areaNow();
+await page.locator(".masktools").nth(1).locator("button", { hasText: "반전" }).click();
+await page.waitForTimeout(800);
+const m1 = await areaNow();
+await page.keyboard.press("Control+z");
+await page.waitForTimeout(1000);
+const m2 = await areaNow();
+console.log(`   마스크 반전 ${m0} → ${m1} → Ctrl+Z → ${m2}`);
+if (m2 !== m0) console.log("   ⚠ 마스크가 같은 역사에 안 들어간다");
+await page.locator(".modal-box header button", { hasText: "닫기" }).click();
+await page.waitForTimeout(500);
+
+// (d) 입력칸 안의 Ctrl+Z는 글자만 되돌려야 한다 — 레시피를 건드리면 안 된다.
+const s4 = await stepCount();
+const nameBox = page.locator(".topbar input.name");
+await nameBox.click();
+await nameBox.type("XY", { delay: 70 });
+await page.waitForTimeout(700);
+await page.keyboard.press("Control+z");
+await page.waitForTimeout(900);
+const s5 = await stepCount();
+console.log(`   이름칸 Ctrl+Z 뒤 단계 ${s4} → ${s5}`);
+if (s5 !== s4) console.log("   ⚠ 입력칸에서 앱 되돌리기를 가로챘다");
+
 // ---- 학생처럼 험하게 다뤄 본다 ----
 console.log("11) UI 스트레스");
 await page.locator(".step").first().click();

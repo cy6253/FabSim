@@ -37,6 +37,7 @@ import { exportSlicePNG, exportStepsCSV } from "./exports";
 import { MaskDesigner } from "./MaskDesigner";
 import { LibraryEditor } from "./LibraryEditor";
 import { loadState, saveState } from "./persist";
+import { useUndoable } from "./useUndoable";
 import "./styles.css";
 
 const HINT_KEY = "fabsim3d.hint.dismissed";
@@ -51,7 +52,13 @@ const HINT_KEY = "fabsim3d.hint.dismissed";
 const PLAY_DWELL_MS = 1100;
 
 export function App() {
-  const [project, setProject] = useState<Project>(() => exampleById("trench"));
+  /*
+   * 프로젝트는 되돌릴 수 있다. 레시피도 노브도 마스크 그림도 재질 표도 전부
+   * 이 한 값으로 흐르므로, 되돌리기를 화면마다 두지 않고 여기 하나만 둔다.
+   */
+  const {
+    value: project, set: setProject, undo, redo, canUndo, canRedo, reset: resetProject,
+  } = useUndoable<Project>(() => exampleById("trench"));
   const [doping, setDoping] = useState(false);
   const [showVoids, setShowVoids] = useState(true);
   const [showDiff, setShowDiff] = useState(false);
@@ -146,7 +153,7 @@ export function App() {
     loadState().then((s) => {
       if (!alive) return;
       if (s) {
-        setProject(s.project);
+        resetProject(s.project);
         sim.setStep(s.step);
       }
       setRestored(true);
@@ -200,6 +207,25 @@ export function App() {
    */
   useEffect(() => { setPlaying(false); }, [project]);
 
+  /*
+   * Ctrl+Z / Ctrl+Shift+Z.
+   *
+   * 입력칸 안에서는 넘긴다 — 거기서는 브라우저가 글자를 되돌려 주는 것이 맞고,
+   * 그걸 가로채면 오타 하나 고치려다 레시피가 통째로 되돌아간다.
+   */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      const t = e.target as HTMLElement | null;
+      if (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return;
+      const k = e.key.toLowerCase();
+      if (k === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
+      else if ((k === "z" && e.shiftKey) || k === "y") { e.preventDefault(); redo(); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [undo, redo]);
+
   /** 마지막에서 누르면 처음부터 다시 — 한 번 더 보려고 되감는 수고를 없앤다. */
   const togglePlay = () => {
     if (playing) { setPlaying(false); return; }
@@ -208,7 +234,7 @@ export function App() {
   };
 
   const openExample = (id: string) => {
-    setProject(exampleById(id));
+    resetProject(exampleById(id));
     goTo(0);
   };
 
@@ -218,7 +244,7 @@ export function App() {
     if (project.nodes.length > 0 && !confirm("지금 레시피를 버리고 새로 시작할까요?")) return;
     const p = newProject("새 프로젝트", project.grid);
     p.nmPerVoxel = nmPerVoxel;
-    setProject(p);
+    resetProject(p);
     goTo(0);
     setCutX(-1);
     setHidden(new Set());
@@ -236,7 +262,7 @@ export function App() {
   const load = (file: File) =>
     file.text().then((t) => {
       try {
-        setProject(parseProject(t));
+        resetProject(parseProject(t));
         goTo(0);
       } catch (e) {
         alert((e as Error).message);
@@ -282,6 +308,12 @@ export function App() {
           value={project.name}
           onChange={(e) => setProject({ ...project, name: e.target.value })}
         />
+
+        {/* 폰에는 Ctrl+Z가 없다. 버튼이 없으면 되돌리기가 없는 것과 같다. */}
+        <span className="undogroup">
+          <button className="ghost" onClick={undo} disabled={!canUndo} title="되돌리기 (Ctrl+Z)">↶</button>
+          <button className="ghost" onClick={redo} disabled={!canRedo} title="다시 실행 (Ctrl+Shift+Z)">↷</button>
+        </span>
 
         <span className="spacer" />
         {sim.busy && <span className="meta">계산 중…</span>}

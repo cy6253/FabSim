@@ -58,6 +58,11 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
 .topbar .meta { color: var(--accent); }
 
 .menuwrap { position: relative; }
+
+/* 되돌리기 한 쌍. 글자가 아니라 화살표라 폭을 맞춰 둔다. */
+.undogroup { display: flex; gap: 2px; }
+.undogroup button { min-width: 28px; padding: 2px 6px; font-size: 14px; line-height: 1.1; }
+.undogroup button:disabled { opacity: 0.3; }
 .menu {
   position: absolute; right: 0; top: calc(100% + 6px); z-index: 40;
   background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
@@ -510,6 +515,7 @@ button.danger { background: #3a1f26; border-color: #5b2b35; color: #ffb3ba; padd
 
   /* 손가락으로 누를 것들이라 조금 키운다. */
   .panebar button, .stepbar button, .viewtools button { min-height: 32px; }
+  .undogroup button { min-height: 32px; min-width: 40px; font-size: 16px; }
 
   .modal { padding: 8px; }
   .modal-box { padding: 10px; max-height: 94vh; }
