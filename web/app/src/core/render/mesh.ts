@@ -349,12 +349,26 @@ export function buildSmoothMesh(mat: Uint8Array, o: MeshOptions): Mesh {
    * 재질마다 점유도를 같은 커널로 흐린 뒤 그 자리에서 가장 큰 재질을 고르면,
    * 경계가 복셀 격자를 벗어나 껍질과 같은 매끄러운 곡선을 따라간다. 고르는 것은
    * 여전히 하나뿐이라 경계 자체는 흐려지지 않고 위치만 정밀해진다.
+   *
+   * **다만 흐린 값끼리만 비교하면 안 된다.** 그것은 이웃을 둘러본 다수결이라
+   * 구조적으로 두꺼운 재질이 이긴다. 한 복셀짜리 막은 제 자리에서조차 진다 —
+   * [1 2 1]을 세 번 돌리면 제 몫이 20/64인데 아래 두꺼운 층이 밀고 올라오는 값이
+   * 22/64다. 양쪽에 낀 막은 **한 번만 흐려도** 진다(0.500 대 0.500). 그래서 두께
+   * 1로 증착한 막이 화면에서 통째로 사라졌다. 증착은 제대로 되고 있었다.
+   *
+   * 그래서 원본 점유도를 주 판단으로 두고 흐린 값을 거기에 **더한다**. 막 안쪽은
+   * 원본이 1이라 어떤 다수결로도 안 뒤집히고, 경계 근처는 원본이 반반이라 흐린
+   * 값이 가른다 — 매끄럽게 만들고 싶었던 자리가 정확히 거기다. 완화 0이면 흐린
+   * 값이 원본과 같아지므로 이 식은 저절로 원본 하나만 보는 것이 된다.
    */
   const labels: number[] = [];
   const fields: Float32Array[] = [];
+  const raws: Float32Array[] = [];
   for (const [m, f] of labelField) {
     labels.push(m);
-    fields.push(blurField(f, { nx, ny, nz, passes }));
+    raws.push(f);
+    // blurField는 넘긴 배열을 덮어쓴다. 원본을 그대로 봐야 하므로 복사해서 준다.
+    fields.push(blurField(Float32Array.from(f), { nx, ny, nz, passes }));
   }
 
   /** 표본 자리를 둘러싼 여덟 칸과 그 가중치. 삼선형 보간에 쓴다. */
@@ -377,14 +391,19 @@ export function buildSmoothMesh(mat: Uint8Array, o: MeshOptions): Mesh {
     WW[4] = gx * gy * fz; WW[5] = fx * gy * fz; WW[6] = gx * fy * fz; WW[7] = fx * fy * fz;
   };
 
-  /** 흐린 재질장을 삼선형으로 재고 가장 큰 재질을 고른다. 아무것도 없으면 -1. */
+  /**
+   * 원본 + 흐린 값을 삼선형으로 재고 가장 큰 재질을 고른다. 아무것도 없으면 -1.
+   *
+   * 원본만 보면 경계가 복셀 격자를 따라 각지고, 흐린 값만 보면 얇은 막이 사라진다.
+   * 둘을 같은 무게로 더하면 안쪽은 원본이(1 대 0) 지키고 경계는 흐린 값이 민다.
+   */
   const labelAt = (sx: number, sy: number, sz: number): number => {
     weigh(sx, sy, sz);
     let best = -1, bestV = 0;
     for (let L = 0; L < fields.length; L++) {
-      const f = fields[L];
+      const f = fields[L], r = raws[L];
       let v = 0;
-      for (let q = 0; q < 8; q++) v += f[WI[q]] * WW[q];
+      for (let q = 0; q < 8; q++) v += (r[WI[q]] + f[WI[q]]) * WW[q];
       if (v > bestV) { bestV = v; best = labels[L]; }
     }
     return best;

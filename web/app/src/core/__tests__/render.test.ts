@@ -10,7 +10,7 @@ import { buildMesh, smoothMesh, buildSmoothMesh } from "../render/mesh";
 import { surfaceNets, blurField } from "../render/surfaceNets";
 import { renderSlice, dopingProfile, junctionDepth } from "../render/slice";
 import { createSim, newMat, newConc, at } from "../grid";
-import { EMPTY, SI, OX, MATCOL, VOIDCOL, B, AS } from "../materials";
+import { EMPTY, SI, OX, NIT, MATCOL, VOIDCOL, B, AS } from "../materials";
 
 const G = { nx: 12, ny: 6, nz: 12 };
 
@@ -424,5 +424,63 @@ describe("등위면 표면 (Surface Nets)", () => {
     const base = buildSmoothMesh(mat, { ...G, smooth: 2 });
     for (const axis of [1, 2] as const)
       expect(buildSmoothMesh(mat, { ...G, smooth: 2, cutAxis: axis }).triangles).toBe(base.triangles);
+  });
+});
+
+/* ------------------------------------------------------- 얇은 막이 살아남나 */
+
+/**
+ * 한 복셀짜리 막은 화면에서 사라지기 가장 쉬운 것이고, 동시에 공정에서 가장
+ * 자주 나오는 것이다 — 게이트 산화막도, 터널 산화막도, 라이너도 그 두께다.
+ *
+ * 사라졌던 이유는 두 겹이었다. 재질을 **흐린 값끼리 비교**한 것이 첫째 —
+ * 이웃 다수결이라 두꺼운 재질이 구조적으로 이긴다. 둘째는 blurField가 넘긴
+ * 배열을 덮어써서, 원본을 같이 보려고 들고 있던 것이 이미 흐려진 값이었다.
+ */
+describe("한 복셀 막이 완화에 지워지지 않는다", () => {
+  /** 재질 m의 색으로 칠해진 꼭짓점 수. 화면에 실제로 그 재질이 나오는지의 척도다. */
+  const painted = (color: Float32Array, m: number) => {
+    const w = MATCOL[m].map((c) => c / 255);
+    let n = 0;
+    for (let i = 0; i < color.length; i += 3)
+      if (Math.abs(color[i] - w[0]) < 0.02 && Math.abs(color[i + 1] - w[1]) < 0.02
+          && Math.abs(color[i + 2] - w[2]) < 0.02) n++;
+    return n;
+  };
+
+  it("표면 위 한 복셀 막이 어느 완화에서도 보인다", () => {
+    const s = createSim(G.nx, G.ny, G.nz);
+    const mat = newMat(s);
+    for (let z = 0; z < 6; z++)
+      for (let y = 0; y < G.ny; y++) for (let x = 0; x < G.nx; x++) mat[at(s, x, y, z)] = SI;
+    for (let y = 0; y < G.ny; y++) for (let x = 0; x < G.nx; x++) mat[at(s, x, y, 6)] = OX;
+    for (const smooth of [0, 1, 3, 5])
+      expect(painted(buildSmoothMesh(mat, { ...G, smooth }).color, OX), `완화 ${smooth}`)
+        .toBeGreaterThan(0);
+  });
+
+  it("두 재질 사이에 낀 한 복셀 막도 보인다 — 가장 불리한 경우다", () => {
+    // 위아래가 모두 두꺼우면 흐린 값 비교에서 0.5 대 0.5로 비겨 버린다.
+    const s = createSim(G.nx, G.ny, G.nz);
+    const mat = newMat(s);
+    for (let z = 0; z < 9; z++)
+      for (let y = 0; y < G.ny; y++) for (let x = 0; x < G.nx; x++)
+        mat[at(s, x, y, z)] = z === 5 ? OX : z < 5 ? SI : NIT;
+    for (const smooth of [0, 1, 3, 5]) {
+      const c = buildSmoothMesh(mat, { ...G, smooth, cutX: G.nx >> 1 }).color;
+      expect(painted(c, OX), `완화 ${smooth} 낀 막`).toBeGreaterThan(0);
+      // 두꺼운 쪽도 여전히 제대로 나뉘어야 한다 — 얇은 것을 살리려다 뒤집으면 안 된다.
+      expect(painted(c, SI), `완화 ${smooth} Si`).toBeGreaterThan(0);
+      expect(painted(c, NIT), `완화 ${smooth} 질화막`).toBeGreaterThan(0);
+    }
+  });
+
+  it("blurField는 넘긴 배열을 덮어쓴다 — 원본이 필요하면 복사해야 한다", () => {
+    // 이 사실을 모르고 원본을 들고 있다가 얇은 막이 안 살아났다. 계약을 못 박는다.
+    const f = new Float32Array(G.nx * G.ny * G.nz);
+    f[at(createSim(G.nx, G.ny, G.nz), 6, 3, 6)] = 1;
+    const copy = Float32Array.from(f);
+    blurField(f, { ...G, passes: 2 });
+    expect(f, "입력이 그대로 남아 있으면 이 테스트의 전제가 바뀐 것이다").not.toEqual(copy);
   });
 });

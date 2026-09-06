@@ -185,6 +185,11 @@ export function surfaceNets(field: Float32Array, o: NetOptions): NetGeometry {
  * **전에** 장을 부드럽게 만든다. 그래서 반복을 늘려도 층이 뭉개지지 않고
  * 경계만 완만해진다.
  */
+/**
+ * **src를 덮어쓴다.** 두 배열을 번갈아 쓰는데 그중 하나가 src다 — 첫 패스의 y
+ * 방향이 이미 src에 쓴다. 원본이 나중에도 필요하면 복사해서 넘겨야 한다.
+ * 재질 라벨을 원본과 흐린 값 둘 다로 판단하려다 여기서 한 번 당했다.
+ */
 export function blurField(
   src: Float32Array,
   o: { nx: number; ny: number; nz: number; passes: number; scratch?: Float32Array },
