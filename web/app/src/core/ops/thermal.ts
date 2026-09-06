@@ -9,6 +9,7 @@
  * "산화막인가"가 아니라 "산화제를 통과시키는가"를 라이브러리에 묻는다.
  */
 import { EMPTY, DG } from "../materials";
+import { semiconductorsOf } from "../library";
 import { XOF, YOF, ZOF, type Sim } from "../grid";
 import { edt3 } from "../edt";
 import { floodTop } from "../connectivity";
@@ -371,7 +372,8 @@ export interface SilicideResult {
 
 /** 실리사이드 반응 한 건. 라이브러리의 레시피를 숫자 ID로 편 것이다. */
 export interface SilicideRecipe {
-  semiconductor: number;
+  /** 반응하는 반도체들. 폴리와 단결정이 같이 들어온다(salicide). */
+  semiconductors: number[];
   metal: number;
   product: number;
 }
@@ -381,7 +383,11 @@ export function defaultSilicide(s: Sim): SilicideRecipe {
   const r = s.lib.proc.silicides[0];
   if (!r) throw new Error("라이브러리에 실리사이드 레시피가 없습니다");
   const ix = s.lib.mat.index;
-  return { semiconductor: ix[r.semiconductor], metal: ix[r.metal], product: ix[r.product] };
+  return {
+    semiconductors: semiconductorsOf(r).map((m) => ix[m]),
+    metal: ix[r.metal],
+    product: ix[r.product],
+  };
 }
 
 /**
@@ -403,8 +409,11 @@ export function opSilicide(
     isM = S.u8b;
   let a = false,
     b = false;
+  // 반도체가 여럿이라 재질마다 한 번 표를 만들어 두고 칸마다 그걸 본다.
+  const reacts = new Uint8Array(256);
+  for (const m of recipe.semiconductors) reacts[m] = 1;
   for (let i = 0; i < N; i++) {
-    isSi[i] = mat[i] === recipe.semiconductor ? 1 : 0;
+    isSi[i] = reacts[mat[i]] ? 1 : 0;
     isM[i] = mat[i] === recipe.metal ? 1 : 0;
     if (isSi[i]) a = true;
     if (isM[i]) b = true;
@@ -460,7 +469,7 @@ export function opSilicide(
     me = 0;
   const hit: number[] = [];
   for (let i = 0; i < N; i++) {
-    if (mat[i] === recipe.semiconductor && dSi[i] - HALF <= tS) { hit.push(i); si++; }
+    if (reacts[mat[i]] && dSi[i] - HALF <= tS) { hit.push(i); si++; }
     else if (mat[i] === recipe.metal && dMe[i] - HALF <= tM) { hit.push(i); me++; }
   }
   for (const i of hit) mat[i] = recipe.product;

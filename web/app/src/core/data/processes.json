@@ -221,7 +221,7 @@
     {
       "id": "generic",
       "name": "실리사이드 (일반)",
-      "semiconductor": "Si",
+      "semiconductors": ["Si", "polySi"],
       "metal": "Metal",
       "product": "MetalSi",
       "siFraction": 0.62
@@ -229,7 +229,7 @@
     {
       "id": "TiSi2",
       "name": "티타늄 실리사이드",
-      "semiconductor": "Si",
+      "semiconductors": ["Si", "polySi"],
       "metal": "Ti",
       "product": "TiSi2",
       "siFraction": 0.62,
@@ -238,7 +238,7 @@
     {
       "id": "CoSi2",
       "name": "코발트 실리사이드",
-      "semiconductor": "Si",
+      "semiconductors": ["Si", "polySi"],
       "metal": "Co",
       "product": "CoSi2",
       "siFraction": 0.64

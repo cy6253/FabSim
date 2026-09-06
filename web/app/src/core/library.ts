@@ -101,11 +101,27 @@ export interface OxidationDef {
 export interface SilicideDef {
   id: string;
   name: string;
-  semiconductor: string;
+  /**
+   * 이 금속과 반응하는 반도체들.
+   *
+   * **목록인 이유.** salicide는 노출된 실리콘이면 단결정이든 폴리든 가리지 않고
+   * 반응한다 — 게이트 폴리와 소스·드레인이 한 번에 실리사이드가 되는 것이 이
+   * 공정의 요점이다. 하나만 적어 두면 게이트가 맨 폴리로 남아, 정작 "자기정렬"이
+   * 무엇인지 보여 주지 못한다.
+   */
+  semiconductors?: string[];
+  /** 옛 형식(하나만). 사용자가 저장해 둔 라이브러리 편집본을 위해 남긴다. */
+  semiconductor?: string;
   metal: string;
   product: string;
   siFraction: number;
   teaches?: string;
+}
+
+/** 레시피가 반응하는 반도체 목록. 옛 단수 형식도 받아 준다. */
+export function semiconductorsOf(r: SilicideDef): string[] {
+  if (r.semiconductors?.length) return r.semiconductors;
+  return r.semiconductor ? [r.semiconductor] : [];
 }
 
 export interface ImplantDef {
@@ -323,8 +339,11 @@ export function buildLibrary(
     check(Object.keys(s.removal), `슬러리 ${s.id}`);
     check(s.stopOn, `슬러리 ${s.id}의 stopOn`);
   }
-  for (const s of proc.silicides)
-    check([s.semiconductor, s.metal, s.product], `실리사이드 ${s.id}`);
+  for (const s of proc.silicides) {
+    const semis = semiconductorsOf(s);
+    if (semis.length === 0) fail(`실리사이드 ${s.id}에 반응할 반도체가 없습니다`);
+    check([...semis, s.metal, s.product], `실리사이드 ${s.id}`);
+  }
   for (const im of proc.implants)
     if (sp.index[im.species] === undefined) fail(`주입 ${im.id}가 모르는 도펀트: ${im.species}`);
 
@@ -371,7 +390,7 @@ export function silicideOf(lib: Library, id: string) {
   const r = lib.proc.byId.silicide[id];
   if (!r) fail(`모르는 실리사이드: ${id}`);
   return {
-    semiconductor: lib.mat.index[r.semiconductor],
+    semiconductors: semiconductorsOf(r).map((m) => lib.mat.index[m]),
     metal: lib.mat.index[r.metal],
     product: lib.mat.index[r.product],
     siFraction: r.siFraction,

@@ -23,8 +23,8 @@ import { createSim, newMat, newPhi, newConc, at, XOF, ZOF, type Sim } from "../g
 import { newProject, validateProject } from "../project/serialize";
 import { defaultParams } from "../project/nodes";
 import { Executor } from "../runner/executor";
-import { EMPTY, SI, OX, NIT, PR, MET, MSI, B, P_, AS, DG, DREL, SEG_M } from "../materials";
-import { DEFAULT_LIBRARY, removalOf, stopLayersOf, selectivityOf } from "../library";
+import { EMPTY, SI, OX, NIT, PR, MET, MSI, POLY, B, P_, AS, DG, DREL, SEG_M } from "../materials";
+import { DEFAULT_LIBRARY, removalOf, stopLayersOf, selectivityOf, semiconductorsOf } from "../library";
 import { annealPlan, diffusivity, dealGrove, dealGroveTime, opOxidize, opSilicide, opDeposit, opEtch, opPRCoat, opExpose, opDevelop, opCMP, opImplant, opAnneal } from "../ops";
 import { columnTop, countOf, sumOf, surfaceZ } from "../measure";
 import { stripeMask, fullMask } from "../masks";
@@ -1094,5 +1094,45 @@ describe("두께를 주면 그 두께가 나온다", () => {
     const w = stack(10);
     const r = opSilicide(w.s, w.mat, w.phi, 8, 0.5);
     expect(r.si, `반도체 ${r.si} 대 금속 ${r.me}`).toBe(r.me);
+  });
+});
+
+/* --------------------------------------------- 자기정렬 실리사이드는 폴리도 먹는다 */
+
+describe("salicide — 게이트 폴리와 소스·드레인이 같이 반응한다", () => {
+  it("레시피가 단결정과 폴리를 둘 다 반응 대상으로 든다", () => {
+    /*
+     * 예전에는 레시피마다 반도체를 **하나만** 적었고 그게 늘 "Si"였다. 그러면
+     * 게이트 폴리는 금속에 맞닿아 있어도 끝까지 맨 폴리로 남는다 — NMOS 예제에서
+     * 폴리 15,360칸이 실리사이드 전후로 한 칸도 안 변했다. 정작 그 단계의 메모는
+     * "소스·드레인과 게이트에만 배선이 붙는다"고 말하고 있었다.
+     *
+     * salicide의 요점이 그 동시성이다. 노출된 실리콘이면 단결정이든 폴리든
+     * 반응하고, 무엇이 반응할지는 마스크가 아니라 산화막이 정한다.
+     */
+    for (const r of DEFAULT_LIBRARY.proc.silicides) {
+      const semis = semiconductorsOf(r);
+      expect(semis, `${r.id}`).toContain("Si");
+      expect(semis, `${r.id} — 게이트 폴리가 빠지면 자기정렬을 못 보여 준다`).toContain("polySi");
+    }
+  });
+
+  it("금속 아래 폴리가 실제로 실리사이드가 된다", () => {
+    const NX = 32, NY = 12, NZ = 40, Z0 = 20;
+    const s = createSim(NX, NY, NZ);
+    const mat = newMat(s), phi = newPhi(s);
+    for (let z = 0; z < Z0; z++)
+      for (let y = 0; y < NY; y++) for (let x = 0; x < NX; x++) mat[at(s, x, y, z)] = SI;
+    // 왼쪽 절반은 폴리, 오른쪽 절반은 그대로 단결정 — 둘 다 금속을 인다.
+    for (let z = Z0; z < Z0 + 6; z++)
+      for (let y = 0; y < NY; y++) for (let x = 0; x < NX >> 1; x++) mat[at(s, x, y, z)] = POLY;
+    for (let z = Z0 + 6; z < Z0 + 12; z++)
+      for (let y = 0; y < NY; y++) for (let x = 0; x < NX; x++) mat[at(s, x, y, z)] = MET;
+    s.phiDirty = true;
+    const before = countOf(s, mat, POLY);
+    const r = opSilicide(s, mat, phi, 4, 0.5);
+    expect(before, "폴리가 깔려 있어야 한다").toBeGreaterThan(0);
+    expect(countOf(s, mat, POLY), "폴리가 줄어야 한다").toBeLessThan(before);
+    expect(r.si, "반응한 반도체").toBeGreaterThan(0);
   });
 });
