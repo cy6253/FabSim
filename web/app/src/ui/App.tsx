@@ -448,7 +448,27 @@ export function App() {
         </div>
       )}
 
-      {sim.error && <div className="error">⚠ {sim.error}</div>}
+      {/*
+        오류는 어느 단계에서 났는지까지 말해야 쓸모가 있다. 실행기가 던지는 말은
+        노드 id를 짚는데("노드 'n7'이 모르는 식각액을 씁니다") 사용자는 id를
+        모른다. 라이브러리를 고친 프로젝트를 다른 사람이 열 때 실제로 나는 오류다.
+      */}
+      {sim.error && (
+        <div className="error">
+          ⚠{" "}
+          {sim.error.step !== undefined && (
+            <b>
+              {sim.error.step + 1}단계 {sim.error.label} —{" "}
+            </b>
+          )}
+          {sim.error.message}
+          {sim.error.step !== undefined && (
+            <button className="ghost tiny" onClick={() => goTo(sim.error!.step!)}>
+              그 단계 보기
+            </button>
+          )}
+        </div>
+      )}
 
       {modal === "mask" && (
         <MaskDesigner project={project} onChange={setProject} onClose={() => setModal(null)} />

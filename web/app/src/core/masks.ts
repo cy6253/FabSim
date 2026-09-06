@@ -9,6 +9,7 @@ import type { Sim } from "./grid";
 
 export const fullMask = (s: Sim) => new Uint8Array(s.NX * s.NY).fill(1);
 
+/** 전면 차단 마스크. **아직 부르는 화면이 없다** — 마스크 디자이너는 제 배열을 직접 만든다. */
 export const emptyMask = (s: Sim) => new Uint8Array(s.NX * s.NY);
 
 /**

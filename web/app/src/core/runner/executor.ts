@@ -85,6 +85,14 @@ export interface Frame {
   changed: { added: number; removed: number; mutated: number };
   /** 컬럼별로 이 단계가 더한 두께. 증착의 실측 커버리지를 여기서 낸다. */
   addedPerColumn?: { top: number; min: number; median: number };
+  /**
+   * 이번 주입이 레지스트에 앉힌 몫 (0~1).
+   *
+   * 레지스트가 이온을 막는 것이 마스크의 원리다. 그런데 화면에서는 그게 "주입은
+   * 됐다는데 PR을 벗기니 아무것도 없다"로만 보인다 — 물리는 맞고 말해 주지
+   * 않는 것이 문제라, 진단이 이 값을 읽어 짚어 준다.
+   */
+  implantInResist?: number;
 }
 
 export interface RunOptions {
@@ -100,6 +108,27 @@ export class Cancelled extends Error {
   constructor() {
     super("계산이 취소되었습니다");
     this.name = "Cancelled";
+  }
+}
+
+/**
+ * 어느 단계에서 무엇이 잘못됐는가.
+ *
+ * 실행기가 던지는 말은 노드 **id**를 짚는다 — "노드 'n7'이 모르는 식각액을
+ * 씁니다". 사용자는 id를 모른다. 화면이 "7단계 식각"이라고 바꿔 말하고 그
+ * 자리로 데려가려면 단계 번호가 필요하고, 그건 실행기만 안다.
+ *
+ * 라이브러리를 고친 프로젝트를 다른 사람이 열 때 실제로 나는 오류다.
+ */
+export class StepError extends Error {
+  constructor(
+    readonly step: number,
+    readonly nodeId: string,
+    readonly label: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = "StepError";
   }
 }
 
@@ -163,6 +192,8 @@ export class Executor {
   private maskCache = new Map<string, Uint8Array>();
   /** 이 갈래에서 주입이 한 번이라도 있었는가. 없으면 산화가 어닐을 건너뛴다. */
   private doped = false;
+  /** 방금 돈 주입이 레지스트에 앉힌 몫. 프레임에 실어 진단으로 넘긴다. */
+  private lastImplantInResist = 0;
   /**
    * 실행기가 매 단계 쓰는 N바이트 버퍼들.
    *
@@ -323,7 +354,15 @@ export class Executor {
         before.set(mat);
       }
       const t0 = Date.now();
-      const note = this.apply(node, mat, phi, conc);
+      this.lastImplantInResist = 0;
+      let note: string;
+      try {
+        note = this.apply(node, mat, phi, conc);
+      } catch (e) {
+        // 어느 단계인지는 여기서만 안다. 화면이 그 자리로 데려갈 수 있게 싣는다.
+        if (e instanceof Cancelled) throw e;
+        throw new StepError(i, node.id, this.labelOf(node), (e as Error).message);
+      }
       // 재질이 없어진 칸의 도펀트도 같이 내보낸다. 연산자마다 넣으면 하나
       // 빠뜨렸을 때 조용히 틀리므로, 모든 단계가 지나는 이 한 자리에서 한다.
       dopantFollowsMaterial(s, mat, conc);
@@ -343,6 +382,7 @@ export class Executor {
         conc: concChanged || !prev ? conc.map((c) => c.slice()) : prev.conc,
         concChanged,
         ...stats!,
+        ...(node.type === "implant" ? { implantInResist: this.lastImplantInResist } : {}),
       };
       s.concDirty = false;
       this.frames.delete(sigs[i]);
@@ -611,7 +651,14 @@ export class Executor {
         this.doped = true;
         const sp = lib.sp.index[str("species")];
         if (sp === undefined) throw new Error(`노드 '${n.id}'가 모르는 도펀트를 씁니다: ${str("species")}`);
-        const d = opImplant(s, mat, conc, sp, this.maskFor(n), num("rp"), num("drp"), num("dose"), num("dx"), num("dy"));
+        const into = new Float64Array(256);
+        const d = opImplant(
+          s, mat, conc, sp, this.maskFor(n),
+          num("rp"), num("drp"), num("dose"), num("dx"), num("dy"), into,
+        );
+        let inResist = 0;
+        for (let m = 0; m < lib.mat.count; m++) if (lib.mat.isResist[m]) inResist += into[m];
+        this.lastImplantInResist = d > 0 ? inResist / d : 0;
         return `${str("species")} 도즈 ${d.toFixed(1)} · Rp ${num("rp")}`;
       }
       case "anneal": {

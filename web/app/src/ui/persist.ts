@@ -100,6 +100,12 @@ export async function loadState(): Promise<SavedState | null> {
   }
 }
 
+/**
+ * 저장된 상태를 지운다.
+ *
+ * **아직 부르는 화면이 없다.** "처음부터 다시" 같은 단추가 생기면 여기다.
+ * 지금은 새 프로젝트를 만들면 다음 저장이 덮어쓰므로 부를 자리가 없었다.
+ */
 export async function clearState(): Promise<void> {
   const db = await open();
   if (!db) return;

@@ -7,17 +7,28 @@
  */
 import { describe, it, expect } from "vitest";
 import { exampleById } from "../project/examples";
+import { newProject } from "../project/serialize";
 import { chainTo, defaultLeaf } from "../project/graph";
-import { Executor } from "../runner/executor";
-import { NODE_SPEC_BY_TYPE } from "../project/nodes";
+import { Executor, StepError } from "../runner/executor";
+import { NODE_SPEC_BY_TYPE, defaultParams } from "../project/nodes";
 import { analyze, sortDiagnostics, countBySeverity } from "../education/diagnostics";
 import { columnStack, voidStats, diffMask, thicknessOf, sidewallAngle } from "../education/measure";
 import { DEFAULT_LIBRARY } from "../library";
 import { EMPTY, SI, OX, NIT, PR } from "../materials";
 import { createSim, newMat, at } from "../grid";
 
-/** 예제를 돌리고 진단까지 낸다. */
-function runWithDiagnostics(id: string, tweak?: (p: ReturnType<typeof exampleById>) => void) {
+/**
+ * 예제를 돌리고 진단까지 낸다.
+ *
+ * **손대지 않은 예제는 한 번만 돈다.** 같은 파일 안에서 트렌치를 세 번, NMOS를
+ * 두 번 처음부터 다시 돌리고 있었는데 3D NAND 한 벌이 8초다 — 시험이 느리면
+ * 고치는 사이의 간격이 늘어나고, 그 간격이 결국 검증을 건너뛰게 만든다.
+ * 반환값은 전부 읽기 전용으로 쓰이고(materialOf는 매번 새 배열을 준다) 노브를
+ * 고치는 시험은 tweak을 주므로 공유되지 않는다.
+ */
+const shared = new Map<string, ReturnType<typeof runFresh>>();
+
+function runFresh(id: string, tweak?: (p: ReturnType<typeof exampleById>) => void) {
   const p = exampleById(id);
   tweak?.(p);
   const ex = new Executor(p);
@@ -25,6 +36,13 @@ function runWithDiagnostics(id: string, tweak?: (p: ReturnType<typeof exampleByI
   const frames = ex.run(leaf);
   const chain = chainTo(p, leaf).filter((n) => !NODE_SPEC_BY_TYPE[n.type]?.asset);
   return { p, ex, frames, diags: analyze(frames, chain, ex.library) };
+}
+
+function runWithDiagnostics(id: string, tweak?: (p: ReturnType<typeof exampleById>) => void) {
+  if (tweak) return runFresh(id, tweak);
+  let hit = shared.get(id);
+  if (!hit) { hit = runFresh(id); shared.set(id, hit); }
+  return hit;
 }
 
 describe("예제가 실제로 그 공정을 해내는가", () => {
@@ -121,6 +139,74 @@ describe("진단 — 문제를 잡아낸다", () => {
       nand.diags.filter((d) => d.kind === "coverage-measured"),
       "ALD·LPCVD만 쓰는 예제라 커버리지 진단이 하나도 없어야 한다",
     ).toEqual([]);
+  });
+
+  it("주입이 레지스트에 들어간 몫을 알려 준다", () => {
+    /*
+     * 레지스트가 이온을 막는 것이 마스크의 원리다. 도즈가 레지스트에 앉는 것은
+     * 고장이 아니라 **작동하는 모습**인데, 화면에서는 "주입은 됐다는데 PR을
+     * 벗기니 아무것도 없다"로만 보인다 — PR 제거가 그 자리의 도펀트를 같이
+     * 걷어 가기 때문이다. 물리는 맞고 말해 주지 않는 것이 문제였다.
+     *
+     * NMOS의 소스·드레인 주입은 마스크가 창을 열어 두므로 대부분 웨이퍼로
+     * 들어간다 — 여기서 경고가 뜨면 그게 거짓말이다.
+     */
+    const clean = runWithDiagnostics("nmos");
+    expect(
+      clean.diags.some((d) => d.kind === "implant-into-resist" && d.severity === "warn"),
+      "제대로 뚫린 마스크에서는 경고가 없어야 한다",
+    ).toBe(false);
+
+    /*
+     * 반대쪽은 예제를 고쳐 만들 수가 없다 — NMOS는 주입 시점에 PR이 이미
+     * 벗겨져 있어서, 앞쪽 현상 단계를 빼도 웨이퍼가 덮이지 않는다. 그래서
+     * 덮인 웨이퍼에 그냥 쏘는 세 단계짜리를 직접 세운다.
+     */
+    const p = newProject("주입 시험", { nx: 48, ny: 24, nz: 40 });
+    const step = (id: string, type: string, params: Record<string, unknown>) => ({
+      id, type, params: { ...defaultParams(type), ...params },
+    });
+    p.nodes = [
+      step("n1", "substrate", { material: "Si", thickness: 12 }),
+      step("n2", "prCoat", { thickness: 10, planarization: 1 }),
+      step("n3", "implant", { species: "B", rp: 4, drp: 2, dose: 1 }),
+    ] as typeof p.nodes;
+    p.edges = [
+      { from: "n1", to: "n2", port: "state" },
+      { from: "n2", to: "n3", port: "state" },
+    ];
+    const ex = new Executor(p);
+    const leaf = defaultLeaf(p)!;
+    const frames = ex.run(leaf);
+    const chain = chainTo(p, leaf).filter((n) => !NODE_SPEC_BY_TYPE[n.type]?.asset);
+    const d = analyze(frames, chain, ex.library).find((x) => x.kind === "implant-into-resist");
+    expect(d, "레지스트가 다 막았으면 짚어야 한다").toBeDefined();
+    expect(d!.severity, "웨이퍼에 하나도 안 닿았으면 경고다").toBe("warn");
+    expect(d!.title).toMatch(/레지스트에 들어갔습니다/);
+  });
+
+  it("실행 오류가 몇 단계인지 말해 준다", () => {
+    /*
+     * 실행기가 던지는 말은 노드 id를 짚는다 — 사용자는 id를 모른다. 라이브러리를
+     * 고친 프로젝트를 다른 사람이 열 때 실제로 나는 오류라, 단계 번호가 같이
+     * 와야 화면이 그 자리로 데려갈 수 있다.
+     */
+    const p = exampleById("trench");
+    const bad = p.nodes.find((n) => n.type === "etch")!;
+    bad.params = { ...bad.params, etchant: "RIE_없는것" };
+    const ex = new Executor(p);
+    let caught: unknown;
+    try {
+      ex.run(defaultLeaf(p)!);
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(StepError);
+    const se = caught as StepError;
+    expect(se.nodeId).toBe(bad.id);
+    expect(se.step, "트렌치 예제에서 식각은 5번째 단계(0-기반 4)다").toBe(4);
+    expect(se.label).toMatch(/식각/);
+    expect(se.message).toMatch(/RIE_없는것/);
   });
 
   it("아무 일도 안 한 단계를 짚는다 — 산화가 실리콘 한 칸도 못 먹을 때", () => {

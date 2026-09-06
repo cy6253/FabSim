@@ -69,8 +69,11 @@ export function removeStep(p: Project, id: string): Project {
  *
  * 간선만 다시 이으면 되지만 경우가 넷이라 헷갈린다 — 앞에 뭔가 있는지,
  * 뒤에 뭔가 있는지에 따라 다르다. 그래서 여기 한 번만 쓰고 UI는 부르기만 한다.
+ *
+ * 밖으로는 `moveStepUp`/`moveStepDown`만 낸다 — 화면이 "위로/아래로"를 말하지
+ * "다음과 바꾸기"를 말하지는 않기 때문이다.
  */
-export function swapWithNext(p: Project, id: string): Project {
+function swapWithNext(p: Project, id: string): Project {
   const g = indexGraph(p);
   const next = g.next[id]?.[0];
   if (!next) return p; // 마지막 단계

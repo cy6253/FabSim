@@ -51,4 +51,13 @@ JS를 로컬에서 못 돌리던 제약 때문이었고, 지금은 Node가 있�
 프로토타입과 파이썬 오라클을 **같은 값으로 옮겼다** — 오라클을 뒤에 남기면 parity가 매번
 실패해 신호가 죽고, 다음 사람이 틀린 참조를 읽는다.
 
-관련: [[fabsim3d-operator-set]], [[fabsim3d-deposition-decision]], [[fabsim3d-connectivity-primitive]], [[fabsim3d-design-first]], [[fabsim3d-physics-review]]
+**패리티가 덮는 범위 — 그리고 덮지 않는 곳 (2026-09-06):** 프로토타입과 파이썬 오라클이
+아는 재질은 **여덟 가지**뿐이다(vacuum·Si·SiO2·Si3N4·PR·PR_exposed·Metal·MetalSi). 앱이
+그 뒤에 더한 폴리실리콘·W·TiN·Ti·Co·Al·Cu·비정질 탄소·SiON과, 그 위에서만 일어나는
+공정(살리사이드가 폴리와도 반응하는 것, 탄소 하드마스크, 슬릿용 `RIE_ON`)은 **패리티
+밖이다.** 그러니 새 재질 경로를 고쳤을 때 parity가 통과하는 것은 "검증됐다"가 아니라
+"여기는 안 본다"는 뜻이다 — 실제로 살리사이드의 폴리 반응을 고친 변경은 parity를 하나도
+안 건드렸다. 그쪽은 골든·교육 테스트가 셀 수로 붙든다. **패리티가 지키는 것은 커널과
+표준 연산자**다: EDT·FMM·가시성·연결성·ADI와 여덟 재질로 도는 표준·적대 시퀀스.
+
+관련: [[fabsim3d-operator-set]], [[fabsim3d-deposition-decision]], [[fabsim3d-connectivity-primitive]], [[fabsim3d-design-first]], [[fabsim3d-physics-review]], [[fabsim3d-improvement-review]]

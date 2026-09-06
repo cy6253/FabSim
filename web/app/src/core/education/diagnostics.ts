@@ -272,6 +272,33 @@ export function analyze(
       });
     }
 
+    /* ---------------------------------------------- 주입이 어디로 갔는가 */
+    if (node.type === "implant" && f.implantInResist !== undefined && f.implantInResist > 0.2) {
+      /*
+       * 레지스트가 이온을 막는 것이 마스크의 원리다. 그래서 도즈가 레지스트에
+       * 들어가는 것은 고장이 아니라 **작동하는 모습**이다.
+       *
+       * 다만 화면에서는 그게 안 보인다. 학생 눈에는 "주입은 됐다는데 PR을
+       * 벗기고 어닐하니 아무것도 없다"로만 보인다 — 실제로 PR 제거가 그 자리의
+       * 도펀트를 같이 걷어 가기 때문이다(dopantFollowsMaterial). 물리는 맞고
+       * 말해 주지 않는 것이 문제라, 여기서 몇 %가 어디로 갔는지 짚는다.
+       */
+      const inResist = f.implantInResist;
+      const all = inResist > 0.98;
+      push({
+        kind: "implant-into-resist",
+        severity: all ? "warn" : "info",
+        title: `주입량의 ${(inResist * 100).toFixed(0)}%가 레지스트에 들어갔습니다`,
+        detail: all
+          ? "웨이퍼에 닿은 도펀트가 사실상 없습니다"
+          : `나머지 ${((1 - inResist) * 100).toFixed(0)}%만 웨이퍼로 들어갔습니다`,
+        advice: all
+          ? "레지스트가 전면을 덮고 있습니다. 현상을 먼저 하거나, 이 단계에 마스크를 붙이세요."
+          : "이 몫은 PR 제거에서 도펀트째 사라집니다 — 그것이 레지스트가 마스크가 " +
+            "되는 방식입니다. 패턴이 의도한 자리면 정상입니다.",
+      });
+    }
+
     /* ------------------------------------------------------------------ 도핑 */
     if (node.type === "anneal" && prev && f.concChanged) {
       // 도즈 보존은 솔버의 불변식이다. 깨지면 수치가 잘못된 것이다.

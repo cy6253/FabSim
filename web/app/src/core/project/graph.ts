@@ -39,6 +39,13 @@ export function indexGraph(p: Project): GraphIndex {
 }
 
 /** 공정 순서의 시작점 — 들어오는 상태 간선이 없는 노드. */
+/**
+ * 들어오는 상태 간선이 없는 노드들 — 갈래의 시작점.
+ *
+ * **아직 부르는 화면이 없다.** 그래프 편집기를 걷어낸 뒤로 화면은 갈래를
+ * 하나만 보여 주지만, 실행 모델은 여전히 분기를 돌린다. 여러 갈래를 나란히
+ * 보여 주는 화면이 생기면 여기서 시작한다.
+ */
 export function roots(p: Project, g = indexGraph(p)): string[] {
   return p.nodes.filter((n) => !n.type.startsWith("mask") && !g.prev[n.id]).map((n) => n.id);
 }

@@ -31,6 +31,18 @@ export interface ViewData {
   diff?: Uint8Array;
 }
 
+/**
+ * 계산이 멈춘 이유.
+ *
+ * 실행기가 던지는 말은 노드 id를 짚는다 — 사용자는 id를 모른다. 단계 번호가
+ * 같이 오면 화면이 "7단계 식각"이라고 바꿔 말하고 그 자리로 데려갈 수 있다.
+ */
+export interface SimError {
+  message: string;
+  step?: number;
+  label?: string;
+}
+
 /** 워커가 만들어 보낸 완성된 메시. 화면은 이걸 GPU에 꽂기만 한다. */
 export interface MeshData {
   step: number;
@@ -57,7 +69,7 @@ export interface SimState {
   mesh: MeshData | null;
   busy: boolean;
   progress: { index: number; total: number } | null;
-  error: string | null;
+  error: SimError | null;
   cacheBytes: number;
   /** 계산된 구간의 진단. 심각도 순으로 정렬돼 있다. */
   diagnostics: Diagnostic[];
@@ -92,7 +104,7 @@ export function useSimulation(project: Project, viewOpts: ViewOptions): SimState
   const [mesh, setMesh] = useState<MeshData | null>(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<{ index: number; total: number } | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<SimError | null>(null);
   const [cacheBytes, setCacheBytes] = useState(0);
   const [diagnostics, setDiagnostics] = useState<Diagnostic[]>([]);
 
@@ -154,7 +166,7 @@ export function useSimulation(project: Project, viewOpts: ViewOptions): SimState
           });
           break;
         case "error":
-          setError(m.message);
+          setError({ message: m.message, step: m.step, label: m.label });
           setBusy(false);
           setProgress(null);
           break;

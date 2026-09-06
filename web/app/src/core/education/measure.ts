@@ -138,6 +138,9 @@ export interface Ruler {
 /**
  * 지정한 재질의 두께를 컬럼마다 재서 최소·최대·중앙값을 돌려준다.
  * "필드 산화막이 액티브보다 몇 배 두꺼운가" 같은 질문이 이걸로 답해진다.
+ *
+ * **아직 부르는 화면이 없다.** 테스트가 LOCOS와 STI를 확인하는 데 쓰고 있고,
+ * 측정 도구를 화면에 내놓을 때 그대로 쓰인다.
  */
 export function thicknessOf(
   mat: Uint8Array,
@@ -174,6 +177,8 @@ export function thicknessOf(
  *
  * 재는 방법: 지정한 재질의 가장자리를 z마다 찾아 x가 얼마나 밀리는지 본다.
  * 수직이면 90도, 45도로 퍼지면 45도.
+ *
+ * **아직 부르는 화면이 없다** — 위 thicknessOf와 같은 처지다.
  */
 export function sidewallAngle(
   mat: Uint8Array,

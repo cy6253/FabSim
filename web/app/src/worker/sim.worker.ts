@@ -10,7 +10,7 @@
  * 버릴 수 있다. `run(leaf, {upTo:i})`를 i를 늘려 가며 부르는 방식이라
  * 서명 캐시 덕에 매번 딱 한 노드씩만 실제로 계산된다.
  */
-import { Executor, type Frame } from "../core/runner/executor";
+import { Executor, StepError, type Frame } from "../core/runner/executor";
 import { chainTo, indexGraph } from "../core/project/graph";
 import { analyze } from "../core/education/diagnostics";
 import { diffMask } from "../core/education/measure";
@@ -34,6 +34,12 @@ const post = (m: FromWorker, transfer?: Transferable[]) =>
   transfer ? ctx.postMessage(m, transfer) : ctx.postMessage(m);
 
 const yieldToQueue = () => new Promise<void>((r) => setTimeout(r, 0));
+
+/** 오류를 화면이 쓸 수 있는 모양으로. 어느 단계인지가 붙어 있으면 같이 보낸다. */
+function errorOf(e: unknown): { message: string; step?: number; label?: string } {
+  const msg = (e as Error)?.message ?? String(e);
+  return e instanceof StepError ? { message: msg, step: e.step, label: e.label } : { message: msg };
+}
 
 /**
  * 지금 화면에 올라간 프레임을 펼쳐 둔 것.
@@ -163,7 +169,7 @@ async function run(leaf: string, upTo: number | undefined, token: number, v: Vie
     try {
       frames = executor.run(leaf, { upTo: i });
     } catch (e) {
-      post({ type: "error", token, message: (e as Error).message });
+      post({ type: "error", token, ...errorOf(e) });
       return;
     }
     const spent = performance.now() - t0;

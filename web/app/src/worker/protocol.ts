@@ -72,7 +72,15 @@ export type FromWorker =
       /** 계산된 구간에 대한 진단. 아직 안 돈 단계는 포함되지 않는다. */
       diagnostics: Diagnostic[];
     }
-  | { type: "error"; token: number; message: string }
+  | {
+      type: "error";
+      token: number;
+      message: string;
+      /** 어느 단계에서 났는가 (0-기반). 모르면 없다. */
+      step?: number;
+      /** 그 단계의 이름. "7단계 식각"처럼 보여 주는 데 쓴다. */
+      label?: string;
+    }
   | {
       type: "viewData";
       token: number;

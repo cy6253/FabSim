@@ -249,12 +249,31 @@ function counts(ex: Executor, f: ReturnType<Executor["run"]>[number]) {
   return c;
 }
 
+/**
+ * 예제 한 벌을 돌려 놓고 나눠 쓴다.
+ *
+ * 예제 여섯 개를 "끝까지 도는가"에서 한 번, 그다음 개별 검사에서 또 한 번씩
+ * 돌리고 있었다. 3D NAND 한 벌이 8초, allops가 8초라 그 중복만으로 파일이
+ * 두 배가 된다. 아래 검사들은 결과를 읽기만 하고 — materialOf는 매번 새 배열을
+ * 준다 — 프로젝트를 고치는 검사는 exampleById로 제 것을 따로 만든다.
+ */
+const runs = new Map<string, { p: Project; ex: Executor; frames: ReturnType<Executor["run"]> }>();
+
+function sharedRun(id: string) {
+  let hit = runs.get(id);
+  if (!hit) {
+    const p = exampleById(id);
+    const ex = new Executor(p);
+    hit = { p, ex, frames: ex.run(defaultLeaf(p)!) };
+    runs.set(id, hit);
+  }
+  return hit;
+}
+
 describe("예제 레시피가 실제로 그것을 가르치는가", () => {
   it("모든 예제가 끝까지 돈다", () => {
     for (const e of EXAMPLES) {
-      const p = e.build();
-      const ex = new Executor(p);
-      const frames = ex.run(defaultLeaf(p)!);
+      const { p, frames } = sharedRun(e.id);
       const steps = p.nodes.filter((n) => n.type !== "mask").length;
       expect(frames, e.id).toHaveLength(steps);
       expect(frames.every((f) => f.mat.length > 0), e.id).toBe(true);
@@ -278,9 +297,7 @@ describe("예제 레시피가 실제로 그것을 가르치는가", () => {
   });
 
   it("LOCOS — 질화막 아래보다 노출부에서 훨씬 많이 자란다", () => {
-    const p = exampleById("locos");
-    const ex = new Executor(p);
-    const frames = ex.run(defaultLeaf(p)!);
+    const { p, ex, frames } = sharedRun("locos");
     // 두 번째 산화(9번째 노드) 직후를 본다.
     const iOx = procNodes(p).findIndex((n) => n.params.condition === "wet1100");
     expect(iOx).toBeGreaterThan(0);
@@ -307,9 +324,7 @@ describe("예제 레시피가 실제로 그것을 가르치는가", () => {
     // 이 레시피의 주장은 하나다: 질화막은 **자리를 맡아 두는 재료**이고, 마지막에
     // 통째로 빠진 뒤 그 자리에 금속이 들어간다. 그 두 가지가 실제로 일어나는지만
     // 본다 — 하나라도 어긋나면 레시피가 가르치는 것이 거짓이 된다.
-    const p = exampleById("nand3d");
-    const ex = new Executor(p);
-    const frames = ex.run(defaultLeaf(p)!);
+    const { p, ex, frames } = sharedRun("nand3d");
     const last = frames[frames.length - 1];
     const L = ex.library.mat.index;
 
@@ -345,9 +360,7 @@ describe("예제 레시피가 실제로 그것을 가르치는가", () => {
   });
 
   it("STI — CMP가 질화막 정지층에서 멈춘다", () => {
-    const p = exampleById("sti");
-    const ex = new Executor(p);
-    const frames = ex.run(defaultLeaf(p)!);
+    const { p, ex, frames } = sharedRun("sti");
     const iCmp = procNodes(p).findIndex((n) => n.type === "cmp");
     expect(iCmp).toBeGreaterThan(0);
     const before = counts(ex, frames[iCmp - 1]);
@@ -409,12 +422,10 @@ describe("예제 레시피가 실제로 그것을 가르치는가", () => {
   });
 
   it("전체 연산자 레시피가 12종을 모두 지난다", () => {
-    const p = exampleById("allops");
+    const { p, ex, frames } = sharedRun("allops");
     const types = new Set(p.nodes.filter((n) => n.type !== "mask").map((n) => n.type));
     // 자산 노드를 뺀 공정 노드 12종
     expect(types.size).toBeGreaterThanOrEqual(11);
-    const ex = new Executor(p);
-    const frames = ex.run(defaultLeaf(p)!);
     const c = counts(ex, frames[frames.length - 1]);
     expect(c[EMPTY]).toBeGreaterThan(0);
     expect(ex.cacheBytes()).toBeGreaterThan(0);

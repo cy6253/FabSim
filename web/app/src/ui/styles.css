@@ -98,6 +98,8 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
   background: #40202a; color: #ffb3ba;
   padding: 6px 12px; border-bottom: 1px solid #5b2b35;
 }
+/* 오류가 난 단계로 뛰는 버튼. 배너 안에서 글자와 같은 줄에 앉는다. */
+.error button { margin-left: 8px; border-color: #5b2b35; color: #ffb3ba; }
 
 /* ------------------------------------------------------------------ 본문 */
 

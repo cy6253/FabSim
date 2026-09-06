@@ -32,6 +32,15 @@ export function opImplant(
   dose: number,
   dx: number,
   dy: number,
+  /**
+   * 재질 번호별로 얼마가 들어갔는지 여기 더한다 (선택).
+   *
+   * 레지스트가 이온을 막는 것이 마스크의 원리인데, 화면에서는 그게 "주입은
+   * 됐다는데 PR을 벗기니 아무것도 없다"로만 보인다. 물리는 맞고 **말해 주지
+   * 않는 것**이 문제라, 어디로 갔는지 셀 수 있게 해 둔다. 안 넘기면 아무 일도
+   * 안 하므로 코어의 셈은 그대로다.
+   */
+  into?: Float64Array,
 ): number {
   const { NX, NY, NZ } = s;
   const f = conc[species];
@@ -100,8 +109,10 @@ export function opImplant(
       // 이 컬럼이 받은 도즈를 정확히 dose만큼 나눠 준다.
       const k = dose / tot;
       for (let q = 0; q < n; q++) {
-        f[idx[q]] += wt[q] * k;
-        placed += wt[q] * k;
+        const amount = wt[q] * k;
+        f[idx[q]] += amount;
+        placed += amount;
+        if (into) into[mat[idx[q]]] += amount;
       }
     }
   s.concDirty = true;
