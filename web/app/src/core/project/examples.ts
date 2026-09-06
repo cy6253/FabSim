@@ -393,8 +393,7 @@ export const EXAMPLES: ExampleRecipe[] = [
     id: "cmos",
     title: "CMOS 인버터",
     summary:
-      "웰 둘·게이트·콘택·배선 2층까지 93단계. 절연막을 접어 둬서 소자가 바로 보입니다 — " +
-      "무겁습니다(끝까지 약 1분, 메모리 600MB)",
+      "웰 둘·게이트·콘택·배선 2층까지 93단계 — 무겁습니다(끝까지 약 1분, 메모리 600MB)",
     build: fromFile(cmosJson),
     heavy: true,
   },

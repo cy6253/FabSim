@@ -300,7 +300,7 @@ export function App() {
   const openExample = (id: string) => {
     const p = exampleById(id);
     resetProject(p);
-    // 예제가 제 볼 자리를 들고 있다 — CMOS는 절연막을 접어야 소자가 보인다.
+    // 예제가 제 볼 자리를 들고 있으면 그대로 편다.
     applyView(p);
   };
 
