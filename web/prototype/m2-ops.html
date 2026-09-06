@@ -1039,8 +1039,13 @@ function opSilicide(mat,phi,thick,siFrac){
   let si=0,me=0;
   const hit=[];
   for(let i=0;i<N;i++){
-    if(mat[i]===SI&&dSi[i]<=tS){hit.push(i);si++;}
-    else if(mat[i]===MET&&dMe[i]<=tM){hit.push(i);me++;}
+    // 2026-09-06: half-voxel convention. The distance runs to the CENTRE of the
+    // cell across the interface, so the touching cell reads 1 while the
+    // interface is at 0.5. Without the half both sides open a cell late and the
+    // layer always came out one voxel short -- thickness 8 gave 7, thickness 1
+    // gave nothing at all. Same convention as phi and oxidation.
+    if(mat[i]===SI&&dSi[i]-0.5<=tS){hit.push(i);si++;}
+    else if(mat[i]===MET&&dMe[i]-0.5<=tM){hit.push(i);me++;}
   }
   for(const i of hit)mat[i]=MSI;
   phiDirty=true;

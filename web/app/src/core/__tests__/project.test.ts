@@ -492,3 +492,42 @@ describe("프레임 캐시가 끝없이 자라지 않는다", () => {
     );
   });
 });
+
+/* ----------------------------------------------- 망가진 파일을 열 때 */
+
+describe("망가진 프로젝트 파일은 열 때 거부한다", () => {
+  /*
+   * 여기서 안 막으면 파일은 멀쩡히 열리고 **나중에** 터진다. 그 시점에는
+   * "무엇이 잘못됐는지" 말해 줄 자리를 이미 지나쳤고, 교사가 배포한 파일이
+   * 왜 안 되는지 아무도 모른다.
+   */
+  const base = {
+    format: "fabsim3d-project",
+    version: 1,
+    name: "t",
+    grid: { nx: 32, ny: 16, nz: 32 },
+    nodes: [],
+    edges: [],
+  };
+  const withMask = (m: unknown) => () => validateProject({ ...base, masks: [m] });
+
+  it("마스크가 터무니없이 크면 거부한다 — 안 막으면 100억 칸을 잡는다", () => {
+    expect(withMask({ id: "m", w: 100000, h: 100000, bits: "AA" })).toThrow(/크기가 이상|너무 큽니다/);
+  });
+
+  it("마스크 크기가 음수거나 0이면 거부한다", () => {
+    expect(withMask({ id: "m", w: -8, h: 16, bits: "AA" })).toThrow(/크기가 이상/);
+    expect(withMask({ id: "m", w: 0, h: 0, bits: "" })).toThrow(/크기가 이상/);
+  });
+
+  it("비트맵이 잘렸으면 거부한다 — 조용히 '전부 막힌 마스크'가 되면 안 된다", () => {
+    expect(withMask({ id: "m", w: 32, h: 16, bits: "AA" })).toThrow(/잘렸습니다/);
+  });
+
+  it("멀쩡한 마스크는 그대로 열린다", () => {
+    const px = new Uint8Array(32 * 16).fill(1);
+    const ok = packMask("m", "창", 32, 16, px);
+    const p = validateProject({ ...base, masks: [ok] });
+    expect(unpackMask(p.masks[0]).reduce((a, b) => a + b, 0)).toBe(32 * 16);
+  });
+});

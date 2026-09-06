@@ -11,10 +11,20 @@ export const fullMask = (s: Sim) => new Uint8Array(s.NX * s.NY).fill(1);
 
 export const emptyMask = (s: Sim) => new Uint8Array(s.NX * s.NY);
 
+/**
+ * 범위를 격자 안으로 자른다.
+ *
+ * 안 자르면 x가 음수일 때 `m[x + NX*y]`가 **앞 줄로 넘어가** 엉뚱한 자리에
+ * 창을 뚫는다. 배열 밖으로 나가면 조용히 무시되니 오류도 안 난다 — 그래서
+ * 화면에서 "창이 왜 저기 있지"로만 드러난다.
+ */
+const clamp = (v: number, hi: number) => Math.max(0, Math.min(hi, Math.round(v)));
+
 /** x0 ≤ x < x1 인 띠. 테스트와 예제 레시피에서 쓴다. */
 export function stripeMask(s: Sim, x0: number, x1: number): Uint8Array {
   const m = new Uint8Array(s.NX * s.NY);
-  for (let y = 0; y < s.NY; y++) for (let x = x0; x < x1; x++) m[x + s.NX * y] = 1;
+  const a = clamp(x0, s.NX), b = clamp(x1, s.NX);
+  for (let y = 0; y < s.NY; y++) for (let x = a; x < b; x++) m[x + s.NX * y] = 1;
   return m;
 }
 
@@ -27,7 +37,9 @@ export function rectMask(
   y1: number,
 ): Uint8Array {
   const m = new Uint8Array(s.NX * s.NY);
-  for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) m[x + s.NX * y] = 1;
+  const ax = clamp(x0, s.NX), bx = clamp(x1, s.NX);
+  const ay = clamp(y0, s.NY), by = clamp(y1, s.NY);
+  for (let y = ay; y < by; y++) for (let x = ax; x < bx; x++) m[x + s.NX * y] = 1;
   return m;
 }
 

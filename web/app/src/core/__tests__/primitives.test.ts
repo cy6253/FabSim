@@ -12,6 +12,7 @@ import { edt3 } from "../edt";
 import { fmm3 } from "../fmm";
 import { floodTop, sealTimes, BINS } from "../connectivity";
 import { EMPTY, SI } from "../materials";
+import { stripeMask, rectMask } from "../masks";
 
 /** 난수 없이 재현 가능한 패턴을 만든다 — 결정성이 요구사항이다. */
 function patternSources(s: Sim, stride: number): Uint8Array {
@@ -230,5 +231,23 @@ describe("P2 — 연결성", () => {
     for (let i = 0; i < s.N; i++)
       if (mat[i] === EMPTY && ZOF(s, i) < 9 && Number.isFinite(seal[i])) sealedBelow++;
     expect(sealedBelow).toBeGreaterThan(0);
+  });
+});
+
+describe("마스크 도우미가 격자 밖으로 안 샌다", () => {
+  it("범위를 벗어난 띠는 잘려 나간다 — 앞 줄로 넘어가면 안 된다", () => {
+    /*
+     * 자르지 않으면 x가 음수일 때 m[x + NX*y]가 앞 줄 끝으로 넘어가 엉뚱한
+     * 자리에 창이 뚫린다. 배열 밖은 조용히 무시되니 오류도 안 나서, 화면에서
+     * "창이 왜 저기 있지"로만 드러난다.
+     */
+    const s = createSim(16, 8, 8);
+    const m = stripeMask(s, -4, 4);
+    for (let y = 0; y < s.NY; y++)
+      for (let x = 0; x < s.NX; x++)
+        expect(m[x + s.NX * y], `(${x},${y})`).toBe(x < 4 ? 1 : 0);
+    // 완전히 밖이면 아무것도 안 열린다.
+    expect(stripeMask(s, 100, 200).reduce((a, b) => a + b, 0)).toBe(0);
+    expect(rectMask(s, -9, -1, -9, -1).reduce((a, b) => a + b, 0)).toBe(0);
   });
 });

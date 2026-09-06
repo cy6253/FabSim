@@ -325,14 +325,30 @@ describe("열공정 — 파이썬이 확인한 주장을 TS가 재현한다", ()
     opDeposit(s, mat, phi, MET, 5, 1.0);
     opSilicide(s, mat, phi, 8, 0.62);
 
-    let far = 0, win = 0;
+    /*
+     * "건너뛰었나"는 **반응 반경으로** 판정해야 한다. 창 가장자리에서는 금속과
+     * 실리콘이 실제로 맞닿아 있으므로 거기서부터 등방으로 번지는 것이 맞고, 그
+     * 거리는 소비 두께 tS다. 그보다 멀리 나타난 것만이 산화막을 뛰어넘은 것이다.
+     *
+     * 예전에는 `x >= 28`이라는 숫자를 박아 뒀는데, 그건 반 복셀이 모자라던 시절의
+     * 반경(4.96)에 맞춘 값이었다. 반 복셀을 바로잡자 반경이 5.46이 되면서 x=28에
+     * 24칸이 생겼고 — 실제로는 가장자리에서 4.5 떨어진 정상적인 사분원인데 —
+     * 테스트가 그걸 "건너뛰기"라고 불렀다. 주장 자체를 적어 두면 그런 일이 없다.
+     */
+    const EDGE = 24;
+    const radius = Math.ceil(8 * 0.62) + 1; // tS + 복셀 하나 여유
+    let far = 0, win = 0, maxReach = 0;
     for (let i = 0; i < s.N; i++) {
       if (mat[i] !== MSI) continue;
-      if (XOF(s, i) < 24) win++;
-      else if (XOF(s, i) >= 28) far++; // 창 가장자리 침투로는 설명이 안 되는 거리
+      const x = XOF(s, i);
+      if (x < EDGE) win++;
+      else {
+        maxReach = Math.max(maxReach, x - EDGE + 1);
+        if (x - EDGE + 1 > radius) far++;
+      }
     }
     expect(win, "창 안에서는 생겨야 한다").toBeGreaterThan(0);
-    expect(far, "산화막을 건너뛴 실리사이드").toBe(0);
+    expect(far, `산화막을 건너뛴 실리사이드 (가장 먼 것이 ${maxReach}복셀, 반경 ${radius})`).toBe(0);
   });
 });
 
@@ -1033,5 +1049,50 @@ describe("산화 — 두께가 계산값을 따라간다", () => {
     expect(none.cells, "한 칸도 못 먹는 시간에는 아무 일도 없다").toBe(0);
     const some = grow("wet1000", 2);
     expect(some.cells, "먹기 시작하면 곧바로 2칸이다").toBeGreaterThanOrEqual(2);
+  });
+});
+
+/* ------------------------------------------------ 두께를 주면 그 두께가 나오나 */
+
+/**
+ * 같은 실수가 세 번 나왔다: φ(증착), 산화, 실리사이드가 모두 EDT 거리를 두께와
+ * 그대로 비교했다. EDT는 칸 **중심** 사이의 거리라 계면에 맞닿은 칸이 1로 나오는데
+ * 계면 자체는 0.5에 있다. 그 반 칸을 안 빼면 두께가 늘 모자라고, 두께 1은 아예
+ * 아무 일도 안 일어난다.
+ *
+ * 여기서는 "달라고 한 두께가 나오는가"만 본다. 새 연산자를 붙일 때 이 절을 보고
+ * 같은 걸 물어보면 된다.
+ */
+describe("두께를 주면 그 두께가 나온다", () => {
+  const stack = (metalTop: number) => {
+    const NX = 32, NY = 12, NZ = 40, Z0 = 20;
+    const s = createSim(NX, NY, NZ);
+    const mat = newMat(s), phi = newPhi(s);
+    for (let z = 0; z < Z0; z++)
+      for (let y = 0; y < NY; y++) for (let x = 0; x < NX; x++) mat[at(s, x, y, z)] = SI;
+    for (let z = Z0; z < Z0 + metalTop; z++)
+      for (let y = 0; y < NY; y++) for (let x = 0; x < NX; x++) mat[at(s, x, y, z)] = MET;
+    s.phiDirty = true;
+    return { s, mat, phi };
+  };
+
+  it("실리사이드 — 두께 N을 주면 N칸이 된다", () => {
+    // 반 복셀을 안 빼던 때는 늘 N−1이었다: 8을 주면 7칸, 1을 주면 0칸.
+    for (const thick of [1, 2, 4, 8]) {
+      const w = stack(10);
+      opSilicide(w.s, w.mat, w.phi, thick, 0.52);
+      let n = 0;
+      for (let z = 0; z < w.s.NZ; z++)
+        if (w.mat[at(w.s, w.s.NX >> 1, w.s.NY >> 1, z)] === MSI) n++;
+      expect(n, `두께 ${thick}`).toBe(thick);
+    }
+  });
+
+  it("실리사이드가 반도체와 금속을 나눠 먹는다 — 비율대로", () => {
+    // siFrac은 "이 두께 중 몇 할을 반도체에서 가져오나"다. 한쪽만 먹으면
+    // 계면이 한 방향으로만 움직여 실제 실리사이드 형성과 달라진다.
+    const w = stack(10);
+    const r = opSilicide(w.s, w.mat, w.phi, 8, 0.5);
+    expect(r.si, `반도체 ${r.si} 대 금속 ${r.me}`).toBe(r.me);
   });
 });

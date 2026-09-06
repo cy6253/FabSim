@@ -18,6 +18,7 @@ import {
   type RecipeEdge,
   type GridSpec,
   type MaskAsset,
+  fromBase64,
 } from "./types";
 
 /** 이 시뮬레이터의 버전. 프로젝트에 기록해 결과 재현성의 근거로 남긴다. */
@@ -92,12 +93,43 @@ function checkNode(raw: unknown, i: number): RecipeNode {
   };
 }
 
+/**
+ * 마스크 한 변의 상한. 격자가 512까지이므로 그 몇 배면 충분히 넉넉하다.
+ * 여기서 안 막으면 `unpackMask`가 그 크기로 배열을 만든다.
+ */
+const MASK_MAX_SIDE = 4096;
+const MASK_MAX_CELLS = 4_000_000;
+
 function checkMask(raw: unknown, i: number): MaskAsset {
   const m = raw as MaskAsset;
   if (!m || typeof m !== "object") bad(`${i}번째 마스크가 객체가 아닙니다`);
   if (typeof m.id !== "string" || !m.id) bad(`${i}번째 마스크에 id가 없습니다`);
-  if (!Number.isInteger(m.w) || !Number.isInteger(m.h)) bad(`마스크 '${m.id}'의 크기가 이상합니다`);
+  /*
+   * 크기를 여기서 막지 않으면 파일은 멀쩡히 열리고 **나중에** 터진다.
+   * 100000×100000짜리를 넣어 두면 unpackMask가 100억 칸을 잡으려 들어 탭이
+   * 죽고, 음수를 넣으면 `new Uint8Array(-128)`이 던진다 — 둘 다 "열 때 뭐가
+   * 잘못됐다"고 말해 줄 자리를 지나쳐 버린 뒤다.
+   */
+  if (!Number.isInteger(m.w) || !Number.isInteger(m.h) ||
+      m.w < 1 || m.h < 1 || m.w > MASK_MAX_SIDE || m.h > MASK_MAX_SIDE)
+    bad(`마스크 '${m.id}'의 크기가 이상합니다: ${String(m.w)}×${String(m.h)}`);
+  if (m.w * m.h > MASK_MAX_CELLS)
+    bad(`마스크 '${m.id}'가 너무 큽니다 (${((m.w * m.h) / 1e6).toFixed(1)}M 칸). 최대 ${MASK_MAX_CELLS / 1e6}M`);
   if (typeof m.bits !== "string") bad(`마스크 '${m.id}'에 비트맵이 없습니다`);
+  /*
+   * 비트가 모자라면 `unpackMask`가 없는 바이트를 읽어 조용히 0으로 채운다 —
+   * 잘린 파일이 "전부 막힌 마스크"가 되어 열린다. 그건 오류가 아니라 **다른
+   * 마스크**이므로, 조용히 넘어가면 안 된다.
+   */
+  const need = Math.ceil((m.w * m.h) / 8);
+  let have: number;
+  try {
+    have = fromBase64(m.bits).length;
+  } catch {
+    bad(`마스크 '${m.id}'의 비트맵을 읽을 수 없습니다`);
+  }
+  if (have < need)
+    bad(`마스크 '${m.id}'의 비트맵이 잘렸습니다 (${have}바이트, ${need}바이트 필요)`);
   return { id: m.id, name: m.name ?? m.id, w: m.w, h: m.h, bits: m.bits };
 }
 

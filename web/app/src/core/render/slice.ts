@@ -87,7 +87,7 @@ const PCOL: [number, number, number] = [195, 75, 65];
  * 고르는 범위는 **부호가 정한 쪽**뿐이다. 보상된 자리에서 소수 캐리어 쪽 색이
  * 나오면 그건 거짓말이 된다.
  */
-export function dopantHue(
+function dopantHue(
   conc: Float32Array[],
   group: number[],
   colors: [number, number, number][] | undefined,
@@ -110,7 +110,7 @@ export function dopantHue(
  * 진성(t=0)은 회색이고 짙어질수록 그 이온의 색에 다가간다. 접합면에서 net이
  * 0을 지나므로 색이 회색을 통과한다 — 접합 깊이가 그대로 눈에 보인다.
  */
-export function dopingColor(
+function dopingColor(
   net: number,
   peak: number,
   hue: [number, number, number] = net >= 0 ? NCOL : PCOL,

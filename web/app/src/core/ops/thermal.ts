@@ -447,12 +447,21 @@ export function opSilicide(
   const dMe = edt3(s, faceS, false, S.d2); // 계면 반도체까지의 거리
   const tS = thick * siFrac,
     tM = thick * (1 - siFrac);
+  /**
+   * **반 복셀 관례.** 거리는 계면 건너편 칸의 **중심**까지다 — 계면에 맞닿은
+   * 칸이 1로 나오지만 계면 자체는 그 절반인 0.5에 있다. 그 반 칸을 안 빼면
+   * 양쪽이 각각 한 칸씩 늦게 열려 두께가 **늘 1복셀 모자랐다**: 두께 8을 주면
+   * 7칸, 두께 1을 주면 아예 0칸이었다.
+   *
+   * φ(증착)와 산화가 쓰는 것과 같은 관례다.
+   */
+  const HALF = 0.5;
   let si = 0,
     me = 0;
   const hit: number[] = [];
   for (let i = 0; i < N; i++) {
-    if (mat[i] === recipe.semiconductor && dSi[i] <= tS) { hit.push(i); si++; }
-    else if (mat[i] === recipe.metal && dMe[i] <= tM) { hit.push(i); me++; }
+    if (mat[i] === recipe.semiconductor && dSi[i] - HALF <= tS) { hit.push(i); si++; }
+    else if (mat[i] === recipe.metal && dMe[i] - HALF <= tM) { hit.push(i); me++; }
   }
   for (const i of hit) mat[i] = recipe.product;
   s.phiDirty = true;

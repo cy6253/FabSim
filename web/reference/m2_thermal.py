@@ -289,8 +289,13 @@ def op_silicide(mat, thickness, si_frac=0.62):
     d_met = edt_from(face_s)     # inside metal: how far from the silicon interface
     t_si = thickness * si_frac
     t_met = thickness * (1 - si_frac)
-    a = [i for i in range(N) if mat[i] == SI and d_si[i] <= t_si]
-    b = [i for i in range(N) if mat[i] == MET and d_met[i] <= t_met]
+    # Half-voxel convention: the distance runs to the centre of the cell across
+    # the interface, so a touching cell reads 1 while the interface sits at 0.5.
+    # Without it both sides open one cell late and the layer is always a voxel
+    # short -- thickness 8 gave 7 cells, thickness 1 gave none.
+    HALF = 0.5
+    a = [i for i in range(N) if mat[i] == SI and d_si[i] - HALF <= t_si]
+    b = [i for i in range(N) if mat[i] == MET and d_met[i] - HALF <= t_met]
     for i in a + b:
         mat[i] = MSI
     return len(a), len(b)
