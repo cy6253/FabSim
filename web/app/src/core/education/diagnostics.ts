@@ -66,7 +66,12 @@ export function analyze(
         detail: `${f.label} — 추가 0, 제거 0`,
         advice:
           node.type === "oxidize"
-            ? "산화 시간이 짧아 두께가 1복셀 미만이면 격자에 아무것도 안 생깁니다. 시간을 늘리세요."
+            ? // 산화막은 실리콘을 먹어야 생긴다 — 한 칸을 먹으면 2.17칸이 나오므로
+              // 격자에 보이는 가장 얇은 산화막은 1칸이 아니라 2칸이다. 인스펙터의
+              // 예상 두께가 이미 그렇게 말하고 있으니 여기서 다른 말을 하면 안 된다.
+              "실리콘 한 칸을 먹을 만큼의 시간이 안 됩니다 (한 칸을 먹으면 산화막 2.17칸이 " +
+              "나오므로 가장 얇아도 2칸입니다). 시간을 늘리거나, 더 얇게 보려면 기판 단계에서 " +
+              "다이를 줄여 칸을 잘게 하세요."
             : node.type === "silicide"
               ? "금속과 반도체가 맞닿아 있어야 반응합니다. 사이에 산화막이 있으면 먼저 벗겨야 합니다."
               : node.type === "implant"
@@ -200,13 +205,39 @@ export function analyze(
     /* -------------------------------------------------------- 증착 커버리지 */
     if (node.type === "deposit" && f.addedPerColumn) {
       const { top, min } = f.addedPerColumn;
-      if (top > 0 && min < top * 0.9) {
+      /*
+       * 지표를 쓸 수 있는 자리인지 먼저 가린다.
+       *
+       * `min/top`은 **컬럼마다 몇 칸이 더해졌나**의 최소/최대다. 평평한 웨이퍼에
+       * 트렌치 하나가 파인 형상에서는 이게 곧 스텝 커버리지지만, 깊은 구멍이나
+       * 슬릿을 **옆에서** 메우는 성장은 그 컬럼에 안 잡힌다. 3D NAND의 마지막
+       * 텅스텐 채움을 재 보면 선언 1.00짜리 ALD가 실측 0.09로 나온다 — 막은
+       * 완벽하게 컨포멀한데 화면은 "커버리지 9%"라고 경고했다. 학생 눈에는
+       * "컨포멀이라면서 왜 9%냐"로만 읽힌다.
+       *
+       * 그래서 **컨포멀이라고 선언한 방법은 이 지표로 판정하지 않는다.** 그런
+       * 단계가 실제로 잘못됐다면 봉인 보이드 진단이 잡는다 — 거기는 컬럼이
+       * 아니라 연결성으로 세므로 옆으로 자란 몫도 제대로 본다.
+       *
+       * 반대로 선언 커버리지가 낮은 방법(스퍼터 0.3, PECVD 0.55)에서는 이
+       * 지표가 바로 그 방법의 성질을 보여 준다. 트렌치 예제의 스퍼터 경고가
+       * 그 예제의 교훈 자체이므로 문턱은 그대로 둔다.
+       *
+       * 참고로 "실측이 선언의 절반 아래일 때만 경고"하는 규칙도 검토했는데,
+       * 그러면 스퍼터(선언 0.30 실측 0.27)가 경고에서 빠진다 — 낮은 커버리지가
+       * 제대로 재현된 것을 잘 됐다고 말하는 셈이라 교훈이 사라진다.
+       */
+      const method = lib.proc.byId.deposition[String(p.method)];
+      const declared = Number(p.coverage) >= 0 ? Number(p.coverage) : (method?.coverage ?? 1);
+      if (declared < 0.9 && top > 0 && min < top * 0.9) {
         const cov = min / top;
         push({
           kind: "coverage-measured",
           severity: cov < 0.4 ? "warn" : "info",
           title: `실측 스텝 커버리지 ${(cov * 100).toFixed(0)}%`,
-          detail: `가장 두꺼운 컬럼 ${top}복셀, 가장 얇은 곳 ${min}복셀`,
+          detail:
+            `가장 두꺼운 컬럼 ${top}복셀, 가장 얇은 곳 ${min}복셀 ` +
+            `(선언 ${(declared * 100).toFixed(0)}%)`,
           advice:
             cov < 0.4
               ? "깊은 곳이 거의 안 자랍니다. 입구가 먼저 막혀 보이드가 생기기 쉽습니다."
@@ -262,19 +293,61 @@ export function analyze(
       // 살리사이드는 반응시킨 뒤 **안 반응한 금속을 벗기는** 것까지가 한 벌이다.
       // 그걸 빼먹으면 산화막 위에 금속이 그대로 남아 게이트와 소스·드레인이
       // 이어진 채로 끝난다 — 화면으로는 멀쩡해 보이므로 말해 줘야 한다.
+      const metals: number[] = [];
       let left = 0;
       for (const [m, n] of Object.entries(f.counts))
-        if (lib.mat.kind[Number(m)] === "metal") left += n;
-      const removedLater = chain.slice(i + 1).some((n2) => n2.type === "etch" || n2.type === "cmp");
-      if (left > 0 && !removedLater) {
+        if (n > 0 && lib.mat.kind[Number(m)] === "metal") { metals.push(Number(m)); left += n; }
+
+      /*
+       * "뒤에 식각이 있는가"로는 부족하다.
+       *
+       * 예전에는 뒤에 etch나 cmp가 **하나라도** 있으면 통과였다. 그 식각이
+       * 산화막 RIE여도 통과다 — 금속은 하나도 안 건드리는데. 실제로 93단계짜리
+       * CMOS 파일에서 게이트 옆 그늘의 Ti 68칸이 끝까지 남았는데 진단은 조용했다.
+       * 그 식각액이 이 금속을 실제로 녹이는지(선택비 > 0)를 봐야 한다.
+       */
+      const key = (m: number) => lib.mat.key[m];
+      const dissolves = chain.slice(i + 1).some((n2) => {
+        if (n2.type === "etch") {
+          const et = lib.proc.byId.etchant[String(n2.params.etchant)];
+          return metals.some((m) => (et?.selectivity[key(m)] ?? 0) > 0);
+        }
+        if (n2.type === "cmp") {
+          const sl = lib.proc.byId.slurry[String(n2.params.slurry)];
+          return metals.some((m) => (sl?.removal[key(m)] ?? 0) > 0);
+        }
+        return false;
+      });
+
+      /*
+       * 걷어내는 단계가 **있어도** 다 걷혔는지는 별개다. 그늘진 자리는 이방성
+       * 식각이 못 닿는다. 그래서 최종 프레임을 보고 실제로 남은 것을 센다 —
+       * 지금까지는 실리사이드 직후 프레임만 봤으니 알 수가 없었다.
+       */
+      const end = frames[frames.length - 1];
+      let endLeft = 0;
+      if (end) for (const m of metals) endLeft += end.counts[m] ?? 0;
+
+      if (left > 0 && !dissolves) {
         push({
           kind: "unreacted-metal",
           severity: "warn",
           title: `반응하지 않은 금속이 ${left.toLocaleString()}셀 남았습니다`,
-          detail: "실리사이드 뒤에 금속을 걷어내는 단계가 없습니다",
+          detail: `실리사이드 뒤에 ${metals.map(name).join("·")}을(를) 녹이는 단계가 없습니다`,
           advice:
             "산화막 위에 남은 금속이 게이트와 소스·드레인을 잇습니다. " +
             "식각 단계를 붙이고 식각액을 '미반응 금속 제거'로 두면 실리사이드만 남습니다.",
+        });
+      } else if (left > 0 && endLeft > 0) {
+        push({
+          kind: "unreacted-metal",
+          severity: "warn",
+          title: `걷어냈지만 금속 ${endLeft.toLocaleString()}셀이 끝까지 남았습니다`,
+          detail: `실리사이드 직후 ${left.toLocaleString()}셀 → 최종 ${endLeft.toLocaleString()}셀`,
+          advice:
+            "이방성 식각은 그늘진 자리에 못 닿습니다. 게이트 옆처럼 가려진 곳에 " +
+            "금속이 남으면 거기서 게이트와 소스·드레인이 이어집니다. 제거 식각의 " +
+            "이방성을 낮추거나(등방성 습식) 시간을 늘리세요.",
         });
       }
     }

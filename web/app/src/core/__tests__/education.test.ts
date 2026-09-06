@@ -53,6 +53,22 @@ describe("예제가 실제로 그 공정을 해내는가", () => {
       p.edges = p.edges.filter((e) => e.to !== strip.id && e.from !== strip.id);
     });
     expect(without.diags.some((d) => d.kind === "unreacted-metal"), "빠지면 짚어야 한다").toBe(true);
+
+    /*
+     * 세 번째 경우 — **걷어내는 단계는 있는데 다 못 걷은 것.**
+     *
+     * 예전 진단은 "뒤에 etch나 cmp가 하나라도 있으면" 통과였다. 그 식각이
+     * 금속을 안 건드리는 산화막 RIE여도 통과였고, 금속 제거 식각이 있어도 그늘진
+     * 자리에 남은 것은 못 봤다. 93단계짜리 CMOS 파일에서 게이트 옆 Ti 68칸이
+     * 끝까지 남았는데 화면은 조용했다. 시간을 3분의 1로 줄여 같은 상황을 만든다.
+     */
+    const short = runWithDiagnostics("nmos", (p) => {
+      const strip = p.nodes.filter((n) => n.type === "etch").pop()!;
+      strip.params = { ...strip.params, seconds: Number(strip.params.seconds) / 3 };
+    });
+    const left = short.diags.find((d) => d.kind === "unreacted-metal");
+    expect(left, "덜 걷혔으면 짚어야 한다").toBeDefined();
+    expect(left!.title).toMatch(/끝까지 남았습니다/);
   });
 
   it("LOCOS·allops: 인산 제거 뒤 질화막이 한 셀도 남지 않는다", () => {
@@ -82,14 +98,32 @@ describe("진단 — 문제를 잡아낸다", () => {
     expect(good.diags.some((d) => d.kind === "voids-remain")).toBe(false);
   });
 
-  it("실측 스텝 커버리지를 숫자로 보고한다", () => {
+  it("실측 스텝 커버리지를 숫자로 보고한다 — 다만 컨포멀 선언에는 침묵한다", () => {
+    // 스퍼터(선언 0.30)는 깊은 곳이 안 자란다. 그게 트렌치 예제의 교훈이므로
+    // 여기서 경고가 사라지면 예제가 가르치려던 것이 없어진다.
     const { diags } = runWithDiagnostics("trench");
     const cov = diags.find((d) => d.kind === "coverage-measured");
     expect(cov).toBeDefined();
     expect(cov!.title).toMatch(/실측 스텝 커버리지 \d+%/);
+    expect(cov!.severity).toBe("warn");
+
+    /*
+     * 반대쪽 — **거짓 경고가 없어야 한다.**
+     *
+     * `min/top`은 컬럼마다 더해진 칸 수다. 평평한 웨이퍼에 트렌치 하나가 파인
+     * 형상에서는 그게 곧 스텝 커버리지지만, 3D NAND의 마지막 텅스텐처럼 슬릿을
+     * **옆에서** 메우는 성장은 그 컬럼에 안 잡힌다 — 선언 1.00짜리 ALD가 실측
+     * 0.09로 나와 "커버리지 9%"라고 경고했다. 막은 멀쩡한데 지표가 못 본 것이라
+     * 학생에게는 "컨포멀이라면서 왜 9%냐"로만 읽힌다.
+     */
+    const nand = runWithDiagnostics("nand3d");
+    expect(
+      nand.diags.filter((d) => d.kind === "coverage-measured"),
+      "ALD·LPCVD만 쓰는 예제라 커버리지 진단이 하나도 없어야 한다",
+    ).toEqual([]);
   });
 
-  it("아무 일도 안 한 단계를 짚는다 — 산화 시간이 1복셀에 못 미칠 때", () => {
+  it("아무 일도 안 한 단계를 짚는다 — 산화가 실리콘 한 칸도 못 먹을 때", () => {
     const { diags } = runWithDiagnostics("nmos", (p) => {
       // 게이트 산화막을 12초로 되돌리면 두께 0.85복셀이라 아무것도 안 생긴다.
       const ox = p.nodes.find((n) => n.type === "oxidize")!;
@@ -97,7 +131,16 @@ describe("진단 — 문제를 잡아낸다", () => {
     });
     const noop = diags.find((d) => d.kind === "no-op");
     expect(noop).toBeDefined();
-    expect(noop!.advice).toMatch(/1복셀 미만/);
+    /*
+     * 조언이 **바닥 두께를 맞게** 말하는지 본다.
+     *
+     * 예전 문구는 "1복셀 미만이면 아무것도 안 생긴다"였는데 그건 틀렸다.
+     * 산화막은 실리콘을 먹어야 생기고, 한 칸을 먹으면 2.17칸이 나온다 —
+     * 격자에 보이는 가장 얇은 산화막은 1칸이 아니라 2칸이다. 인스펙터의 예상
+     * 두께가 이미 그렇게 말하므로 진단이 다른 말을 하면 둘 중 하나는 거짓말이다.
+     */
+    expect(noop!.advice).toMatch(/한 칸/);
+    expect(noop!.advice).not.toMatch(/1복셀 미만/);
   });
 
   it("레지스트가 식각 중 소모되면 오류로 올린다", () => {
