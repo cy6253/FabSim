@@ -186,11 +186,26 @@ export function StepBar(p: {
   progress: { index: number; total: number } | null;
   /** 3D 메시를 만든 결과 — 삼각형 수와 걸린 시간. */
   mesh?: { triangles: number; ms: number } | null;
+  /** 프레임 캐시가 들고 있는 바이트. */
+  cacheBytes?: number;
+  /** 격자 자체가 쓰는 바이트 (스크래치 포함). */
+  gridBytes?: number;
 }) {
   const m = p.meta[p.step];
   const node = p.chain[p.step];
   const last = p.chain.length - 1;
   const atEnd = p.step >= last;
+  /*
+   * 메모리를 보이는 이유.
+   *
+   * 캐시 예산(128MB)은 **지금 보고 있는 갈래는 안 버린다.** 격자가 커서 갈래
+   * 하나가 예산을 통째로 넘기면 넘긴 채로 도는 것이 맞다 — 방금 만든 것을
+   * 곧바로 버리면 다시 만들고 또 버리는 헛돌기가 된다. 다만 그럴 때 사용자는
+   * 아무것도 모른 채 탭이 무거워지는 것만 겪는다. 93단계짜리 CMOS 파일이
+   * 266MB를 쓰고 있었는데 화면에는 그 숫자가 어디에도 없었다.
+   */
+  const bytes = (p.cacheBytes ?? 0) + (p.gridBytes ?? 0);
+  const heavy = bytes > 400e6;
   return (
     <div className="stepbar">
       <button onClick={() => p.onStep(Math.max(0, p.step - 1))} disabled={p.step <= 0}>◀</button>
@@ -226,6 +241,18 @@ export function StepBar(p: {
           {p.mesh && (
             <span className="ms" title="3D 표면 삼각형 수와 만드는 데 걸린 시간">
               △ {p.mesh.triangles.toLocaleString()} · {p.mesh.ms.toFixed(0)}ms
+            </span>
+          )}
+          {bytes > 0 && (
+            <span
+              className={`ms${heavy ? " heavy" : ""}`}
+              title={
+                heavy
+                  ? "격자와 단계 캐시가 쓰는 메모리입니다. 기판 단계에서 격자를 줄이거나 레시피를 나누세요"
+                  : "격자와 단계 캐시가 쓰는 메모리입니다"
+              }
+            >
+              {Math.round(bytes / 1e6)}MB
             </span>
           )}
           {m && <span className="ms">{(m.ms / 1000).toFixed(2)}s</span>}

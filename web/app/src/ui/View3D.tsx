@@ -10,41 +10,24 @@
  */
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
-import { buildMesh, buildSmoothMesh } from "../core/render/mesh";
-import type { DopingField } from "../core/render/slice";
-import type { ViewData } from "./useSimulation";
-
-/**
- * 메시를 다시 만들기 전에 기다리는 시간.
- *
- * 슬라이더가 손을 따라오게 하는 값이다. 너무 짧으면 재생성이 밀리고, 너무 길면
- * 단계를 옮길 때 빈 화면이 보인다. 메시 한 번이 200ms대라 그보다 짧게 둔다.
- */
-const MESH_DEBOUNCE_MS = 110;
+import type { MeshData } from "./useSimulation";
 
 export interface View3DProps {
-  view: ViewData;
-  /** 이 좌표보다 큰 쪽을 잘라낸다. */
-  cutX: number;
-  /** 절단 축. 0=x, 1=y, 2=z. */
-  cutAxis: 0 | 1 | 2;
-  showVoids: boolean;
-  hidden: Set<number>;
-  /** 흐리기 반복 횟수. 클수록 부드럽고, 너무 크면 얇은 층이 뭉개진다. */
-  smooth: number;
-  /** 부드러운 등위면으로 그릴지, 복셀 면 그대로 그릴지. */
+  /**
+   * 워커가 만들어 보낸 꼭짓점 배열.
+   *
+   * 예전에는 재질 배열을 받아 여기서 등위면을 뽑았는데, 그 한 번이 기본 격자에서
+   * 300ms였고 그동안 슬라이더도 버튼도 전부 굳었다. 지금 이 파일이 하는 일은
+   * 카메라와 GPU 업로드뿐이라 몇 ms면 끝난다.
+   */
+  mesh: MeshData;
+  /** 부드러운 등위면으로 그릴지, 복셀 면 그대로 그릴지 — 재질의 양면 여부가 갈린다. */
   mode: "smooth" | "voxel";
-  /** 재질 대신 net doping을 칠한다. */
-  doping?: DopingField;
-  /** 변경분 하이라이트. 1 = 이번 단계가 더한 곳, 2 = 없앤 곳. */
-  diff?: Uint8Array;
   /**
    * 표면을 클릭했을 때 그 자리의 격자 좌표. 프로브 지점을 여기서 고른다 —
    * 예전에는 2D 단면을 클릭해 골랐는데, 단면을 걷어내면서 3D가 그 일을 맡았다.
    */
   onPick?: (x: number, y: number) => void;
-  /** 메시를 만드는 데 걸린 시간을 알려 준다 (화면에 표시용). */
-  onStats?: (s: { triangles: number; ms: number }) => void;
 }
 
 export function View3D(p: View3DProps) {
@@ -57,6 +40,19 @@ export function View3D(p: View3DProps) {
     scene: THREE.Scene;
     camera: THREE.PerspectiveCamera;
     mesh?: THREE.Mesh;
+    /**
+     * 재질은 **한 번만** 만든다.
+     *
+     * 예전에는 메시를 갈아 끼울 때마다 MeshStandardMaterial을 새로 만들고 옛
+     * 것을 dispose했다. 그러면 three가 매번 셰이더 프로그램을 새로 컴파일하는데,
+     * 그 컴파일은 GPU 드라이버 안에서 **동기로** 끝난다 — 프로파일을 떠 보니
+     * 단계를 옮길 때마다 메인 스레드가 그것 때문에 270ms 굳고 있었다. 메시를
+     * 워커로 옮겨 등위면 추출을 걷어내고 나니 이게 남은 가장 큰 덩어리였다.
+     *
+     * 재질은 어차피 늘 같다. 양면 여부만 표현 방식에 따라 바뀌는데 그건 래스터
+     * 상태라 재컴파일을 부르지 않는다.
+     */
+    material: THREE.MeshStandardMaterial;
     yaw: number;
     pitch: number;
     dist: number;
@@ -99,6 +95,15 @@ export function View3D(p: View3DProps) {
     scene.add(rim);
     stateRef.current = {
       renderer, scene, camera,
+      // 약한 반사가 있어야 곡면의 방향이 읽힌다. 완전 무광이면 어디가 꺾인
+      // 자리인지 눈이 못 잡는다.
+      material: new THREE.MeshStandardMaterial({
+        vertexColors: true,
+        roughness: 0.62,
+        metalness: 0.06,
+        flatShading: false,
+        side: THREE.DoubleSide,
+      }),
       yaw: -0.7, pitch: 0.42, dist: 1,
       target: new THREE.Vector3(),
       radius: 100,
@@ -249,6 +254,8 @@ export function View3D(p: View3DProps) {
       el.removeEventListener("pointerup", up);
       el.removeEventListener("pointercancel", up);
       el.removeEventListener("wheel", wheel);
+      stateRef.current?.mesh?.geometry.dispose();
+      stateRef.current?.material.dispose();
       renderer.dispose();
       host.removeChild(el);
       stateRef.current = null;
@@ -256,60 +263,28 @@ export function View3D(p: View3DProps) {
   }, []);
 
   /*
-   * 데이터가 바뀌면 메시를 다시 만든다 — 다만 **한 박자 늦춘다.**
+   * 새 메시가 오면 갈아 끼운다.
    *
-   * 완화·절단 슬라이더는 끄는 동안 값을 수십 번 던지는데, 메시 한 번이 200ms대다.
-   * 그대로 따라가면 재생성이 줄줄이 밀려 슬라이더가 손을 못 따라온다. 입력이
-   * 멎기를 기다렸다 한 번만 만들면 끄는 동안은 화면이 살아 있고, 결과는 어차피
-   * 마지막 값 하나다.
-   *
-   * 단계를 옮길 때는 이미 워커를 수백 ms 기다린 뒤라 이 지연이 안 보인다.
+   * 늦추지 않는다 — 늦출 이유였던 재생성 비용이 워커로 갔고, 워커에 보내는
+   * 요청 쪽에서 이미 한 박자 모아 두기 때문이다(useSimulation). 여기서 또
+   * 늦추면 두 번 늦춰져 슬라이더를 놓고도 그림이 늦게 바뀐다.
    */
   useEffect(() => {
-    if (!stateRef.current) return;
-    const timer = setTimeout(() => build(), MESH_DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-
-    function build() {
-    // 늦춰 부르므로 그 사이에 화면이 사라졌을 수 있다. 여기서 다시 잡는다.
     const s = stateRef.current;
     if (!s) return;
-    const { nx, ny, nz } = p.view;
-    const t0 = performance.now();
-    const opts = {
-      nx, ny, nz,
-      cutX: p.cutX,
-      cutAxis: p.cutAxis,
-      voids: p.showVoids ? p.view.voids : undefined,
-      hidden: p.hidden,
-      smooth: p.smooth,
-      doping: p.doping,
-      diff: p.diff,
-    };
-    const m = p.mode === "smooth" ? buildSmoothMesh(p.view.mat, opts) : buildMesh(p.view.mat, opts);
-    p.onStats?.({ triangles: m.triangles, ms: performance.now() - t0 });
+    const { nx, ny, nz } = p.mesh;
+    // 등위면은 절단면에서 안쪽을 보게 되므로 양면을 칠한다. 복셀 면은 겉만 보인다.
+    s.material.side = p.mode === "smooth" ? THREE.DoubleSide : THREE.FrontSide;
+    // 기하만 갈아 끼운다 — 재질은 그대로 두므로 셰이더가 다시 컴파일되지 않는다.
     if (s.mesh) {
       s.scene.remove(s.mesh);
       s.mesh.geometry.dispose();
-      (s.mesh.material as THREE.Material).dispose();
     }
     const geo = new THREE.BufferGeometry();
-    geo.setAttribute("position", new THREE.BufferAttribute(m.position, 3));
-    geo.setAttribute("normal", new THREE.BufferAttribute(m.normal, 3));
-    geo.setAttribute("color", new THREE.BufferAttribute(m.color, 3));
-    const mesh = new THREE.Mesh(
-      geo,
-      // 약한 반사가 있어야 곡면의 방향이 읽힌다. 완전 무광이면 어디가 꺾인
-      // 자리인지 눈이 못 잡는다.
-      new THREE.MeshStandardMaterial({
-        vertexColors: true,
-        roughness: 0.62,
-        metalness: 0.06,
-        flatShading: false,
-        // 등위면은 절단면에서 안쪽을 보게 되므로 양면을 칠한다.
-        side: p.mode === "smooth" ? THREE.DoubleSide : THREE.FrontSide,
-      }),
-    );
+    geo.setAttribute("position", new THREE.BufferAttribute(p.mesh.position, 3));
+    geo.setAttribute("normal", new THREE.BufferAttribute(p.mesh.normal, 3));
+    geo.setAttribute("color", new THREE.BufferAttribute(p.mesh.color, 3));
+    const mesh = new THREE.Mesh(geo, s.material);
     // 격자는 z가 위지만 three는 y가 위다. 축을 돌려 맞춘다.
     mesh.rotation.x = -Math.PI / 2;
     mesh.position.set(-nx / 2, -nz / 2, ny / 2);
@@ -319,9 +294,7 @@ export function View3D(p: View3DProps) {
     s.target.set(0, 0, 0);
     s.radius = 0.5 * Math.hypot(nx, ny, nz);
     (s as unknown as { place?: () => void }).place?.();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [p.view, p.cutX, p.cutAxis, p.showVoids, p.hidden, p.smooth, p.mode, p.doping, p.diff]);
+  }, [p.mesh, p.mode]);
 
   return <div className="view3d" ref={hostRef} />;
 }

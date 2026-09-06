@@ -47,7 +47,12 @@ export interface RecipeNode {
   id: string;
   type: string;
   params: Record<string, ParamValue>;
-  /** 노드 에디터 좌표. 실행에는 영향이 없다. */
+  /**
+   * 옛 그래프 편집기의 좌표. **아무 데서도 안 읽는다.**
+   *
+   * 편집기를 걷어낸 뒤로는 쓰는 곳이 없지만, 그때 저장된 파일들이 이 값을
+   * 들고 있으므로 읽어서 그대로 돌려주기만 한다. 새로 만드는 노드에는 안 넣는다.
+   */
   pos?: { x: number; y: number };
   /** 사용자가 단 주석. 가이드 레슨은 여기까지만 한다(교육 범위 결정). */
   note?: string;
@@ -150,8 +155,32 @@ export interface Project {
   nodes: RecipeNode[];
   edges: RecipeEdge[];
   library?: LibraryOverride;
-  /** 마지막으로 보던 위치. 열었을 때 그 자리로 돌아간다. */
-  view?: { leaf?: string; step?: number };
+  /**
+   * 어디를 어떻게 보고 있었는가. 열었을 때 그 자리로 돌아간다.
+   *
+   * 예제에도 이걸 넣는다. 3D NAND는 **내부**가 요점인데 절단 기본값이 끝까지라
+   * 열면 겉만 보인다 — "절단 슬라이더를 줄이세요"를 말로 따로 알려야 했다.
+   * 예제가 제 볼 자리를 들고 있으면 그 말이 필요 없다.
+   *
+   * 절단은 복셀이 아니라 **비율**로 담는다. 격자 프리셋을 바꿔도 "가운데를
+   * 자른다"는 뜻이 살아남아야 하기 때문이다.
+   */
+  view?: ProjectView;
+}
+
+/** 화면이 복원하는 시점. 전부 없어도 되고, 없는 것은 기본값을 쓴다. */
+export interface ProjectView {
+  leaf?: string;
+  step?: number;
+  /** 0=x, 1=y, 2=z. */
+  cutAxis?: 0 | 1 | 2;
+  /** 절단 위치를 그 축 길이로 나눈 비율 (0~1). 1이면 안 자른 것이다. */
+  cutX?: number;
+  smooth?: number;
+  mode?: "smooth" | "voxel";
+  doping?: boolean;
+  /** 숨긴 재질의 **이름**. 번호는 라이브러리가 바뀌면 뜻이 달라진다. */
+  hidden?: string[];
 }
 
 /* ------------------------------------------------------------ 마스크 인코딩 */

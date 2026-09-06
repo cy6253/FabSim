@@ -18,6 +18,7 @@ import {
   type RecipeEdge,
   type GridSpec,
   type MaskAsset,
+  type ProjectView,
   fromBase64,
 } from "./types";
 
@@ -27,6 +28,23 @@ export const SIM_VERSION = "0.3.0";
 export const DEFAULT_GRID: GridSpec = { nx: 176, ny: 64, nz: 96 };
 
 /** 격자 프리셋. 600만은 교실 기기에 위험해서 기본이 아니다 (메모리 300~400MB). */
+/**
+ * 격자 상한.
+ *
+ * 예전에는 12M이었는데 그건 지킬 수 없는 약속이었다. 코어의 스크래치 버퍼를
+ * 더하면 복셀 하나가 **47바이트**를 쓴다(EDT의 f64 8 + feat 4 + 거리장 둘 8 +
+ * 표시 둘 2 + i32 4 + fa·fb 8 + union-find 넷 13). 여기에 재질·φ·농도 17바이트가
+ * 붙는다. 12M이면 스크래치만 564MB, 합쳐 770MB다 — 프레임 캐시를 한 장도 안
+ * 세고서. 데스크톱 탭도 그만큼은 잘 안 받고 폰은 그 전에 죽는다.
+ *
+ * 4M이면 스크래치 188MB + 격자 68MB로 프레임 캐시(128MB)까지 얹어 400MB 안쪽이다.
+ * 프리셋 중 가장 큰 "정밀"이 2.15M이므로 손으로 다듬을 여지도 남는다.
+ */
+export const MAX_VOXELS = 4_000_000;
+
+/** 복셀 하나가 코어에서 차지하는 대략적인 바이트 (스크래치 + 재질·φ·농도). */
+export const BYTES_PER_VOXEL = 64;
+
 export const GRID_PRESETS: { label: string; grid: GridSpec }[] = [
   { label: "빠르게 (0.28M)", grid: { nx: 96, ny: 48, nz: 60 } },
   { label: "기본 (1.08M)", grid: { nx: 176, ny: 64, nz: 96 } },
@@ -61,8 +79,11 @@ function checkGrid(g: unknown): GridSpec {
     const v = o[k];
     if (!Number.isInteger(v) || v < 8 || v > 512) bad(`격자 ${k}가 이상합니다: ${String(v)}`);
   }
-  if (o.nx * o.ny * o.nz > 12_000_000)
-    bad(`격자가 너무 큽니다 (${(o.nx * o.ny * o.nz / 1e6).toFixed(1)}M 복셀). 최대 12M`);
+  if (o.nx * o.ny * o.nz > MAX_VOXELS)
+    bad(
+      `격자가 너무 큽니다 (${(o.nx * o.ny * o.nz / 1e6).toFixed(1)}M 복셀). ` +
+        `최대 ${(MAX_VOXELS / 1e6).toFixed(0)}M`,
+    );
   return { nx: o.nx, ny: o.ny, nz: o.nz };
 }
 
@@ -191,8 +212,28 @@ export function validateProject(raw: unknown): Project {
     nodes,
     edges,
     ...(p.library ? { library: p.library } : {}),
-    ...(p.view ? { view: p.view } : {}),
+    ...(p.view ? { view: checkView(p.view) } : {}),
   };
+}
+
+/**
+ * 보던 자리. 여기서 던지지 않는다 — 시점이 이상하다고 레시피를 못 열게 하는
+ * 것은 과하다. 이상한 값은 조용히 빼고 화면이 기본값을 쓰게 둔다.
+ */
+function checkView(raw: unknown): ProjectView {
+  const v = (raw ?? {}) as ProjectView;
+  const out: ProjectView = {};
+  if (typeof v.leaf === "string") out.leaf = v.leaf;
+  if (Number.isInteger(v.step) && (v.step as number) >= 0) out.step = v.step;
+  if (v.cutAxis === 0 || v.cutAxis === 1 || v.cutAxis === 2) out.cutAxis = v.cutAxis;
+  if (Number.isFinite(v.cutX) && (v.cutX as number) > 0 && (v.cutX as number) <= 1)
+    out.cutX = v.cutX;
+  if (Number.isInteger(v.smooth) && (v.smooth as number) >= 0 && (v.smooth as number) <= 6)
+    out.smooth = v.smooth;
+  if (v.mode === "smooth" || v.mode === "voxel") out.mode = v.mode;
+  if (typeof v.doping === "boolean") out.doping = v.doping;
+  if (Array.isArray(v.hidden)) out.hidden = v.hidden.filter((x) => typeof x === "string");
+  return out;
 }
 
 export function parseProject(json: string): Project {

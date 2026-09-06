@@ -21,10 +21,11 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EXAMPLES, exampleById } from "../core/project/examples";
-import { parseProject, serializeProject, libraryOf, newProject } from "../core/project/serialize";
+import { BYTES_PER_VOXEL, parseProject, serializeProject, libraryOf, newProject } from "../core/project/serialize";
 import { insertStep, removeStep, moveStepDown, moveStepUp } from "../core/project/edit";
 import type { Project } from "../core/project/types";
 import { EMPTY } from "../core/materials";
+import { acceptorsOf, donorsOf } from "../core/library";
 import { lengthLabel, nmPerVoxelOf } from "../core/project/types";
 import { useSimulation } from "./useSimulation";
 import { View3D } from "./View3D";
@@ -68,7 +69,6 @@ export function App() {
   const [cutAxis, setCutAxis] = useState<0 | 1 | 2>(0);
   const [smooth, setSmooth] = useState(3);
   const [mode, setMode] = useState<"smooth" | "voxel">("smooth");
-  const [meshStats, setMeshStats] = useState<{ triangles: number; ms: number } | null>(null);
   /**
    * 좁은 화면에서 지금 보고 있는 칸.
    *
@@ -85,7 +85,6 @@ export function App() {
   const [hint, setHint] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const sim = useSimulation(project);
   const lib = useMemo(() => libraryOf(project), [project]);
 
   const y = sliceY >= 0 ? sliceY : Math.floor(project.grid.ny / 2);
@@ -97,27 +96,36 @@ export function App() {
   const cut = cutX >= 0 ? Math.min(cutX, cutDim) : cutDim;
   const nmPerVoxel = nmPerVoxelOf(project);
 
+  /**
+   * 워커에 넘길 화면 설정.
+   *
+   * 메시를 워커가 만들므로 이 값들이 거기까지 가야 한다. 객체를 매번 새로 만들면
+   * 절단과 무관한 렌더마다 메시를 다시 요청하게 되므로 값으로 메모해 둔다.
+   */
+  const viewOpts = useMemo(
+    () => ({
+      cutX: cut,
+      cutAxis,
+      smooth,
+      mode,
+      hidden: [...hidden].sort((a, b) => a - b),
+      doping,
+      showVoids,
+      showDiff,
+    }),
+    [cut, cutAxis, smooth, mode, hidden, doping, showVoids, showDiff],
+  );
+
+  const sim = useSimulation(project, viewOpts);
+
   /** 지금 보고 있는 단계 = 지금 선택된 노드. 둘은 같은 것이다. */
   const currentId = sim.chain[sim.step]?.id;
   const currentNode = project.nodes.find((n) => n.id === currentId) ?? null;
 
-  const donors = useMemo(
-    () => lib.sp.key.map((_, i) => i).filter((i) => lib.sp.key[i] !== "B"),
-    [lib],
-  );
-  const acceptors = useMemo(
-    () => lib.sp.key.map((_, i) => i).filter((i) => lib.sp.key[i] === "B"),
-    [lib],
-  );
-
-  /**
-   * 3D에 넘길 도핑 자료. 객체를 매번 새로 만들면 참조가 달라져 메시를 다시
-   * 만들게 되므로 메모해 둔다.
-   */
-  const dopingData = useMemo(
-    () => (doping && sim.view ? { conc: sim.view.conc, donors, acceptors, colors: lib.sp.color } : undefined),
-    [doping, sim.view, donors, acceptors, lib],
-  );
+  // 도너·억셉터 구분은 재질 표가 이미 안다. 예전에는 여기서 id로 추측했는데,
+  // 그러면 표에 Ga을 더하는 순간 억셉터가 도너로 세어져 접합이 뒤집힌다.
+  const donors = useMemo(() => donorsOf(lib.sp), [lib]);
+  const acceptors = useMemo(() => acceptorsOf(lib.sp), [lib]);
 
   const present = useMemo(() => {
     const s = new Set<number>();
@@ -146,6 +154,49 @@ export function App() {
     return m;
   }, [sim.diagnostics]);
 
+  /* ------------------------------------------------------------- 보던 자리 */
+
+  /**
+   * 지금 보고 있는 시점.
+   *
+   * 프로젝트 **상태에는 안 넣는다.** 넣으면 절단 슬라이더 한 번에 프로젝트가
+   * 바뀐 것이 되어 되돌리기 역사에 쌓이고 시뮬레이션이 다시 돈다. 저장하거나
+   * 내보낼 때만 프로젝트에 얹는다.
+   */
+  const currentView = useMemo(
+    () => ({
+      step: sim.step,
+      cutAxis,
+      // 격자를 바꿔도 "가운데를 자른다"는 뜻이 살아남게 비율로 담는다.
+      cutX: cut / cutDim,
+      smooth,
+      mode,
+      doping,
+      hidden: [...hidden].map((m) => lib.mat.key[m]).filter(Boolean),
+    }),
+    [sim.step, cutAxis, cut, cutDim, smooth, mode, doping, hidden, lib],
+  );
+
+  /** 프로젝트가 담고 있는 시점을 화면에 편다. 예제·파일·되살리기가 같이 쓴다. */
+  const applyView = useCallback((p: Project) => {
+    const v = p.view ?? {};
+    const dim = v.cutAxis === 1 ? p.grid.ny : v.cutAxis === 2 ? p.grid.nz : p.grid.nx;
+    setCutAxis(v.cutAxis ?? 0);
+    // 1이면 안 자른 것이다 — -1로 두면 격자 끝까지라는 뜻이 된다.
+    setCutX(v.cutX !== undefined && v.cutX < 1 ? Math.max(1, Math.round(v.cutX * dim)) : -1);
+    setSmooth(v.smooth ?? 3);
+    setMode(v.mode ?? "smooth");
+    setDoping(v.doping ?? false);
+    const idx = libraryOf(p).mat.index;
+    setHidden(
+      new Set(
+        (v.hidden ?? []).map((k) => idx[k]).filter((i): i is number => i !== undefined),
+      ),
+    );
+    setPlaying(false);
+    sim.setStep(v.step ?? 0);
+  }, [sim.setStep]);
+
   /* ---------------------------------------------------------------- 되살리기 */
   useEffect(() => {
     let alive = true;
@@ -153,7 +204,7 @@ export function App() {
       if (!alive) return;
       if (s) {
         resetProject(s.project);
-        sim.setStep(s.step);
+        applyView(s.project);
       }
       setRestored(true);
       try {
@@ -170,9 +221,9 @@ export function App() {
 
   useEffect(() => {
     if (!restored) return;
-    const t = setTimeout(() => void saveState(project, sim.step), 600);
+    const t = setTimeout(() => void saveState({ ...project, view: currentView }), 600);
     return () => clearTimeout(t);
-  }, [project, sim.step, restored]);
+  }, [project, currentView, restored]);
 
   /* ------------------------------------------------------------------ 동작 */
 
@@ -233,8 +284,10 @@ export function App() {
   };
 
   const openExample = (id: string) => {
-    resetProject(exampleById(id));
-    goTo(0);
+    const p = exampleById(id);
+    resetProject(p);
+    // 예제가 제 볼 자리를 들고 있다 — 3D NAND는 잘라야 안이 보인다.
+    applyView(p);
   };
 
   /** 빈 프로젝트로 시작한다. 지금 것을 버리므로 한 번 묻는다. */
@@ -261,8 +314,9 @@ export function App() {
   const load = (file: File) =>
     file.text().then((t) => {
       try {
-        resetProject(parseProject(t));
-        goTo(0);
+        const p = parseProject(t);
+        resetProject(p);
+        applyView(p);
       } catch (e) {
         alert((e as Error).message);
       }
@@ -270,7 +324,10 @@ export function App() {
     });
 
   const save = () => {
-    const blob = new Blob([serializeProject(project)], { type: "application/json" });
+    // 보던 자리를 같이 담는다 — 받은 사람이 같은 그림에서 시작한다.
+    const blob = new Blob([serializeProject({ ...project, view: currentView })], {
+      type: "application/json",
+    });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = `${project.name.replace(/\s+/g, "_")}.fabsim.json`;
@@ -485,19 +542,11 @@ export function App() {
             </label>
           </div>
 
-          {sim.view ? (
+          {sim.mesh ? (
             <View3D
-              view={sim.view}
-              cutX={cut}
-              cutAxis={cutAxis}
-              showVoids={showVoids}
-              hidden={hidden}
-              smooth={smooth}
+              mesh={sim.mesh}
               mode={mode}
-              doping={dopingData}
-              diff={showDiff ? sim.view.diff : undefined}
               onPick={(gx, gy) => { setProbeX(gx); setSliceY(gy); }}
-              onStats={setMeshStats}
             />
           ) : (
             <div className="placeholder">
@@ -517,7 +566,9 @@ export function App() {
             busy={sim.busy}
             progress={sim.progress}
             /* 그릴 것이 없으면 삼각형 수도 없다. 안 지우면 앞 프로젝트의 숫자다. */
-            mesh={sim.view ? meshStats : null}
+            mesh={sim.mesh}
+            cacheBytes={sim.cacheBytes}
+            gridBytes={project.grid.nx * project.grid.ny * project.grid.nz * BYTES_PER_VOXEL}
           />
 
           {sim.chain[sim.step]?.note && <div className="nodenote">{sim.chain[sim.step].note}</div>}

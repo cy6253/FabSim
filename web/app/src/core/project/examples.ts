@@ -19,7 +19,14 @@ import { newProject } from "./serialize";
 import { defaultParams } from "./nodes";
 import { dealGroveTime } from "../ops";
 import { DEFAULT_LIBRARY } from "../library";
-import { packMask, type Project, type RecipeNode, type GridSpec, type ParamValue } from "./types";
+import {
+  packMask,
+  type Project,
+  type ProjectView,
+  type RecipeNode,
+  type GridSpec,
+  type ParamValue,
+} from "./types";
 
 interface Step {
   type: string;
@@ -68,6 +75,16 @@ function scaleOf(grid: GridSpec): Scale {
   };
 }
 
+/**
+ * 이 예제를 열었을 때 어디서부터 보게 할지.
+ *
+ * 예제가 가르치려는 것이 안쪽에 있으면 겉만 보이는 화면으로 여는 것은 그
+ * 예제를 반쯤 감추는 것이다. 3D NAND가 그랬다 — 채널홀도 워드라인도 전부
+ * 적층 안에 있는데 절단 기본값이 끝까지라, 열면 매끈한 상자 하나가 나오고
+ * "절단 슬라이더를 줄여 보세요"를 따로 말해 줘야 했다.
+ */
+const lookAt = (p: Project, view: ProjectView): Project => ({ ...p, view });
+
 /** 직선 체인 하나를 프로젝트로. 대부분의 레시피가 직선이다. */
 function chain(
   name: string,
@@ -87,7 +104,7 @@ function chain(
       id,
       type: s.type,
       params: { ...defaultParams(s.type), ...(s.params ?? {}) },
-      pos: { x: 40, y: 40 + i * 92 },
+      // pos는 안 넣는다 — 그래프 편집기를 걷어낸 뒤로 읽는 곳이 없다.
       ...(s.note ? { note: s.note } : {}),
     });
     if (prev) p.edges.push({ from: prev, to: id, port: "state" });
@@ -99,7 +116,6 @@ function chain(
         id: mid,
         type: "mask",
         params: { maskId: s.mask },
-        pos: { x: -190, y: 40 + i * 92 },
       });
       p.edges.push({ from: mid, to: id, port: "mask" });
     }
@@ -170,7 +186,8 @@ function trenchFill(): Project {
   // 종횡비가 보이드의 조건이다. 폭 28(종횡비 1.3)에서는 스퍼터 막이 입구를
   // 다 못 닫아 위까지 열린 홈으로 남았다 — 22(1.6)로 좁혀야 실제로 갇힌다.
   const m = stripe("trench", "트렌치 창", s.grid, 0.44, 0.56);
-  return chain("트렌치 증착 — 보이드는 왜 생기나", s.grid, [
+  // 보이드는 트렌치 **안**에 갇힌 것이라 조금 잘라야 보인다.
+  return lookAt(chain("트렌치 증착 — 보이드는 왜 생기나", s.grid, [
     { type: "substrate", params: { material: "Si", thickness: s.L(0.42) } },
     { type: "prCoat", params: { thickness: s.L(0.11), planarization: 1 } },
     { type: "expose", mask: "trench", note: "창 하나만 연다" },
@@ -186,7 +203,7 @@ function trenchFill(): Project {
       params: { material: "SiO2", thickness: s.L(0.22), method: "sputter", coverage: -1 },
       note: "여기가 핵심. 커버리지를 0.3 → 1.0으로 올리면 보이드가 사라진다",
     },
-  ], [m]);
+  ], [m]), { cutAxis: 0, cutX: 0.6, smooth: 3 });
 }
 
 /** ② LOCOS — 질화막 마스크와 bird's beak. */
@@ -444,7 +461,8 @@ function nand3d(): Project {
   // 기하학적 깊이만 주면 절반쯤에서 멈춘다 — 재 보니 1.6배가 있어야 닿는다.
   const deep = (extra: number) => s.etch("RIE_ON", Math.round((stack + s.L(extra)) * 1.6));
 
-  return chain("3D NAND — 한 번 뚫어 모든 층을 지난다", s.grid, [
+  // 채널홀도 워드라인도 전부 적층 안에 있다. 반을 잘라야 이 예제가 보인다.
+  return lookAt(chain("3D NAND — 한 번 뚫어 모든 층을 지난다", s.grid, [
     { type: "substrate", params: { material: "Si", thickness: s.L(0.09) }, note: "소스 플레이트" },
     ...pairs,
     ...hardmask("hole", "탄소 하드마스크. 이 깊이의 식각을 레지스트로는 못 버틴다"),
@@ -497,7 +515,7 @@ function nand3d(): Project {
         "슬릿 안의 금속을 걷어낸다. 안 걷으면 층마다 따로 걸어야 할 워드라인이 " +
         "세로로 다 이어져 버린다",
     },
-  ], [hole, slit]);
+  ], [hole, slit]), { cutAxis: 0, cutX: 0.5, smooth: 3 });
 }
 
 export interface ExampleRecipe {

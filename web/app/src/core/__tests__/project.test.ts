@@ -11,12 +11,14 @@ import {
   type Project,
 } from "../project/types";
 import {
-  newProject, parseProject, serializeProject, validateProject, GRID_PRESETS,
+  newProject, parseProject, serializeProject, validateProject, GRID_PRESETS, MAX_VOXELS,
 } from "../project/serialize";
 import { chainTo, leaves, indexGraph, defaultLeaf } from "../project/graph";
 import { setParam } from "../project/edit";
 import { EXAMPLES, exampleById } from "../project/examples";
-import { defaultParams, NODE_SPECS, NODE_SPEC_BY_TYPE, optionsFor } from "../project/nodes";
+import {
+  defaultParams, NODE_SPECS, NODE_SPEC_BY_TYPE, optionsFor, resolveMax,
+} from "../project/nodes";
 import { Executor, Cancelled } from "../runner/executor";
 import { rleEncode, rleDecode } from "../runner/snapshot";
 import { DEFAULT_LIBRARY } from "../library";
@@ -454,6 +456,105 @@ describe("노드 카탈로그", () => {
     expect(vals).not.toContain("PR_exposed");
     expect(vals).toContain("PR");
     expect(vals).toContain("aC");
+  });
+});
+
+describe("노브 상한이 격자를 따라간다", () => {
+  /** 식각 시간 노브의 스펙. */
+  const secSpec = NODE_SPEC_BY_TYPE.etch.params.find((q) => q.key === "seconds") as Extract<
+    (typeof NODE_SPEC_BY_TYPE)["etch"]["params"][number],
+    { kind: "number" }
+  >;
+
+  it("격자를 키우면 길이·시간 노브도 같이 늘어난다", () => {
+    /*
+     * 길이와 시간은 격자와 무관한 절댓값일 수가 없다. 상한을 스펙에 박아 두면
+     * 격자를 키웠을 때 입력칸이 **조용히 잘라** 식각이 바닥에 못 닿는다 —
+     * 오류도 경고도 없이 결과만 달라지는 종류의 고장이라 화면으로는 안 보인다.
+     */
+    const small = { nx: 96, ny: 48, nz: 60 };
+    const big = { nx: 224, ny: 80, nz: 200 };
+    const th = NODE_SPEC_BY_TYPE.deposit.params.find((q) => q.key === "thickness") as never;
+    expect(resolveMax(th, big, DEFAULT_LIBRARY, {})).toBeGreaterThan(
+      resolveMax(th, small, DEFAULT_LIBRARY, {}),
+    );
+
+    // nz 200이면 옛 고정 상한 120으로는 절반도 못 판다.
+    const deep = resolveMax(secSpec, big, DEFAULT_LIBRARY, { etchant: "RIE_silicon" });
+    expect(deep).toBeGreaterThan(secSpec.max);
+    expect(deep).toBeGreaterThan(big.nz);
+  });
+
+  it("느린 식각액일수록 상한이 넉넉하다 — 같은 시간에 파는 깊이가 다르므로", () => {
+    const g = { nx: 176, ny: 64, nz: 96 };
+    const rates = ["RIE_silicon", "BOE", "RIE_ON"].map((e) => ({
+      e,
+      rate: DEFAULT_LIBRARY.proc.byId.etchant[e].baseRate,
+      cap: resolveMax(secSpec, g, DEFAULT_LIBRARY, { etchant: e }),
+    }));
+    for (const a of rates)
+      for (const b of rates)
+        if (a.rate < b.rate) expect(a.cap).toBeGreaterThanOrEqual(b.cap);
+  });
+
+  it("작은 격자에서도 스펙의 상한보다 좁아지지 않는다", () => {
+    const tiny = { nx: 16, ny: 16, nz: 16 };
+    for (const spec of NODE_SPECS)
+      for (const prm of spec.params)
+        if (prm.kind === "number")
+          expect(resolveMax(prm, tiny, DEFAULT_LIBRARY, {})).toBeGreaterThanOrEqual(prm.max);
+  });
+});
+
+describe("예제가 어디를 볼지 들고 있다", () => {
+  it("3D NAND와 트렌치는 잘라 놓은 화면으로 열린다", () => {
+    /*
+     * 예제가 가르치려는 것이 안쪽에 있으면 겉만 보이는 화면으로 여는 것은
+     * 그 예제를 반쯤 감추는 것이다. 3D NAND는 채널홀도 워드라인도 전부 적층
+     * 안에 있어서, 절단 없이 열면 매끈한 상자 하나가 나온다.
+     */
+    for (const id of ["nand3d", "trench"]) {
+      const v = exampleById(id).view;
+      expect(v, `${id}에 시점이 없다`).toBeDefined();
+      expect(v!.cutX).toBeGreaterThan(0);
+      expect(v!.cutX).toBeLessThan(1);
+    }
+  });
+
+  it("시점은 저장하고 다시 읽어도 그대로다 — 절단은 비율이라 격자를 바꿔도 산다", () => {
+    const p = exampleById("nand3d");
+    const back = parseProject(serializeProject(p));
+    expect(back.view).toEqual(p.view);
+  });
+
+  it("이상한 시점은 레시피를 못 열게 하지 않고 조용히 빠진다", () => {
+    const p = exampleById("trench");
+    const raw = JSON.parse(serializeProject(p));
+    raw.view = { step: -3, cutAxis: 9, cutX: 7, smooth: 99, mode: "홀로그램", hidden: [1, "SiO2"] };
+    const back = validateProject(raw);
+    // 값 하나가 이상하다고 레시피 전체를 못 열게 하는 것은 과하다.
+    expect(back.nodes.length).toBe(p.nodes.length);
+    expect(back.view).toEqual({ hidden: ["SiO2"] });
+  });
+
+  it("새로 만드는 노드에는 옛 그래프 편집기 좌표가 안 붙는다", () => {
+    for (const e of EXAMPLES)
+      for (const n of exampleById(e.id).nodes)
+        expect(n.pos, `${e.id}/${n.id}`).toBeUndefined();
+  });
+});
+
+describe("격자 상한은 실제로 감당할 수 있는 크기다", () => {
+  it("12M은 거부하고, 프리셋은 전부 통과한다", () => {
+    /*
+     * 복셀 하나가 스크래치까지 합쳐 47바이트다. 12M이면 그것만 564MB라
+     * 프레임 캐시를 한 장도 안 세고서 탭이 죽는다 — 지킬 수 없는 약속이었다.
+     */
+    expect(MAX_VOXELS).toBeLessThan(12_000_000);
+    const p = newProject("큰 격자", { nx: 512, ny: 256, nz: 128 });
+    expect(() => validateProject(JSON.parse(serializeProject(p)))).toThrow(/너무 큽니다/);
+    for (const q of GRID_PRESETS)
+      expect(q.grid.nx * q.grid.ny * q.grid.nz, q.label).toBeLessThanOrEqual(MAX_VOXELS);
   });
 });
 

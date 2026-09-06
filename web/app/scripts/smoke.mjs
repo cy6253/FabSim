@@ -117,10 +117,80 @@ await page.waitForTimeout(600);
 console.log("5) 프로브: " + (await line(".stack")));
 await shot("05-probe");
 
+/*
+ * 메인 스레드가 얼마나 오래 굳는가, 그리고 진행 표시가 진짜인가.
+ *
+ * 둘 다 눈으로는 못 본다 — 결과는 맞으므로 스크린샷으로는 통과한다. 재야 잡힌다.
+ *
+ * **재는 자리를 절단 슬라이더로 잡은 이유.** 절단은 계산을 하나도 안 바꾸고
+ * 메시만 다시 뽑는 조작이라, 여기서 메인 스레드가 굳으면 그건 전적으로 우리가
+ * 메시를 메인에서 만들었다는 뜻이다. 실제로 워커로 옮기기 전에는 슬라이더를 한
+ * 번 움직일 때마다 448ms씩 잡혔고 지금은 0이다.
+ *
+ * 단계 이동은 같은 기준으로 못 잰다. 그때는 10MB짜리 꼭짓점 배열이 GPU로
+ * 올라가고 화면 전체가 다시 래스터되는데, 헤드리스 크로미움은 그 래스터를
+ * **소프트웨어로** 한다(SwiftShader). 같은 코드가 1680×1000에서 282ms,
+ * 900×560에서 127ms로 화면 넓이만 따라가는 것을 확인했다 — 우리 코드가 아니라
+ * 시험 환경의 성질이다. 그래서 숫자는 찍되 문턱은 "메인에서 메시를 만들던
+ * 시절(565ms)로 되돌아갔는가"만 잡을 만큼 느슨하게 둔다.
+ */
+const perfInit = () =>
+  page.evaluate(() => {
+    window.__long = [];
+    if (!window.__lo) {
+      window.__lo = new PerformanceObserver((l) => {
+        for (const e of l.getEntries()) window.__long.push(Math.round(e.duration));
+      });
+      window.__lo.observe({ entryTypes: ["longtask"] });
+    }
+  });
+const perfRead = () => page.evaluate(() => window.__long.slice().sort((a, b) => b - a));
+
+await perfInit();
+for (let i = 0; i < (await page.locator(".step").count()); i++) {
+  await page.locator(".step").nth(i).click();
+  await settle();
+  await page.waitForTimeout(600);
+}
+const stepLong = await perfRead();
+await perfInit();
+const cutSlider = page.locator('.slider:has-text("절단") input[type=range]');
+for (const v of [150, 120, 90, 60]) {
+  await cutSlider.fill(String(v));
+  await page.waitForTimeout(900);
+}
+const cutLong = await perfRead();
+console.log(
+  `5b) 메인 스레드가 잡힌 시간 — 단계 이동 최장 ${stepLong[0] ?? 0}ms(${stepLong.length}건) · ` +
+    `절단 슬라이더 최장 ${cutLong[0] ?? 0}ms(${cutLong.length}건)`,
+);
+if ((cutLong[0] ?? 0) >= 50)
+  console.log(`   ⚠ 절단만 바꿨는데 메인이 ${cutLong[0]}ms 굳었다 — 메시가 메인에서 도는지 확인`);
+// 단계 이동 쪽은 숫자만 남긴다. 여기엔 소프트웨어 래스터가 섞여 있어 문턱을
+// 걸면 기계와 창 크기에 따라 켜졌다 꺼졌다 하는 거짓 경고가 된다.
+await page.locator('.slider:has-text("절단") select').selectOption("0");
+
+// 진행 표시가 실제로 여러 단계를 지나가는가. 예전에는 run 뒤에 보낸 view가
+// 첫 양보 순간에 동기로 끝까지 돌아 버려서 "1/93"에 멈춘 채 49초가 흘렀다.
+await page.evaluate(() => {
+  window.__prog = new Set();
+  const bar = document.querySelector(".stepbar");
+  if (bar)
+    new MutationObserver(() => {
+      const m = bar.textContent.match(/계산 중 (\d+)\/(\d+)/);
+      if (m) window.__prog.add(Number(m[1]));
+    }).observe(bar, { subtree: true, childList: true, characterData: true });
+});
+
 // NMOS + 도핑 — 이제 3D가 도핑 색을 칠한다
 await page.selectOption(".topbar select >> nth=0", "nmos");
 await page.waitForTimeout(1000);
 await gotoLast();
+
+const prog = await page.evaluate(() => [...window.__prog].sort((a, b) => a - b));
+console.log(`5c) 진행 표시가 지난 단계 ${prog.length}개 [${prog.join(",")}]`);
+if (prog.length < 2) console.log("   ⚠ 진행 표시가 한 값에서 멈춰 있다");
+
 await page.locator('.toggle:has-text("도핑") input').check();
 await page.waitForTimeout(1500);
 console.log("6) NMOS 도핑 보기 — 게이트 아래 채널만 비어 있어야 한다");

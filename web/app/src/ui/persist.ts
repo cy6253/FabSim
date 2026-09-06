@@ -18,9 +18,16 @@ const KEY = "current";
 const VERSION = 1;
 
 export interface SavedState {
+  /**
+   * 프로젝트. 보던 자리는 `project.view`에 들어 있다.
+   *
+   * 예전에는 단계 번호만 따로 옆에 뒀는데, 그러면 절단면·완화·숨긴 재질은
+   * 아무 데도 안 남아 탭을 닫았다 열면 다른 자리에서 시작했다. 시점 전체가
+   * 한 곳에 있어야 파일로 내보낸 것과 브라우저에 남은 것이 같은 뜻이 된다.
+   */
   project: ProjectType;
-  /** 마지막으로 보던 단계. 열었을 때 그 자리로 돌아간다. */
-  step: number;
+  /** 옛 저장분과의 호환용. 새로 쓸 때는 `project.view.step`을 쓴다. */
+  step?: number;
   savedAt: number;
 }
 
@@ -43,13 +50,16 @@ function open(): Promise<IDBDatabase | null> {
   });
 }
 
-export async function saveState(project: ProjectType, step: number): Promise<void> {
+export async function saveState(project: ProjectType): Promise<void> {
   const db = await open();
   if (!db) return;
   try {
     await new Promise<void>((resolve) => {
       const tx = db.transaction(STORE, "readwrite");
-      tx.objectStore(STORE).put({ project, step, savedAt: Date.now() } satisfies SavedState, KEY);
+      tx.objectStore(STORE).put(
+        { project, step: project.view?.step ?? 0, savedAt: Date.now() } satisfies SavedState,
+        KEY,
+      );
       tx.oncomplete = () => resolve();
       tx.onerror = () => resolve();
       tx.onabort = () => resolve();
@@ -76,7 +86,13 @@ export async function loadState(): Promise<SavedState | null> {
     if (!raw || typeof raw !== "object") return null;
     const s = raw as SavedState;
     const project = validateProject(s.project);
-    return { project, step: Number(s.step) || 0, savedAt: Number(s.savedAt) || 0 };
+    // 옛 저장분은 단계를 옆에 들고 있었다. 시점 안으로 옮겨 준다.
+    const step = project.view?.step ?? (Number(s.step) || 0);
+    return {
+      project: { ...project, view: { ...project.view, step } },
+      step,
+      savedAt: Number(s.savedAt) || 0,
+    };
   } catch {
     return null;
   } finally {

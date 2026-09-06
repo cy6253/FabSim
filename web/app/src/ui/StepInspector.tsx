@@ -12,7 +12,7 @@
 import { useState } from "react";
 import { dealGrove } from "../core/ops";
 import { dgTableOf, EXPANSION } from "../core/materials";
-import { NODE_SPEC_BY_TYPE, optionsFor } from "../core/project/nodes";
+import { NODE_SPEC_BY_TYPE, optionsFor, resolveMax } from "../core/project/nodes";
 import { attachMask, maskOfStep, setNote, setParam } from "../core/project/edit";
 import type { Library } from "../core/library";
 import { lengthLabel, nmPerVoxelOf, type Project, type RecipeNode } from "../core/project/types";
@@ -84,6 +84,7 @@ export function StepInspector(p: {
   const mask = maskOfStep(p.project, node.id);
   const nm = nmPerVoxelOf(p.project);
 
+
   return (
     <aside className="stepinspector">
       <header>
@@ -154,7 +155,8 @@ export function StepInspector(p: {
           // "자동"은 숫자가 아니다. 입력칸은 비워 두고 무슨 뜻인지만 적는다 —
           // 값을 넣는 순간 자동이 풀리고, 되돌리려면 버튼을 누른다.
           const isAuto = prm.autoValue !== undefined && Number(v) === prm.autoValue;
-          const shown = isAuto ? (prm.min + prm.max) / 2 : Number(v);
+          const pmax = resolveMax(prm, p.project.grid, p.lib, node.params);
+          const shown = isAuto ? (prm.min + pmax) / 2 : Number(v);
           return (
             <label key={prm.key} className="field">
               <span>
@@ -186,7 +188,7 @@ export function StepInspector(p: {
                 <NumberEntry
                   value={Number(v)}
                   min={prm.min}
-                  max={prm.max}
+                  max={pmax}
                   step={prm.step}
                   placeholder={isAuto ? (prm.autoLabel ?? "자동") : undefined}
                   onChange={(n) => set(prm.key, n)}
@@ -196,7 +198,7 @@ export function StepInspector(p: {
                   type="range"
                   className={isAuto ? "auto" : undefined}
                   min={prm.min}
-                  max={prm.max}
+                  max={pmax}
                   step={prm.step}
                   value={shown}
                   onChange={(e) => set(prm.key, Number(e.target.value))}

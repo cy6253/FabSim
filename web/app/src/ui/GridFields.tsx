@@ -14,16 +14,28 @@
  * 크기는 마스크의 성질이 아니라 **웨이퍼의 성질**이다. 웨이퍼를 까는 자리에서
  * 정하는 것이 맞고, 그래야 "어디서 정해지는 값인가"를 한 번만 배우면 된다.
  */
-import { GRID_PRESETS } from "../core/project/serialize";
+import { BYTES_PER_VOXEL, GRID_PRESETS, MAX_VOXELS } from "../core/project/serialize";
 import { fieldLabel, nmForGrid, nmPerVoxelOf, type GridSpec, type Project } from "../core/project/types";
 
 /** serialize의 checkGrid와 같은 한계. 여기서 미리 막아 저장할 때 거부당하지 않게 한다. */
 const MIN = 8;
 const MAX = 512;
-const MAX_VOXELS = 12_000_000;
 
 /** 큰 격자는 한 단계가 몇 초씩 걸린다. 넘으면 눈에 띄게 해 둔다. */
-const HEAVY = 4_000_000;
+const HEAVY = 2_000_000;
+
+/**
+ * 폰에서의 상한.
+ *
+ * 복셀 하나가 64바이트다. 2M이면 128MB인데, 그 위에 프레임 캐시가 또 쌓인다 —
+ * 폰 브라우저가 탭 하나에 주는 몫의 끝자락이다. 넘으면 계산 도중에 탭이 죽고,
+ * 사용자에게는 앱이 그냥 사라진 것으로 보인다. 막아 두는 편이 낫다.
+ */
+const MAX_VOXELS_NARROW = 2_000_000;
+
+/** 폰처럼 좁은 화면인가. CSS의 칸 전환 기준(860px)과 같은 선을 쓴다. */
+const isNarrow = () =>
+  typeof window !== "undefined" && window.matchMedia?.("(max-width: 860px)").matches === true;
 
 export function GridFields(p: {
   project: Project;
@@ -35,21 +47,23 @@ export function GridFields(p: {
   const nm = nmPerVoxelOf(p.project);
   const voxels = g.nx * g.ny * g.nz;
   const umWide = Math.round((g.nx * nm) / 10) / 100;
+  const narrow = isNarrow();
+  const cap = narrow ? MAX_VOXELS_NARROW : MAX_VOXELS;
 
   /** 격자를 바꾼다. 다이 폭은 붙들어 두므로 칸을 늘리면 칸이 잘아진다. */
   const setGrid = (next: GridSpec) => {
     p.onChange({ ...p.project, grid: next, nmPerVoxel: nmForGrid(g, next, nm) });
   };
 
-  /** 한 축만 바꾼다. 나머지 둘을 곱해 상한을 내므로 12M을 넘길 수가 없다. */
+  /** 한 축만 바꾼다. 나머지 둘을 곱해 상한을 내므로 총 복셀 수를 넘길 수가 없다. */
   const setAxis = (axis: "nx" | "ny" | "nz", raw: string) => {
     const v = Number(raw);
     if (!Number.isFinite(v)) return;
     const rest = (["nx", "ny", "nz"] as const)
       .filter((k) => k !== axis)
       .reduce((a, k) => a * g[k], 1);
-    const cap = Math.min(MAX, Math.max(MIN, Math.floor(MAX_VOXELS / rest)));
-    setGrid({ ...g, [axis]: Math.max(MIN, Math.min(cap, Math.round(v))) });
+    const lim = Math.min(MAX, Math.max(MIN, Math.floor(cap / rest)));
+    setGrid({ ...g, [axis]: Math.max(MIN, Math.min(lim, Math.round(v))) });
   };
 
   const axes: ["nx" | "ny" | "nz", string][] = [
@@ -88,11 +102,18 @@ export function GridFields(p: {
           }}
         >
           <option value="">고르기…</option>
-          {GRID_PRESETS.map((q) => (
-            <option key={q.label} value={q.label}>
-              {q.grid.nx}×{q.grid.ny}×{q.grid.nz} — {q.label}
-            </option>
-          ))}
+          {GRID_PRESETS.map((q) => {
+            // 폰에서 감당 못 하는 프리셋은 지우지 않고 고를 수 없게만 한다 —
+            // 목록에서 사라지면 PC에서 만든 프로젝트의 격자가 어디서 왔는지
+            // 알 길이 없다.
+            const big = q.grid.nx * q.grid.ny * q.grid.nz > cap;
+            return (
+              <option key={q.label} value={q.label} disabled={big}>
+                {q.grid.nx}×{q.grid.ny}×{q.grid.nz} — {q.label}
+                {big ? " (PC에서)" : ""}
+              </option>
+            );
+          })}
         </select>
       </label>
 
@@ -113,9 +134,11 @@ export function GridFields(p: {
         ))}
       </div>
 
+      {/* 복셀 수만 보면 무거운지 알 수 없다. 실제로 무엇을 치르는지는 메모리다. */}
       <div className={`menurow dim${voxels > HEAVY ? " heavy" : ""}`}>
-        {(voxels / 1e6).toFixed(2)}M 복셀 · {fieldLabel(g, nm)} · {nm.toFixed(1)} nm/칸
-        {voxels > HEAVY && " — 한 단계가 느려집니다"}
+        {(voxels / 1e6).toFixed(2)}M 복셀 · {fieldLabel(g, nm)} · {nm.toFixed(1)} nm/칸 ·{" "}
+        {Math.round((voxels * BYTES_PER_VOXEL) / 1e6)}MB
+        {voxels > HEAVY && (narrow ? " — 폰에서는 버겁습니다" : " — 한 단계가 느려집니다")}
       </div>
     </>
   );

@@ -174,6 +174,15 @@ export interface SpeciesTable {
   name: string[];
   /** 도핑 보기 색. 농도가 짙을수록 이 색에 가까워진다. */
   color: [number, number, number][];
+  /**
+   * 도너인가 (1) 억셉터인가 (0).
+   *
+   * net doping은 도너에서 억셉터를 빼는 값이라 이 구분이 화면 색을 정한다.
+   * 예전에는 화면이 `id !== "B"`로 추측했는데, 그러면 사용자가 표에 Ga이나 In을
+   * 더하는 순간 억셉터가 도너로 세어져 접합이 통째로 뒤집힌다. 표가 이미 아는
+   * 것을 화면이 다시 추측할 이유가 없다.
+   */
+  isDonor: Uint8Array;
   relD: Float64Array;
   segregation: Float64Array;
   /** 아레니우스 계수. 없으면 0 — 그러면 relD를 기준 온도의 배수로 본다. */
@@ -278,6 +287,7 @@ export function resolveSpecies(defs: SpeciesDef[]): SpeciesTable {
     name: defs.map((d) => d.name),
     // 색을 안 준 종도 화면에는 나와야 한다. 억셉터는 붉은 쪽, 도너는 푸른 쪽.
     color: defs.map((d) => d.color ?? (d.type === "acceptor" ? [195, 75, 65] : [45, 85, 195])),
+    isDonor: Uint8Array.from(defs, (d) => (d.type === "acceptor" ? 0 : 1)),
     relD: new Float64Array(n),
     segregation: new Float64Array(n),
     D0: new Float64Array(n),
@@ -382,6 +392,25 @@ export function stopLayersOf(lib: Library, slurryId: string): Record<number, num
   if (!s) fail(`모르는 슬러리: ${slurryId}`);
   const out: Record<number, number> = {};
   for (const k of s.stopOn) out[lib.mat.index[k]] = 1;
+  return out;
+}
+
+/**
+ * 도너 종의 번호들. net doping을 낼 때 더하는 쪽이다.
+ *
+ * 화면과 워커가 둘 다 이걸 부른다 — 같은 웨이퍼를 두 곳이 다르게 세면
+ * 3D 색과 프로브 숫자가 어긋난다.
+ */
+export function donorsOf(sp: SpeciesTable): number[] {
+  const out: number[] = [];
+  for (let i = 0; i < sp.count; i++) if (sp.isDonor[i]) out.push(i);
+  return out;
+}
+
+/** 억셉터 종의 번호들. net doping에서 빼는 쪽이다. */
+export function acceptorsOf(sp: SpeciesTable): number[] {
+  const out: number[] = [];
+  for (let i = 0; i < sp.count; i++) if (!sp.isDonor[i]) out.push(i);
   return out;
 }
 

@@ -225,6 +225,8 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
 }
 .stepbar .note { color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .stepbar .ms { color: var(--dim); font-variant-numeric: tabular-nums; }
+/* 메모리가 많이 올라가면 다른 숫자들 사이에서 눈에 띄어야 한다. */
+.stepbar .ms.heavy { color: var(--warn); }
 .stepbar .busy { color: var(--accent); }
 
 .nodenote {
