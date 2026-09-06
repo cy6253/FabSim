@@ -145,6 +145,42 @@ await page.locator(".menu button", { hasText: "마스크 편집" }).click();
 await page.waitForSelector(".maskcanvas canvas", { timeout: 10000 });
 console.log("8) 마스크 디자이너");
 await shot("08-mask");
+
+/*
+ * 원 그리기. 콘택홀·채널홀이 실제로 원이라 사각형 근사로는 모자란다.
+ * 채워진 칸 수를 세면 진짜 타원인지가 바로 드러난다 — 상자를 그대로 채우면
+ * 20×12 = 240이고, 내접 타원이면 π·10·6 = 188이다. 그 차이는 못 속인다.
+ */
+const mtools = page.locator(".masktools").nth(1);
+await mtools.locator("button", { hasText: "비우기" }).click();
+await mtools.locator(".slider input[type=range]").first().fill("1"); // 스냅 한 칸
+await mtools.locator(".slider input[type=range]").last().fill("8");  // 확대 8배
+await mtools.locator("label", { hasText: "원형" }).locator("input").check();
+await page.waitForTimeout(600);
+const mbox = await page.locator(".maskcanvas canvas").boundingBox();
+const open = async () => {
+  const t = await page.locator(".maskcanvas + .hint, .hint").last().innerText();
+  return Number((t.match(/열린 면적 ([\d,]+)/) ?? [0, "0"])[1].replace(/,/g, ""));
+};
+const dragBox = async (w, h, shift) => {
+  await mtools.locator("button", { hasText: "비우기" }).click();
+  await page.waitForTimeout(300);
+  await page.mouse.move(mbox.x + 10 * 8, mbox.y + 10 * 8);
+  await page.mouse.down();
+  if (shift) await page.keyboard.down("Shift");
+  await page.mouse.move(mbox.x + (10 + w) * 8, mbox.y + (10 + h) * 8, { steps: 8 });
+  await page.mouse.up();
+  if (shift) await page.keyboard.up("Shift");
+  await page.waitForTimeout(600);
+  return open();
+};
+const ell = await dragBox(20, 12, false);
+const circ = await dragBox(20, 12, true);
+console.log(`8b) 원 그리기: 20×12 타원 ${ell}칸 (이론 188) · Shift 정원 ${circ}칸 (이론 314)`);
+if (Math.abs(ell - 188) > 12) console.log(`   ⚠ 타원 면적이 어긋난다 (${ell})`);
+if (Math.abs(circ - 314) > 16) console.log(`   ⚠ Shift가 정원으로 안 묶인다 (${circ})`);
+await shot("08b-circle");
+await mtools.locator("button", { hasText: "비우기" }).click();
 await page.locator(".modal-box header button", { hasText: "닫기" }).click();
 
 await page.locator(".topbar .menuwrap > button").click();

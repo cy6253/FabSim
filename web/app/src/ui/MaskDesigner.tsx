@@ -12,7 +12,7 @@ import {
   fieldLabel, nmPerVoxelOf, packMask, unpackMask, type MaskAsset, type Project,
 } from "../core/project/types";
 
-type Tool = "rect" | "poly";
+type Tool = "rect" | "ellipse" | "poly";
 
 export interface MaskDesignerProps {
   project: Project;
@@ -137,7 +137,14 @@ export function MaskDesigner({ project, onChange, onClose }: MaskDesignerProps) 
     ctx.lineWidth = 2;
     if (drag) {
       const x = Math.min(drag.x0, drag.x1), y = Math.min(drag.y0, drag.y1);
-      ctx.strokeRect(x * scale, y * scale, Math.abs(drag.x1 - drag.x0) * scale, Math.abs(drag.y1 - drag.y0) * scale);
+      const w = Math.abs(drag.x1 - drag.x0), h = Math.abs(drag.y1 - drag.y0);
+      if (tool === "ellipse") {
+        ctx.beginPath();
+        ctx.ellipse((x + w / 2) * scale, (y + h / 2) * scale, (w / 2) * scale, (h / 2) * scale, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      } else {
+        ctx.strokeRect(x * scale, y * scale, w * scale, h * scale);
+      }
     }
     if (poly.length > 0) {
       ctx.beginPath();
@@ -150,7 +157,7 @@ export function MaskDesigner({ project, onChange, onClose }: MaskDesignerProps) 
         ctx.fillRect(x * scale - 2, y * scale - 2, 5, 5);
       }
     }
-  }, [asset, px, scale, snap, drag, poly, subtract, refs]);
+  }, [asset, px, scale, snap, drag, poly, subtract, refs, tool]);
 
   /* ------------------------------------------------------------------ 입력 */
   const toGrid = (e: React.MouseEvent<HTMLCanvasElement>): [number, number] => {
@@ -169,6 +176,31 @@ export function MaskDesigner({ project, onChange, onClose }: MaskDesignerProps) 
     for (let y = Math.max(0, ay); y < Math.min(asset.h, by); y++)
       for (let x = Math.max(0, ax); x < Math.min(asset.w, bx); x++)
         next[x + asset.w * y] = subtract ? 0 : 1;
+    commit(next);
+  };
+
+  /**
+   * 끈 상자에 내접하는 타원을 채운다.
+   *
+   * 콘택홀도 채널홀도 실제로는 원이다. 사각형과 다각형만으로는 근사밖에 안 되고,
+   * 다각형으로 원을 흉내 내려면 꼭짓점을 열 몇 번 찍어야 한다.
+   *
+   * 판정은 **칸 중심**으로 한다. 모서리로 재면 경계에 걸친 칸이 한 줄 더 붙어
+   * 반지름이 반 칸씩 커진다 — 채널홀처럼 몇 칸 안 되는 도형에서는 그게 큰 차이다.
+   */
+  const fillEllipse = (x0: number, y0: number, x1: number, y1: number) => {
+    if (!asset || !px) return;
+    const [ax, bx] = x0 < x1 ? [x0, x1] : [x1, x0];
+    const [ay, by] = y0 < y1 ? [y0, y1] : [y1, y0];
+    const rx = (bx - ax) / 2, ry = (by - ay) / 2;
+    if (rx <= 0 || ry <= 0) return;
+    const cx = ax + rx, cy = ay + ry;
+    const next = px.slice();
+    for (let y = Math.max(0, Math.floor(ay)); y < Math.min(asset.h, Math.ceil(by)); y++)
+      for (let x = Math.max(0, Math.floor(ax)); x < Math.min(asset.w, Math.ceil(bx)); x++) {
+        const dx = (x + 0.5 - cx) / rx, dy = (y + 0.5 - cy) / ry;
+        if (dx * dx + dy * dy <= 1) next[x + asset.w * y] = subtract ? 0 : 1;
+      }
     commit(next);
   };
 
@@ -335,6 +367,14 @@ export function MaskDesigner({ project, onChange, onClose }: MaskDesignerProps) 
                 <input type="radio" checked={tool === "rect"} onChange={() => { setTool("rect"); setPoly([]); }} />
                 사각형
               </label>
+              <label className="toggle" title="끌어서 타원. Shift를 누르면 정원이 된다">
+                <input
+                  type="radio"
+                  checked={tool === "ellipse"}
+                  onChange={() => { setTool("ellipse"); setPoly([]); }}
+                />
+                원형
+              </label>
               <label className="toggle">
                 <input type="radio" checked={tool === "poly"} onChange={() => setTool("poly")} />
                 다각형
@@ -406,18 +446,28 @@ export function MaskDesigner({ project, onChange, onClose }: MaskDesignerProps) 
                 ref={canvasRef}
                 onMouseDown={(e) => {
                   const [x, y] = toGrid(e);
-                  if (tool === "rect") setDrag({ x0: x, y0: y, x1: x, y1: y });
-                  else setPoly((prev) => [...prev, [x, y]]);
+                  if (tool === "poly") setPoly((prev) => [...prev, [x, y]]);
+                  else setDrag({ x0: x, y0: y, x1: x, y1: y });
                 }}
                 onMouseMove={(e) => {
                   if (!drag) return;
-                  const [x, y] = toGrid(e);
+                  let [x, y] = toGrid(e);
+                  if (e.shiftKey) {
+                    // 가로세로를 같게 묶는다 — 원형이면 정원, 사각형이면 정사각.
+                    // 스냅을 거친 값에서 묶으므로 격자를 벗어나지 않는다.
+                    const dx = x - drag.x0, dy = y - drag.y0;
+                    const d = Math.max(Math.abs(dx), Math.abs(dy));
+                    x = drag.x0 + (dx < 0 ? -d : d);
+                    y = drag.y0 + (dy < 0 ? -d : d);
+                  }
                   setDrag({ ...drag, x1: x, y1: y });
                 }}
-                onMouseUp={(e) => {
-                  if (tool !== "rect" || !drag) return;
-                  const [x, y] = toGrid(e);
-                  fillRect(drag.x0, drag.y0, x, y);
+                onMouseUp={() => {
+                  // 놓는 자리를 다시 재지 않고 끌던 값을 그대로 쓴다.
+                  // 다시 재면 Shift로 묶어 둔 것이 마지막 순간에 풀린다.
+                  if (!drag) return;
+                  if (tool === "ellipse") fillEllipse(drag.x0, drag.y0, drag.x1, drag.y1);
+                  else if (tool === "rect") fillRect(drag.x0, drag.y0, drag.x1, drag.y1);
                   setDrag(null);
                 }}
                 onDoubleClick={() => {
@@ -429,8 +479,10 @@ export function MaskDesigner({ project, onChange, onClose }: MaskDesignerProps) 
             </div>
             <p className="hint">
               {tool === "rect"
-                ? "끌어서 사각형. 스냅이 켜져 있으면 격자에 맞춰집니다."
-                : "클릭해 꼭짓점을 찍고 더블클릭으로 닫습니다."}
+                ? "끌어서 사각형. Shift를 누르면 정사각형입니다."
+                : tool === "ellipse"
+                  ? "끌어서 타원. Shift를 누르면 정원입니다 — 콘택홀·채널홀이 그 모양입니다."
+                  : "클릭해 꼭짓점을 찍고 더블클릭으로 닫습니다."}
               {" · "}
               열린 면적 {openCells.toLocaleString()} / {(asset.w * asset.h).toLocaleString()} (
               {((openCells / (asset.w * asset.h)) * 100).toFixed(1)}%)
