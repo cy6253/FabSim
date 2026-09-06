@@ -973,3 +973,65 @@ describe("Deal-Grove 역함수", () => {
     expect(dealGroveTime("dry1000", 0)).toBe(0);
   });
 });
+
+/* ------------------------------------------------- 산화막을 얇게 만들 수 있나 */
+
+describe("산화 — 두께가 계산값을 따라간다", () => {
+  /** 맨 실리콘 웨이퍼. 한 컬럼의 산화막 칸 수를 센다. */
+  const grow = (cond: string, seconds: number, pre?: number) => {
+    const NX = 40, NY = 16, NZ = 44, Z0 = 20;
+    const s = createSim(NX, NY, NZ);
+    const mat = newMat(s), phi = newPhi(s), conc = newConc(s);
+    for (let z = 0; z < Z0; z++)
+      for (let y = 0; y < NY; y++) for (let x = 0; x < NX; x++) mat[at(s, x, y, z)] = SI;
+    s.phiDirty = true;
+    if (pre) opOxidize(s, mat, phi, conc, cond, pre);
+    const r = opOxidize(s, mat, phi, conc, cond, seconds);
+    let n = 0;
+    for (let z = 0; z < NZ; z++) if (mat[at(s, NX >> 1, NY >> 1, z)] === OX) n++;
+    return { cells: n, ...r };
+  };
+
+  it("실측 두께가 Deal-Grove 값에서 한 칸 넘게 벗어나지 않는다", () => {
+    // EDT는 칸 중심 사이의 거리라 계면이 첫 칸에서 0.5 떨어져 있다. 그 반 칸을
+    // 안 빼면 각 면이 floor로 돌아 두께가 크게 모자랐다 — 해석값 3.46이 2칸,
+    // 2.80이 2칸이었다. 반 칸을 빼면 round가 되어 계산값을 따라간다.
+    for (const [cond, t] of [["wet1000", 8], ["wet1000", 20], ["dry1100", 60]] as const) {
+      const g = grow(cond, t);
+      expect(Math.abs(g.cells - g.x), `${cond} ${t}s: 실측 ${g.cells}칸 대 계산 ${g.x.toFixed(2)}`)
+        .toBeLessThanOrEqual(1);
+    }
+  });
+
+  it("두꺼운 산화막 위에서도 x0를 보고 자란다 — 조용히 넘어가지 않는다", () => {
+    /*
+     * 산화제 도달 한계를 "이번 단계가 맨 실리콘에서 자랄 두께"로 잡으면, 이미
+     * 두꺼운 산화막이 깔린 위에서는 그 한계가 산화막보다 짧아 계면에 닿지도
+     * 못한다. x0가 0으로 나오고 단계 전체가 아무 일도 안 하면서 오류도 안 난다.
+     * 건너야 할 것은 이번에 자랄 두께가 아니라 **이미 있는 두께**다.
+     *
+     * 두 가지를 같이 본다. 두껍게 깔린 위에서도 (1) 실제로 자라고, (2) 맨
+     * 실리콘에 같은 시간을 준 것보다는 덜 자란다 — 후자가 τ가 일하고 있다는
+     * 증거다. 도달을 못 하던 시절에는 (1)이 0이었고, x0를 0으로 넘기던 더 옛날
+     * 버그에서는 (2)가 같아졌다.
+     */
+    const on = grow("wet1000", 30, 60);
+    expect(on.x0, "두꺼운 산화막을 x0로 봐야 한다").toBeGreaterThan(2);
+    expect(on.g, "얇게라도 자라야 한다").toBeGreaterThan(0);
+
+    const bare = grow("wet1000", 30);
+    expect(on.g, `두껍게 깔린 위 ${on.g} 대 맨 실리콘 ${bare.g}`).toBeLessThan(bare.g);
+  });
+
+  it("2칸이 바닥이다 — 한 칸을 먹으면 부피비만큼 나온다", () => {
+    /*
+     * 1복셀 산화막은 이 모형에서 만들 수 없고, 그게 맞다. 산화막은 실리콘을
+     * 먹어야 생기는데(무에서 안 생긴다) 한 칸을 먹으면 2.17칸이 나온다.
+     * 더 얇게 보려면 다이를 줄여 한 칸 자체를 잘게 만들어야 한다.
+     */
+    const none = grow("wet1000", 1);
+    expect(none.cells, "한 칸도 못 먹는 시간에는 아무 일도 없다").toBe(0);
+    const some = grow("wet1000", 2);
+    expect(some.cells, "먹기 시작하면 곧바로 2칸이다").toBeGreaterThanOrEqual(2);
+  });
+});

@@ -177,7 +177,7 @@ export function opOxidize(
   ambience: string,
   seconds: number,
 ): OxidizeResult {
-  const { N, S } = s;
+  const { N, NZ, S } = s;
   const { carriesOxidant, oxidantPermeable, oxidizesTo, expansion } = s.lib.mat;
   /**
    * 이미 깔린 산화막을 셈에 넣는다.
@@ -199,12 +199,33 @@ export function opOxidize(
    */
   const dg = dgTable(s);
   const depth = new Uint8Array(N);
-  const lOx = Math.max(1, Math.round(dealGrove(ambience, seconds, 0, dg)));
-  const reach = oxidantReach(s, mat, lOx, depth);
-  const x0 = existingOxide(s, mat, reach, depth);
+
+  /*
+   * x0를 잴 때는 **넉넉히** 흘린다.
+   *
+   * 도달 한계를 "이번 단계가 맨 실리콘에서 자랄 두께"로 잡으면 안 된다. 산화제가
+   * 건너야 하는 것은 그게 아니라 **이미 깔려 있는 산화막**이다. 두꺼운 산화막
+   * 위에 짧은 산화를 얹으면 한계가 그 산화막보다 짧아 계면에 닿지도 못하고,
+   * x0가 0으로 나오면서 단계 전체가 조용히 아무 일도 안 한다.
+   *
+   * 물리적인 느려짐은 이미 τ = (x0² + A·x0)/B 가 담당한다. 여기서 또 한 번
+   * 막으면 두 번 세는 셈이고, 게다가 절벽이 생긴다.
+   */
+  const probe = oxidantReach(s, mat, NZ, depth);
+  const x0 = existingOxide(s, mat, probe, depth);
   // 총 두께에서 이미 있던 것을 빼면 이번 단계가 자랄 몫이다.
   const x = dealGrove(ambience, seconds, x0, dg);
   const dx = Math.max(0, x - x0);
+
+  /*
+   * 실제 도달 범위는 이번에 만들어질 **총** 두께만큼으로 잡는다. 옆으로 기어드는
+   * 거리도 그 값이다 — LOCOS의 bird's beak이 마스크 밑으로 파고드는 깊이가
+   * 산화막 두께로 정해진다는 것이 이 한계가 담고 있는 물리다.
+   *
+   * 첫 산화(x0 = 0)에서는 x = dealGrove(seconds, 0)이라 예전 값과 똑같다.
+   */
+  const lOx = Math.max(1, Math.round(x));
+  const reach = oxidantReach(s, mat, lOx, depth);
 
   const oxid = S.u8a,
     src = S.u8b;
@@ -227,9 +248,22 @@ export function opOxidize(
     gd = dx * (1 - 1 / exp);
   const product = oxidizesTo[srcMat];
 
+  /**
+   * **반 복셀 관례.** EDT는 칸 중심 사이의 거리를 준다 — 계면 바로 아래 첫 고체
+   * 칸이 1이고, 바로 위 첫 빈 칸도 1이다. 하지만 계면은 그 사이 0.5에 있다.
+   *
+   * 그 반 칸을 안 빼면 두께가 1.85에 닿기 전에는 **아무 일도 안 일어나고**,
+   * 닿는 순간 위아래가 같이 열려 2칸이 된다 — 1복셀 산화막을 만들 방법이 없다.
+   * 게이트 산화막이 딱 그 두께인데 말이다. 두꺼운 쪽도 틀렸다: 해석값 3.46이
+   * 2칸으로 찍혔다(42% 모자람). 각 면이 floor 대신 round로 도는 셈이라 두께가
+   * 계산값을 따라간다.
+   *
+   * 증착의 φ에서 같은 관례를 이미 쓴다(core/phi.ts).
+   */
+  const HALF = 0.5;
   const dIn = edt3(s, oxid, false, S.d1); // 표면 아래 깊이
   const consumed: number[] = [];
-  for (let i = 0; i < N; i++) if (src[i] && dIn[i] <= cd) consumed.push(i);
+  for (let i = 0; i < N; i++) if (src[i] && dIn[i] - HALF <= cd) consumed.push(i);
 
   /**
    * 새 산화막이 **어디에** 붙는가 — 컬럼이 아니라 거리로 고른다.
@@ -265,7 +299,7 @@ export function opOxidize(
   const grown: number[] = [];
   for (let i = 0; i < N; i++) {
     if (mat[i] !== EMPTY || !reach[i]) continue;
-    if (dOff[i] > gd || dC[i] > outer) continue;
+    if (dOff[i] - HALF > gd || dC[i] > outer) continue;
     const f = feat[i];
     if (cons[f] || oxidantPermeable[mat[f]] || mat[f] === product) grown.push(i);
   }

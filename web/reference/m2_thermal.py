@@ -155,11 +155,18 @@ def op_oxidize(mat, conc, ambience, temp, seconds):
     # gets dragged by the few cells that crawled a long way under a mask. The
     # reach bound cannot truncate this: a cell only contributes if the oxidant
     # actually got there, and then its hop count is the whole traversal.
-    l_ox = max(1.0, deal_grove(ambience, temp, seconds))
-    reach, depth = oxidant_reach(mat, l_ox)
-    x0 = existing_oxide(mat, reach, depth)
+    # 2026-09-06: measure x0 with a generous reach. Bounding it by "what this
+    # step would grow on bare silicon" means a short oxidation over a thick
+    # oxide never reaches the interface: x0 reads 0 and the step silently does
+    # nothing. tau = (x0^2 + A*x0)/B already carries that slowdown.
+    probe, depth = oxidant_reach(mat, NZ)
+    x0 = existing_oxide(mat, probe, depth)
     x = deal_grove(ambience, temp, seconds, x0)
     dx = max(0.0, x - x0)
+    # The real reach is the TOTAL thickness being made, which is also how far
+    # the oxidant crawls sideways under a mask. Unchanged on a bare wafer.
+    l_ox = max(1.0, round(x))
+    reach, depth = oxidant_reach(mat, l_ox)
     consume_d, grow_d = dx * CONSUME_FRAC, dx * GROW_FRAC
     oxidant = [reach[i] and mat[i] in (EMPTY, OX) for i in range(N)]
     if not any(oxidant):
@@ -170,8 +177,14 @@ def op_oxidize(mat, conc, ambience, temp, seconds):
     if not any(is_si):
         return 0, 0, x
 
+    # Half-voxel convention: the EDT gives centre-to-centre distances, so the
+    # first solid cell below the interface reads 1 and the first empty cell
+    # above reads 1, while the interface sits at 0.5 between them. Without the
+    # half nothing happens until dx reaches 1.85 and then both sides open at
+    # once -- a one-voxel oxide is unreachable and thick ones read far too thin.
+    HALF = 0.5
     consumed = [i for i in range(N)
-                if mat[i] == SI and d_into_si[i] <= consume_d]
+                if mat[i] == SI and d_into_si[i] - HALF <= consume_d]
 
     # New oxide appears AT the interface and pushes whatever is above it up, so
     # the outward growth is measured from the top of the existing stack, not
@@ -208,7 +221,7 @@ def op_oxidize(mat, conc, ambience, temp, seconds):
     outer = grow_d + l_ox
     grown = [i for i in range(N)
              if mat[i] == EMPTY and reach[i]
-             and d_off_solid[i] <= grow_d and d_cons[i] <= outer
+             and d_off_solid[i] - HALF <= grow_d and d_cons[i] <= outer
              and (cons_mask[feat[i]] or mat[feat[i]] == OX)]
 
     redistribute(mat, conc, consumed)

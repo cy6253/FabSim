@@ -905,11 +905,19 @@ function existingOxide(mat,reach,depth){
 }
 function opOxidize(mat,phi,conc,key,seconds){
   const depth=new Uint8Array(N);
-  const lOx=Math.max(1,Math.round(dealGrove(key,seconds,0)));
-  const reach=oxidantReach(mat,lOx,depth);
-  const x0=existingOxide(mat,reach,depth);
+  // 2026-09-06: measure x0 with a generous reach. Capping it at "what this step
+  // would grow on bare silicon" means a short oxidation on top of a thick oxide
+  // never reaches the interface at all -- x0 reads 0 and the whole step silently
+  // does nothing. The slowdown is already carried by tau = (x0^2 + A*x0)/B.
+  const probe=oxidantReach(mat,NZ,depth);
+  const x0=existingOxide(mat,probe,depth);
   const x=dealGrove(key,seconds,x0);
   const dx=Math.max(0,x-x0);
+  // The real reach is the TOTAL thickness being made -- that is also how far
+  // the oxidant crawls sideways under a mask (bird's beak). Unchanged on a
+  // bare wafer, where x0 = 0.
+  const lOx=Math.max(1,Math.round(x));
+  const reach=oxidantReach(mat,lOx,depth);
   const cd=dx*CONSUME, gd=dx*GROW;
   const oxid=S.u8a,isSi=S.u8b;
   let anyO=false,anySi=false;
@@ -921,9 +929,16 @@ function opOxidize(mat,phi,conc,key,seconds){
     if(isSi[i])anySi=true;
   }
   if(!anyO||!anySi)return {c:0,g:0,x};
+  // Half-voxel convention. EDT gives centre-to-centre distances, so the first
+  // solid cell below the interface reads 1 and the first empty cell above reads
+  // 1 -- but the interface itself is at 0.5 between them. Without the half, no
+  // oxide appears until dx reaches 1.85 and then both sides open at once: a
+  // one-voxel oxide is unreachable, and thicker ones read far too thin
+  // (analytic 3.46 came out as 2 cells). Same convention as phi (redistance).
+  const HALF=0.5;
   const dIn=edt3(oxid,false,S.d1);      // depth below the surface
   const consumed=[];
-  for(let i=0;i<N;i++)if(mat[i]===SI&&dIn[i]<=cd)consumed.push(i);
+  for(let i=0;i<N;i++)if(mat[i]===SI&&dIn[i]-HALF<=cd)consumed.push(i);
 
   // New oxide appears AT the interface and pushes whatever sits above it up,
   // so the outward growth is measured from the top of the existing stack --
@@ -952,7 +967,7 @@ function opOxidize(mat,phi,conc,key,seconds){
   const grown=[];
   for(let i=0;i<N;i++){
     if(mat[i]!==EMPTY||!reach[i])continue;
-    if(dOff[i]>gd||dC[i]>outer)continue;
+    if(dOff[i]-HALF>gd||dC[i]>outer)continue;
     const f=feat[i];
     if(cons[f]||mat[f]===OX)grown.push(i);
   }

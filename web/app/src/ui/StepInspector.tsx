@@ -10,6 +10,8 @@
  * 알아야 한다.
  */
 import { useState } from "react";
+import { dealGrove } from "../core/ops";
+import { dgTableOf, EXPANSION } from "../core/materials";
 import { NODE_SPEC_BY_TYPE, optionsFor } from "../core/project/nodes";
 import { attachMask, maskOfStep, setNote, setParam } from "../core/project/edit";
 import type { Library } from "../core/library";
@@ -118,6 +120,32 @@ export function StepInspector(p: {
             ))}
           </select>
         </label>
+      )}
+
+      {/*
+        산화는 시간과 두께가 비례하지 않는다(√t에 가깝다). 시간을 몇 초로 할지
+        감이 안 오면 돌려 보는 수밖에 없었는데, 돌려 봐야 알 수 있는 값이면
+        노브가 아니다. 맨 실리콘 기준 예상 두께를 여기서 미리 보여 준다.
+
+        **2칸 밑으로는 못 내려간다**는 것도 같이 적는다. 산화막은 실리콘을 먹어야
+        생기고, 한 칸을 먹으면 부피비만큼 2.17칸이 나온다 — 그게 이 격자에서의
+        최소 단위다. 더 얇게 보려면 다이를 줄여 한 칸을 잘게 만들어야 한다.
+      */}
+      {node.type === "oxidize" && (
+        <p className="derived">
+          {(() => {
+            const t = Number(node.params.seconds);
+            const x = dealGrove(String(node.params.condition), t, 0, dgTableOf(p.lib));
+            const cells = Math.max(0, Math.round(x));
+            return (
+              <>
+                맨 실리콘에서 <b>≈ {x.toFixed(2)} 복셀</b> ({lengthLabel(x, nm)})
+                {cells < 2 && " — 실리콘 한 칸도 못 먹어 아무 일도 안 일어납니다"}
+                {cells >= 2 && ` · 격자 최소는 2칸입니다 (한 칸을 먹으면 ${EXPANSION}칸이 나옵니다)`}
+              </>
+            );
+          })()}
+        </p>
       )}
 
       {spec.params.map((prm) => {
