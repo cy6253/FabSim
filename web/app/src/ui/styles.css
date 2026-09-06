@@ -433,8 +433,17 @@ table.lib input[type="color"] { width: 42px; height: 24px; padding: 1px; }
 table.lib .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 table.lib .dim { color: var(--dim); }
 .teachrow { color: #a9c4d8; margin-top: 3px; max-width: 320px; line-height: 1.4; }
-.selgrid { display: flex; flex-wrap: wrap; gap: 6px; }
+.selgrid { display: flex; flex-wrap: wrap; gap: 6px; max-width: 460px; }
 .selgrid label { display: flex; align-items: center; gap: 4px; color: var(--dim); }
+/* 표가 여덟 개로 늘면서 탭이 한 줄을 넘는다. */
+.tabs { flex-wrap: wrap; }
+/* 재질 여러 개를 고르는 칸 — 정지층, 실리사이드가 반응하는 반도체. */
+.chipset { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; max-width: 320px; }
+.chipset .chip {
+  display: inline-flex; align-items: center; gap: 2px;
+  background: var(--panel2); border: 1px solid var(--line);
+  border-radius: 10px; padding: 1px 4px 1px 8px;
+}
 button.danger { background: #3a1f26; border-color: #5b2b35; color: #ffb3ba; padding: 2px 8px; }
 
 .panel {

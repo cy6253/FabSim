@@ -33,7 +33,7 @@ import { RecipeList } from "./RecipeList";
 import { StepInspector } from "./StepInspector";
 import { Details } from "./Details";
 import { Legend, StepBar } from "./Panels";
-import { exportSlicePNG, exportStepsCSV } from "./exports";
+import { exportSlicePNG, exportStepsCSV, exportViewPNG } from "./exports";
 import { MaskDesigner } from "./MaskDesigner";
 import { LibraryEditor } from "./LibraryEditor";
 import { loadState, saveState } from "./persist";
@@ -84,6 +84,8 @@ export function App() {
   const [restored, setRestored] = useState(false);
   const [hint, setHint] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  /** 3D 화면을 PNG로 뜨는 함수. View3D가 여기 꽂아 준다. */
+  const captureRef = useRef<(() => Promise<Blob | null>) | null>(null);
 
   const lib = useMemo(() => libraryOf(project), [project]);
 
@@ -387,6 +389,19 @@ export function App() {
               <button onClick={() => { setModal("mask"); setMenu(false); }}>마스크 편집</button>
               <button onClick={() => { setModal("library"); setMenu(false); }}>재질·공정 표</button>
               <hr />
+              {/* 학생이 보고서에 붙이는 것은 3D 쪽이다. 단면은 2D 패널이 있던
+                  시절의 내보내기라 무엇인지 이름에 적어 둔다. */}
+              <button
+                disabled={!sim.mesh}
+                onClick={() => {
+                  const cap = captureRef.current;
+                  if (cap)
+                    void exportViewPNG(project.name, sim.step, cap, { axis: cutAxis, at: cut });
+                  setMenu(false);
+                }}
+              >
+                3D 화면 PNG 내보내기
+              </button>
               <button
                 disabled={!sim.view}
                 onClick={() => {
@@ -399,7 +414,7 @@ export function App() {
                   setMenu(false);
                 }}
               >
-                단면 PNG 내보내기
+                단면(2D) PNG 내보내기
               </button>
               <button
                 onClick={() => {
@@ -546,6 +561,7 @@ export function App() {
             <View3D
               mesh={sim.mesh}
               mode={mode}
+              captureRef={captureRef}
               onPick={(gx, gy) => { setProbeX(gx); setSliceY(gy); }}
             />
           ) : (

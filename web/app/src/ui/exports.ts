@@ -68,6 +68,25 @@ export function exportSlicePNG(name: string, step: number, o: SliceExportOptions
   }, "image/png");
 }
 
+/**
+ * 지금 보고 있는 3D 화면을 PNG로.
+ *
+ * 학생이 보고서에 붙이는 것은 3D 쪽이다 — 단면은 2D 패널이 있던 시절의
+ * 내보내기이고, 그 패널은 이제 없다. 파일 이름에 단계와 절단 자리를 적어 둔다.
+ * 같은 레시피에서 각도만 바꿔 여러 장 뽑으면 그러지 않고는 구분할 수가 없다.
+ */
+export async function exportViewPNG(
+  name: string,
+  step: number,
+  capture: () => Promise<Blob | null>,
+  cut: { axis: 0 | 1 | 2; at: number },
+) {
+  const blob = await capture();
+  if (!blob) return;
+  const ax = ["x", "y", "z"][cut.axis];
+  download(blob, `${slug(name)}_${step + 1}단계_3D_${ax}${cut.at}.png`);
+}
+
 /** CSV 한 칸. 쉼표·따옴표·줄바꿈이 들어가도 깨지지 않게 감싼다. */
 const cell = (v: string | number) => {
   const s = String(v);

@@ -256,9 +256,38 @@ await page.locator(".modal-box header button", { hasText: "닫기" }).click();
 await page.locator(".topbar .menuwrap > button").click();
 await page.locator(".menu button", { hasText: "재질·공정 표" }).click();
 await page.waitForSelector("table.lib", { timeout: 10000 });
-console.log(`9) 재질·공정 표 — ${await page.locator("table.lib tbody tr").count()}행`);
+const tabs = await page.locator(".tabs button").count();
+console.log(`9) 재질·공정 표 — 탭 ${tabs}개 · 재질 ${await page.locator("table.lib tbody tr").count()}행`);
+if (tabs < 8) console.log(`   ⚠ 표가 ${tabs}개뿐이다 — 여덟 개가 다 편집돼야 한다`);
 await shot("09-library");
+
+/*
+ * 예전에는 편집할 수 있는 표가 재질·식각액 둘뿐이었다. 나머지 여섯은 프로젝트로
+ * 복사만 되고 화면이 없었다 — 이온 색은 3D에 새로 넣어 놓고 정작 바꿀 방법이
+ * 없었다. 그중 하나를 실제로 고쳐 보고, 저장했다 다시 열었을 때 남아 있는지 본다.
+ */
+await page.locator(".tabs button", { hasText: "증착" }).click();
+await page.waitForTimeout(400);
+const covBox = page.locator("table.lib tbody tr").first().locator('input[type="number"]').first();
+const cov0 = await covBox.inputValue();
+await covBox.fill("0.45");
+await page.waitForTimeout(700);
+await page.locator(".tabs button", { hasText: "이온" }).click();
+await page.waitForTimeout(400);
+const hasColor = await page.locator('table.lib input[type="color"]').count();
+await page.locator(".tabs button", { hasText: "증착" }).click();
+await page.waitForTimeout(400);
+const cov1 = await covBox.inputValue();
+console.log(`9b) 증착 커버리지 ${cov0} → ${cov1} · 이온 표의 색 칸 ${hasColor}개`);
+if (cov1 !== "0.45") console.log(`   ⚠ 증착 표를 고쳤는데 값이 안 남는다 (${cov1})`);
+if (hasColor === 0) console.log("   ⚠ 이온 색을 바꿀 칸이 없다");
 await page.locator(".modal-box header button", { hasText: "닫기" }).click();
+await settle();
+await page.waitForTimeout(600);
+// 되돌려 둔다 — 뒤의 검사들이 기본 표를 전제로 한다.
+await page.keyboard.press("Control+z");
+await settle();
+await page.waitForTimeout(600);
 
 
 // 기판 단계가 다이·격자의 집이다. 여기 없으면 어디에도 없다.

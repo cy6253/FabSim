@@ -28,6 +28,13 @@ export interface View3DProps {
    * 예전에는 2D 단면을 클릭해 골랐는데, 단면을 걷어내면서 3D가 그 일을 맡았다.
    */
   onPick?: (x: number, y: number) => void;
+  /**
+   * 화면을 그대로 PNG로 뜨는 함수를 여기 꽂아 준다.
+   *
+   * 캔버스는 이 컴포넌트 안에만 있고 메뉴는 바깥에 있다. 상태로 올리면 캔버스가
+   * 바뀔 때마다 위쪽이 다시 그려지므로, 함수 하나만 ref로 건넨다.
+   */
+  captureRef?: { current: (() => Promise<Blob | null>) | null };
 }
 
 export function View3D(p: View3DProps) {
@@ -240,6 +247,25 @@ export function View3D(p: View3DProps) {
      * 이전 칸의 비율을 그대로 들고 있어 물체가 잘린 채로 남는다. 칸 자체를
      * 지켜보면 창이든 탭이든 패널 접힘이든 한 길로 처리된다.
      */
+    /*
+     * 그림 뜨기.
+     *
+     * preserveDrawingBuffer를 켜지 않는다 — 켜면 매 프레임 뒷버퍼를 남겨 두느라
+     * 평소 렌더가 느려진다. 대신 **그린 직후 같은 태스크 안에서** toBlob을
+     * 부르면 버퍼가 아직 살아 있다. 그래서 requestAnimationFrame 안에서
+     * render()와 toBlob()을 붙여 둔다.
+     */
+    if (p.captureRef)
+      p.captureRef.current = () =>
+        new Promise<Blob | null>((resolve) => {
+          const s = stateRef.current;
+          if (!s) return resolve(null);
+          requestAnimationFrame(() => {
+            s.renderer.render(s.scene, s.camera);
+            s.renderer.domElement.toBlob((b) => resolve(b), "image/png");
+          });
+        });
+
     const onResize = () => place();
     const ro = new ResizeObserver(onResize);
     if (host) ro.observe(host);
@@ -259,6 +285,7 @@ export function View3D(p: View3DProps) {
       renderer.dispose();
       host.removeChild(el);
       stateRef.current = null;
+      if (p.captureRef) p.captureRef.current = null;
     };
   }, []);
 
