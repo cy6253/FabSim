@@ -396,8 +396,6 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
 .modal-box.wide { width: min(1100px, 96vw); }
 .modal-box header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
 .modal-box h2 { margin: 0; font-size: 15px; }
-.graphmodal { height: min(760px, 88vh); display: flex; flex-direction: column; }
-.graphmodal .nodeeditor { flex: 1; min-height: 0; }
 
 .masktools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
 .masktools .name { width: 190px; }
@@ -448,24 +446,6 @@ button.danger { background: #3a1f26; border-color: #5b2b35; color: #ffb3ba; padd
   display: flex; align-items: center; justify-content: space-between;
 }
 
-/* --------------------------------------------------------- 노드 에디터 */
-
-.nodeeditor { height: 100%; min-height: 380px; }
-.react-flow__node.is-active .fabnode { box-shadow: 0 0 0 2px var(--accent); }
-.fabnode {
-  min-width: 150px; max-width: 210px;
-  background: var(--panel); border: 1px solid; border-radius: 6px;
-  overflow: hidden; font-size: 12px;
-}
-.fabnode-head { padding: 4px 8px; color: #0b0f15; font-weight: 600; }
-.fabnode-sub { padding: 4px 8px; color: var(--dim); }
-.fabnode-note {
-  padding: 4px 8px; color: #cfe6d4; background: #1d2a1f;
-  border-top: 1px solid var(--line); font-size: 11px; line-height: 1.4;
-}
-.react-flow__handle.h-state { background: #7b8aa0; width: 8px; height: 8px; }
-.react-flow__handle.h-mask { background: #8f6bbf; width: 8px; height: 8px; }
-.react-flow__controls button { background: var(--panel2); border-color: var(--line); fill: var(--text); }
 
 
 /* ------------------------------------------------------- 좁은 화면 (폰) */

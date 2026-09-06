@@ -19,7 +19,7 @@
  *
  * Run 버튼은 여전히 없다 — 노브를 움직이면 그 지점부터 자동으로 다시 돈다(결정 ⑥).
  */
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EXAMPLES, exampleById } from "../core/project/examples";
 import { parseProject, serializeProject, libraryOf, newProject } from "../core/project/serialize";
 import { insertStep, removeStep, moveStepDown, moveStepUp } from "../core/project/edit";
@@ -38,16 +38,6 @@ import { LibraryEditor } from "./LibraryEditor";
 import { loadState, saveState } from "./persist";
 import { useUndoable } from "./useUndoable";
 import "./styles.css";
-
-/*
- * 그래프 화면은 열 때 받아 온다.
- *
- * @xyflow는 이 앱에서 가장 무거운 의존이면서 모달 하나에서만 쓴다. 같이 묶어
- * 두면 3D를 보러 온 사람도 그래프 편집기를 내려받고 나서야 첫 화면을 본다.
- */
-const NodeEditor = lazy(() =>
-  import("./NodeEditor").then((m) => ({ default: m.NodeEditor })),
-);
 
 const HINT_KEY = "fabsim3d.hint.dismissed";
 
@@ -89,7 +79,7 @@ export function App() {
    */
   const [pane, setPane] = useState<"recipe" | "view" | "step">("view");
   const [playing, setPlaying] = useState(false);
-  const [modal, setModal] = useState<null | "mask" | "library" | "graph">(null);
+  const [modal, setModal] = useState<null | "mask" | "library">(null);
   const [menu, setMenu] = useState(false);
   const [restored, setRestored] = useState(false);
   const [hint, setHint] = useState(false);
@@ -339,12 +329,6 @@ export function App() {
               <hr />
               <button onClick={() => { setModal("mask"); setMenu(false); }}>마스크 편집</button>
               <button onClick={() => { setModal("library"); setMenu(false); }}>재질·공정 표</button>
-              <button
-                onClick={() => { setModal("graph"); setMenu(false); }}
-                title="분기를 만들거나 연결을 직접 고칠 때"
-              >
-                공정 그래프
-              </button>
               <hr />
               <button
                 disabled={!sim.view}
@@ -400,31 +384,6 @@ export function App() {
       {modal === "library" && (
         <LibraryEditor project={project} onChange={setProject} onClose={() => setModal(null)} />
       )}
-      {modal === "graph" && (
-        <div className="modal" onClick={(e) => e.target === e.currentTarget && setModal(null)}>
-          <div className="modal-box wide graphmodal">
-            <header>
-              <h2>공정 그래프</h2>
-              <span className="hint">분기를 만들거나 연결을 직접 고칠 때 씁니다.</span>
-              <span className="spacer" />
-              <button onClick={() => setModal(null)}>닫기</button>
-            </header>
-            <Suspense fallback={<div className="placeholder">그래프 편집기를 불러오는 중…</div>}>
-              <NodeEditor
-                project={project}
-                onChange={setProject}
-                selectedId={currentId ?? null}
-                onSelect={(id) => {
-                  const i = sim.chain.findIndex((c) => c.id === id);
-                  if (i >= 0) goTo(i);
-                }}
-                activeId={currentId}
-              />
-            </Suspense>
-          </div>
-        </div>
-      )}
-
       {/* 좁은 화면 전용 칸 전환. 넓은 화면에서는 CSS가 통째로 숨긴다. */}
       <nav className="panebar">
         {([["recipe", "레시피"], ["view", "화면"], ["step", "설정"]] as const).map(([k, label]) => (

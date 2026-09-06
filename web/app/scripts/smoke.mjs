@@ -190,14 +190,6 @@ console.log(`9) 재질·공정 표 — ${await page.locator("table.lib tbody tr"
 await shot("09-library");
 await page.locator(".modal-box header button", { hasText: "닫기" }).click();
 
-// 그래프 화면 (분기 편집용) — 다른 모달들과 같이 ⋯ 메뉴에 있다
-await page.locator(".topbar .menuwrap > button").click();
-await page.locator(".menu button", { hasText: "공정 그래프" }).click();
-await page.waitForSelector(".fabnode", { timeout: 10000 });
-console.log(`10) 그래프 — 노드 ${await page.locator(".fabnode").count()}개`);
-await shot("10-graph");
-await page.locator(".modal-box header button", { hasText: "닫기" }).click();
-await page.waitForTimeout(400);
 
 // 기판 단계가 다이·격자의 집이다. 여기 없으면 어디에도 없다.
 await page.locator(".step").first().click();
