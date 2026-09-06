@@ -170,6 +170,45 @@ if ((cutLong[0] ?? 0) >= 50)
 // 걸면 기계와 창 크기에 따라 켜졌다 꺼졌다 하는 거짓 경고가 된다.
 await page.locator('.slider:has-text("절단") select').selectOption("0");
 
+/*
+ * 절단 조절 — 이 앱에서 가장 자주 만지는 값이다. 구조는 대부분 안쪽에 있고
+ * 그걸 보려면 여기를 움직여야 하는데, 오래도록 슬라이더 하나뿐이라 "z=48을
+ * 보고 싶다"를 픽셀로 맞춰야 했다. 쳐 넣기·한 칸씩·왕복이 다 되는지 본다.
+ */
+const cutRow = page.locator(".cutrow");
+const cutNum = cutRow.locator("input.cutnum");
+const cutBtn = (t) => cutRow.locator("button", { hasText: t });
+await cutNum.fill("60");
+await page.waitForTimeout(700);
+const typed60 = await cutNum.inputValue();
+await cutBtn("▶").click();
+await page.waitForTimeout(500);
+const stepped = await cutNum.inputValue();
+await cutBtn("◀").click();
+await cutBtn("◀").click();
+await page.waitForTimeout(500);
+const back = await cutNum.inputValue();
+// 잘라 놨으면 "전체"가, 온전하면 "가운데"가 떠야 한다 — 단추가 상태가 아니라
+// 누르면 될 일을 말한다.
+const roundTrip = await cutBtn("전체").count();
+await cutBtn("전체").click();
+await page.waitForTimeout(800);
+const whole = await cutNum.inputValue();
+const toMiddle = await cutBtn("가운데").count();
+await cutBtn("가운데").click();
+await page.waitForTimeout(800);
+const middle = await cutNum.inputValue();
+console.log(
+  `5d) 절단 조절: 입력 ${typed60} · ▶ ${stepped} · ◀◀ ${back} · ` +
+    `전체 ${whole} · 가운데 ${middle}`,
+);
+if (typed60 !== "60") console.log(`   ⚠ 절단을 쳐 넣을 수 없다 (${typed60})`);
+if (Number(stepped) !== 61 || Number(back) !== 59)
+  console.log(`   ⚠ 한 칸씩 옮기기가 안 맞는다 (${stepped}, ${back})`);
+if (roundTrip === 0 || toMiddle === 0) console.log("   ⚠ 왕복 단추가 상태를 못 따라간다");
+if (Number(middle) >= Number(whole)) console.log("   ⚠ 가운데가 전체보다 작지 않다");
+await shot("05d-cut");
+
 // 진행 표시가 실제로 여러 단계를 지나가는가. 예전에는 run 뒤에 보낸 view가
 // 첫 양보 순간에 동기로 끝까지 돌아 버려서 "1/93"에 멈춘 채 49초가 흘렀다.
 await page.evaluate(() => {

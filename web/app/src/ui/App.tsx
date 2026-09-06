@@ -33,6 +33,7 @@ import { RecipeList } from "./RecipeList";
 import { StepInspector } from "./StepInspector";
 import { Details } from "./Details";
 import { Legend, StepBar } from "./Panels";
+import { NumberEntry } from "./NumberEntry";
 import { exportSlicePNG, exportStepsCSV, exportViewPNG } from "./exports";
 import { MaskDesigner } from "./MaskDesigner";
 import { LibraryEditor } from "./LibraryEditor";
@@ -552,29 +553,85 @@ export function App() {
                 />
               </label>
             )}
-            <label
-              className="slider"
-              title={`이 면보다 바깥을 잘라 내부를 봅니다 (${lengthLabel(cut, nmPerVoxel)})`}
-            >
+            {/*
+              절단은 이 앱에서 **가장 자주 만지는 값**이다 — 구조는 대부분
+              안쪽에 있고, 그걸 보려면 여기를 움직여야 한다. 그런데 오래도록
+              슬라이더 하나뿐이라 "z=48을 보고 싶다"를 픽셀로 맞춰야 했고,
+              한 칸씩 훑어보는 것은 사실상 불가능했다. 오른쪽 노브들이 이미
+              쳐 넣기와 끌기를 같이 주고 있으므로 같은 것을 여기에도 둔다.
+
+                ◀ ▶  한 칸씩 — 층을 하나하나 지나며 볼 때 쓴다
+                입력칸 아는 자리로 바로
+                슬라이더 훑어보기
+                가운데/전체  가장 잦은 두 자리를 한 번에
+            */}
+            <span className="slider cutrow">
               절단
               <select
                 value={cutAxis}
                 // 축을 바꾸면 값의 범위가 달라진다. 자동으로 되돌려 놔야
                 // 새 축에서도 층 구조가 보이는 자리에서 시작한다.
                 onChange={(e) => { setCutAxis(Number(e.target.value) as 0 | 1 | 2); setCutX(-1); }}
-                onClick={(e) => e.preventDefault()}
                 title="어느 축으로 자를지"
               >
                 <option value={0}>x</option>
                 <option value={1}>y</option>
                 <option value={2}>z</option>
               </select>
-              {cut}
+              <button
+                className="ghost tiny"
+                onClick={() => setCutX(Math.max(1, cut - 1))}
+                disabled={cut <= 1}
+                title="한 칸 앞으로 (입력칸에서 ↓ 키도 같습니다)"
+              >
+                ◀
+              </button>
+              <NumberEntry
+                value={cut}
+                min={1}
+                max={cutDim}
+                step={1}
+                className="cutnum"
+                title={`이 면보다 바깥을 잘라 내부를 봅니다 (${lengthLabel(cut, nmPerVoxel)})`}
+                onChange={setCutX}
+              />
+              <button
+                className="ghost tiny"
+                onClick={() => setCutX(Math.min(cutDim, cut + 1))}
+                disabled={cut >= cutDim}
+                title="한 칸 뒤로 (입력칸에서 ↑ 키도 같습니다)"
+              >
+                ▶
+              </button>
               <input
                 type="range" min={1} max={cutDim} value={cut}
                 onChange={(e) => setCutX(Number(e.target.value))}
               />
-            </label>
+              {/*
+                단추 하나가 왕복을 맡는다. 잘라서 안을 보다가 겉을 다시 보려면
+                슬라이더를 끝까지 밀어야 했는데, 그건 가장 잦은 동작이다.
+                글자가 **지금 상태**가 아니라 **누르면 될 일**을 말하므로
+                무엇이 일어날지 읽고 누를 수 있다.
+              */}
+              {cut >= cutDim ? (
+                <button
+                  className="ghost tiny"
+                  onClick={() => setCutX(Math.max(1, Math.round(cutDim / 2)))}
+                  title="가운데를 자릅니다 — 대부분의 구조가 거기 있습니다"
+                >
+                  가운데
+                </button>
+              ) : (
+                <button
+                  className="ghost tiny"
+                  onClick={() => setCutX(-1)}
+                  title="자르지 않은 온전한 형상으로 되돌립니다"
+                >
+                  전체
+                </button>
+              )}
+              <i className="nm">{lengthLabel(cut, nmPerVoxel)}</i>
+            </span>
           </div>
 
           {sim.mesh ? (
