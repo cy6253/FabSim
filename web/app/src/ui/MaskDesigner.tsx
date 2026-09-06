@@ -106,17 +106,31 @@ export function MaskDesigner({ project, onChange, onClose }: MaskDesignerProps) 
       for (let x = 0; x < asset.w; x++)
         if (px[x + asset.w * y]) ctx.fillRect(x * scale, y * scale, scale, scale);
 
-    // 스냅 격자
-    if (snap > 1 && scale >= 3) {
-      ctx.strokeStyle = "rgba(120,140,165,0.18)";
+    /*
+     * 격자선 두 겹.
+     *
+     * 예전에는 스냅 격자만 그렸다. 그러면 기본값 4에서 네 칸짜리 사각형이 "한
+     * 칸"으로 읽힌다 — 실제로 한 칸은 그 1/4이고, 마스크가 담을 수 있는 가장
+     * 작은 패턴도 그 크기다. 손으로 그린 것보다 잘아 보이는 도형을 만나면
+     * "격자보다 작은 것을 그렸다"고 오해하게 된다. 그런 일은 일어날 수 없다 —
+     * 마스크 한 칸이 곧 복셀 한 칸이다.
+     *
+     * 그래서 진짜 칸을 흐리게 먼저 깔고, 스냅 격자를 그 위에 진하게 얹는다.
+     * 둘의 관계가 눈에 보이면 스냅을 1로 내리면 된다는 것도 같이 보인다.
+     */
+    const lines = (step: number, style: string) => {
+      ctx.strokeStyle = style;
       ctx.lineWidth = 1;
-      for (let x = 0; x <= asset.w; x += snap) {
+      for (let x = 0; x <= asset.w; x += step) {
         ctx.beginPath(); ctx.moveTo(x * scale, 0); ctx.lineTo(x * scale, cv.height); ctx.stroke();
       }
-      for (let y = 0; y <= asset.h; y += snap) {
+      for (let y = 0; y <= asset.h; y += step) {
         ctx.beginPath(); ctx.moveTo(0, y * scale); ctx.lineTo(cv.width, y * scale); ctx.stroke();
       }
-    }
+    };
+    // 한 칸이 5픽셀은 되어야 선이 칸을 덮어 버리지 않는다.
+    if (scale >= 5) lines(1, "rgba(120,140,165,0.10)");
+    if (snap > 1 && scale >= 3) lines(snap, "rgba(120,140,165,0.30)");
 
     // 진행 중인 도형
     ctx.strokeStyle = subtract ? "#e5675f" : "#4a9edd";
@@ -329,8 +343,11 @@ export function MaskDesigner({ project, onChange, onClose }: MaskDesignerProps) 
                 <input type="checkbox" checked={subtract} onChange={(e) => setSubtract(e.target.checked)} />
                 지우기
               </label>
-              <label className="slider">
-                스냅 {snap}
+              <label
+                className="slider"
+                title="그리는 도형이 몇 칸 단위로 맞춰지는지. 1로 내리면 한 칸(=복셀 하나)씩 그린다 — 마스크가 담을 수 있는 가장 잘은 크기다"
+              >
+                스냅 {snap === 1 ? "한 칸" : `${snap}칸`}
                 <input type="range" min={1} max={16} value={snap} onChange={(e) => setSnap(Number(e.target.value))} />
               </label>
               <label className="slider" title="한 칸을 몇 픽셀로 볼지. 격자가 촘촘하면 키워서 그린다">
