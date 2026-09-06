@@ -544,6 +544,40 @@ describe("예제가 어디를 볼지 들고 있다", () => {
   });
 });
 
+describe("같은 답을 두 번 구하지 않는다", () => {
+  it("보이드 마스크를 화면에 줄 때 flood fill을 다시 안 돈다", () => {
+    /*
+     * 통계가 보이드를 세려고 한 번 흘렸는데, 화면이 마스크를 달라고 하면
+     * `voidsOf`가 재질을 다시 풀고 **같은 것을 또** 흘렸다. 단계당 124ms —
+     * 식각 한 단계(452ms)의 27%가 이미 아는 답을 다시 구하는 데 갔다.
+     * 지금은 프레임이 마스크를 들고 다닌다.
+     */
+    const p = exampleById("trench");
+    const ex = new Executor(p);
+    const frames = ex.run(defaultLeaf(p)!);
+    const after = ex.floodCount;
+
+    const v = ex.voidsOf(frames[frames.length - 1]);
+    expect(ex.floodCount, "화면에 줄 때는 한 번도 안 흘려야 한다").toBe(after);
+
+    // 답이 맞는지도 같이 본다 — 안 흘리고 틀린 답을 주면 더 나쁘다.
+    let n = 0;
+    for (let i = 0; i < v.length; i++) if (v[i]) n++;
+    expect(n).toBe(frames[frames.length - 1].voidCount);
+    expect(n).toBeGreaterThan(0);
+  });
+
+  it("캐시에서 나온 단계는 flood fill을 아예 안 돈다", () => {
+    const p = exampleById("trench");
+    const ex = new Executor(p);
+    const leaf = defaultLeaf(p)!;
+    ex.run(leaf);
+    const after = ex.floodCount;
+    ex.run(leaf);
+    expect(ex.floodCount, "두 번째 실행은 전부 캐시다").toBe(after);
+  });
+});
+
 describe("격자 상한은 실제로 감당할 수 있는 크기다", () => {
   it("12M은 거부하고, 프리셋은 전부 통과한다", () => {
     /*

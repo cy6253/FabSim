@@ -81,10 +81,12 @@ export function oxidantReach(
   lOx: number,
   /** 각 칸까지 산화막을 몇 번 밟고 왔는가. 진공은 0. x0를 재는 데 쓴다. */
   depth?: Uint8Array,
+  /** 결과를 담을 버퍼. 안 주면 새로 잡는다 (floodTop이 어차피 비우고 시작한다). */
+  out?: Uint8Array,
 ): Uint8Array {
   const { N } = s;
   const { oxidantPermeable } = s.lib.mat;
-  const reach = floodTop(s, (i) => mat[i] === EMPTY, new Uint8Array(N));
+  const reach = floodTop(s, (i) => mat[i] === EMPTY, out ?? new Uint8Array(N));
   depth?.fill(0);
   let cur: number[] = [];
   for (let i = 0; i < N; i++) {
@@ -199,7 +201,7 @@ export function opOxidize(
    * 맞다 — 다음 산화가 뚫고 와야 하는 것은 그 층들이지 계산값이 아니다.
    */
   const dg = dgTable(s);
-  const depth = new Uint8Array(N);
+  const depth = S.u8c;
 
   /*
    * x0를 잴 때는 **넉넉히** 흘린다.
@@ -212,7 +214,7 @@ export function opOxidize(
    * 물리적인 느려짐은 이미 τ = (x0² + A·x0)/B 가 담당한다. 여기서 또 한 번
    * 막으면 두 번 세는 셈이고, 게다가 절벽이 생긴다.
    */
-  const probe = oxidantReach(s, mat, NZ, depth);
+  const probe = oxidantReach(s, mat, NZ, depth, S.u8d);
   const x0 = existingOxide(s, mat, probe, depth);
   // 총 두께에서 이미 있던 것을 빼면 이번 단계가 자랄 몫이다.
   const x = dealGrove(ambience, seconds, x0, dg);
@@ -226,7 +228,8 @@ export function opOxidize(
    * 첫 산화(x0 = 0)에서는 x = dealGrove(seconds, 0)이라 예전 값과 똑같다.
    */
   const lOx = Math.max(1, Math.round(x));
-  const reach = oxidantReach(s, mat, lOx, depth);
+  // probe는 x0를 재는 데 다 썼다 — 같은 버퍼를 이어 쓴다.
+  const reach = oxidantReach(s, mat, lOx, depth, S.u8d);
 
   const oxid = S.u8a,
     src = S.u8b;

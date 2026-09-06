@@ -52,7 +52,8 @@ export function opEtch(
     touched = 0,
     rounds = 0,
     tLeft = seconds;
-  const reach = new Uint8Array(N);
+  // 스크래치를 쓴다 — ambient가 들어가면서 fill(0)부터 하므로 남은 값은 안 읽힌다.
+  const reach = S.u8c;
 
   /**
    * 이온은 **위에서 온다** — 축별 간격 (1/lat, 1/lat, 1)은 그걸 잊고 ±z에 대칭이라

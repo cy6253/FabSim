@@ -72,7 +72,10 @@ export function opDeposit(
       else if (z < NZ - 1 && mat[i + NX * NY] !== EMPTY) t = true;
       if (t) { front[i] = 1; cells.push(i); }
     }
-    const fr = new Float32Array(N);
+    // 스크래치. visibility는 전선 칸만 채우고 아래 루프는 feat이 가리키는
+    // 전선 칸만 읽지만, 0으로 비워 두는 편이 예전(새 배열)과 완전히 같다.
+    const fr = S.fc;
+    fr.fill(0);
     // 지수는 표본이 이미 cos 분포인 만큼 하나를 뺀 값으로 넘긴다.
     // φ를 같이 주면 표면 법선까지 셈에 들어간다 — 수직 벽이 얇아지는 이유다.
     visibility(s, mat, cells, NRAY, RAYLEN, fr, coverage, Math.max(0, directionality - 1), phi);

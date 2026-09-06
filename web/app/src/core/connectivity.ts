@@ -19,6 +19,7 @@ export function floodTop(
   out: Uint8Array,
 ): Uint8Array {
   const { NX, NY, NZ, S } = s;
+  s.floodCount++;
   const reach = out;
   reach.fill(0);
   const q = S.i32;

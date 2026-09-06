@@ -27,10 +27,22 @@ export interface Scratch {
   d2: Float32Array;
   u8a: Uint8Array;
   u8b: Uint8Array;
+  /**
+   * 연산자가 스스로 들고 있어야 하는 표시 둘.
+   *
+   * u8a와 u8b는 연산자 안에서 이미 다른 뜻으로 쓰이고 있어서(식각은 u8a가
+   * 전선, u8b가 FMM 상태) 세 번째 표시가 필요할 때 예전에는 그때마다
+   * `new Uint8Array(N)`을 잡았다. 단계마다 1~3MB짜리 배열이 태어났다 죽는데,
+   * 데스크톱 V8은 견디지만 폰의 GC는 여기서 멈칫한다.
+   */
+  u8c: Uint8Array;
+  u8d: Uint8Array;
   /** flood fill 큐 겸 union-find 버킷의 next 포인터. */
   i32: Int32Array;
   fa: Float32Array;
   fb: Float32Array;
+  /** 증착의 가시성 장. fa·fb는 속도와 도달 시각이 이미 쓰고 있다. */
+  fc: Float32Array;
   /* union-find (칸 N개 + 바깥을 뜻하는 가상 노드 1개) */
   parent: Int32Array;
   usize: Int32Array;
@@ -75,6 +87,15 @@ export interface Sim {
   /** EDT 호출 횟수. 성능 회귀를 눈으로 잡기 위한 계수기. */
   edtCount: number;
   /**
+   * flood fill을 몇 번 돌았는가.
+   *
+   * 세는 이유는 성능이 아니라 **같은 답을 두 번 구하지 않기 위해서**다. 통계가
+   * 보이드를 세려고 한 번 흘리고, 화면이 보이드 마스크를 만들려고 또 흘렸다 —
+   * 단계당 124ms가 그렇게 갔다. 지금은 프레임이 마스크를 들고 다니고, 이 수가
+   * 테스트에서 그 사실을 붙들어 둔다.
+   */
+  floodCount: number;
+  /**
    * 재질·공정 라이브러리.
    *
    * 연산자가 재질을 이름이 아니라 **속성**으로 판정하게 하는 표다 —
@@ -99,9 +120,12 @@ export function createSim(
     d2: new Float32Array(N),
     u8a: new Uint8Array(N),
     u8b: new Uint8Array(N),
+    u8c: new Uint8Array(N),
+    u8d: new Uint8Array(N),
     i32: new Int32Array(N),
     fa: new Float32Array(N),
     fb: new Float32Array(N),
+    fc: new Float32Array(N),
     parent: new Int32Array(N + 1),
     usize: new Int32Array(N + 1),
     stamped: new Uint8Array(N + 1),
@@ -121,7 +145,7 @@ export function createSim(
     dp: new Float64Array(m),
     top: new Int32Array(NX * NY),
   };
-  return { NX, NY, NZ, N, S, phiDirty: false, concDirty: false, edtCount: 0, lib };
+  return { NX, NY, NZ, N, S, phiDirty: false, concDirty: false, edtCount: 0, floodCount: 0, lib };
 }
 
 /** 격자 하나 분량의 재질 배열. */

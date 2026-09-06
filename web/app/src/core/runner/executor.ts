@@ -46,6 +46,14 @@ export interface Frame {
   signature: string;
   /** RLE로 압축한 재질 배열. */
   mat: RLE;
+  /**
+   * 봉인된 보이드 마스크, 역시 RLE.
+   *
+   * 통계를 낼 때 이미 flood fill을 한 번 돌았는데, 화면이 보이드를 보여 달라고
+   * 하면 `voidsOf`가 **같은 것을 또** 돌았다. 단계당 124ms — 식각 한 단계의
+   * 27%가 같은 답을 두 번 구하는 데 갔다. 보이드는 대개 작아서 RLE로 몇 KB다.
+   */
+  voids: RLE;
   /** 도핑 필드. 안 바뀐 단계는 이전 것과 같은 배열을 가리킨다. */
   conc: Float32Array[];
   /** 이 단계에서 도핑이 바뀌었는가. */
@@ -113,7 +121,7 @@ interface Resume {
   phiDirty: boolean;
 }
 
-/** 32비트 FNV-1a. 서명은 충돌 확률보다 결정성과 속도가 중요하다. */
+/** 32비트 FNV-1a. 두 시드로 두 번 돌려 64비트를 만든다 (아래 signatureOf). */
 function hashString(s: string, seed = 0x811c9dc5): number {
   let h = seed >>> 0;
   for (let i = 0; i < s.length; i++) {
@@ -151,6 +159,26 @@ export class Executor {
   private maxCacheBytes: number;
   /** 지금 돌고 있는 갈래의 서명. 이건 방금 만들었거나 곧 쓸 것이라 안 버린다. */
   private activeSigs = new Set<string>();
+  /** 펼친 마스크. 열쇠에 비트 해시가 들어가므로 다시 그리면 저절로 갈린다. */
+  private maskCache = new Map<string, Uint8Array>();
+  /** 이 갈래에서 주입이 한 번이라도 있었는가. 없으면 산화가 어닐을 건너뛴다. */
+  private doped = false;
+  /**
+   * 실행기가 매 단계 쓰는 N바이트 버퍼들.
+   *
+   * 코어의 스크래치(Sim.S)는 연산자가 쓰는 중이라 빌릴 수 없다. 단계마다
+   * `new Uint8Array(N)`을 세 개씩 잡아 버리면 격자가 클 때 그것만으로 GC가 돈다.
+   */
+  private bufs = new Map<string, Uint8Array>();
+
+  private buf(name: string): Uint8Array {
+    let b = this.bufs.get(name);
+    if (!b || b.length !== this.sim.N) {
+      b = new Uint8Array(this.sim.N);
+      this.bufs.set(name, b);
+    }
+    return b;
+  }
 
   constructor(project: Project, opts: { maxCacheBytes?: number } = {}) {
     // 기본값은 무거운 예제 한 벌(allops 77MB)에 여유를 얹은 값이다. 테스트는
@@ -177,6 +205,8 @@ export class Executor {
       this.resumes.clear();
       this.phiHolders = [];
       this.frames.clear();
+      // 마스크는 격자 크기에 맞춰 늘려 둔 것이라 격자가 바뀌면 남의 것이 된다.
+      this.maskCache.clear();
     }
   }
 
@@ -193,10 +223,15 @@ export class Executor {
     return this.lib;
   }
 
+  /** 테스트가 "같은 답을 두 번 구하지 않는다"를 확인하는 창. */
+  get floodCount(): number {
+    return this.sim.floodCount;
+  }
+
   /** 캐시가 들고 있는 대략적인 바이트 수. 화면에 예산을 보여주기 위한 것. */
   cacheBytes(): number {
     let b = 0;
-    for (const f of this.frames.values()) b += rleBytes(f.mat);
+    for (const f of this.frames.values()) b += rleBytes(f.mat) + rleBytes(f.voids);
     const seen = new Set<Float32Array>();
     for (const f of this.frames.values())
       for (const c of f.conc) if (!seen.has(c)) { seen.add(c); b += c.byteLength; }
@@ -209,13 +244,14 @@ export class Executor {
     return rleDecode(f.mat, this.sim.N, out);
   }
 
-  /** 봉인된 보이드 마스크. 화면이 요청할 때만 계산한다(단계당 flood fill 한 번). */
-  voidsOf(f: Frame): Uint8Array {
-    const mat = this.materialOf(f);
-    const reach = ambient(this.sim, mat, new Uint8Array(this.sim.N));
-    const v = new Uint8Array(this.sim.N);
-    for (let i = 0; i < this.sim.N; i++) if (mat[i] === EMPTY && !reach[i]) v[i] = 1;
-    return v;
+  /**
+   * 봉인된 보이드 마스크.
+   *
+   * 프레임을 만들 때 이미 구해 둔 것을 편다. 예전에는 여기서 재질을 다시 풀고
+   * flood fill을 다시 돌았는데, 통계가 방금 같은 답을 냈다는 것을 몰라서였다.
+   */
+  voidsOf(f: Frame, out?: Uint8Array): Uint8Array {
+    return rleDecode(f.voids, this.sim.N, out);
   }
 
   /**
@@ -281,7 +317,11 @@ export class Executor {
       const cached = this.frames.get(sigs[i]);
       // 이 단계가 무엇을 바꿨는지 재려면 직전 상태가 필요하다. 캐시가 있으면
       // 다시 계산할 일이 없으므로 그때는 뜨지 않는다.
-      const before = cached ? null : mat.slice();
+      let before: Uint8Array | null = null;
+      if (!cached) {
+        before = this.buf("before");
+        before.set(mat);
+      }
       const t0 = Date.now();
       const note = this.apply(node, mat, phi, conc);
       // 재질이 없어진 칸의 도펀트도 같이 내보낸다. 연산자마다 넣으면 하나
@@ -325,9 +365,17 @@ export class Executor {
     const counts: Record<number, number> = {};
     for (let i = 0; i < s.N; i++) counts[mat[i]] = (counts[mat[i]] ?? 0) + 1;
 
-    const reach = ambient(s, mat, new Uint8Array(s.N));
+    // flood fill은 단계당 **한 번**이다. 여기서 낸 마스크를 프레임에 실어 두면
+    // 화면이 보이드를 그릴 때 다시 돌 이유가 없다.
+    const reach = ambient(s, mat, this.buf("reach"));
+    const voidMask = this.buf("voidMask");
     let voidCount = 0;
-    for (let i = 0; i < s.N; i++) if (mat[i] === EMPTY && !reach[i]) voidCount++;
+    for (let i = 0; i < s.N; i++) {
+      const v = mat[i] === EMPTY && !reach[i] ? 1 : 0;
+      voidMask[i] = v;
+      voidCount += v;
+    }
+    const voids = rleEncode(voidMask);
 
     let topOccupied = 0;
     const topBase = s.NX * s.NY * (s.NZ - 1);
@@ -356,7 +404,10 @@ export class Executor {
         median: perCol[perCol.length >> 1],
       };
     }
-    return { counts, voidCount, topOccupied, changed: { added, removed, mutated }, addedPerColumn };
+    return {
+      counts, voids, voidCount, topOccupied,
+      changed: { added, removed, mutated }, addedPerColumn,
+    };
   }
 
   /**
@@ -367,11 +418,32 @@ export class Executor {
    * 통째로 넘길 때 그렇게 된다. 그럴 때는 예산을 넘긴 채로 두는 것이 맞다.
    */
   private evict() {
-    if (this.cacheBytes() <= this.maxCacheBytes) return;
+    /*
+     * 예전에는 프레임을 하나 지울 때마다 `cacheBytes()`를 다시 셌다. 그건 캐시에
+     * 든 프레임 전부를 훑고 도핑 배열을 Set에 모으는 일이라, 지울 것이 많을수록
+     * 제곱으로 비싸진다. 한 번 세고 지운 만큼 빼면 같은 답이다.
+     */
+    let bytes = this.cacheBytes();
+    if (bytes <= this.maxCacheBytes) return;
+    // 도핑 배열은 프레임끼리 공유하므로, 마지막 주인이 나갈 때만 실제로 줄어든다.
+    const users = new Map<Float32Array, number>();
+    for (const f of this.frames.values())
+      for (const c of new Set(f.conc)) users.set(c, (users.get(c) ?? 0) + 1);
     for (const sig of [...this.frames.keys()]) {
       if (this.activeSigs.has(sig)) continue;
+      const f = this.frames.get(sig)!;
+      bytes -= rleBytes(f.mat) + rleBytes(f.voids);
+      for (const c of new Set(f.conc)) {
+        const left = (users.get(c) ?? 1) - 1;
+        users.set(c, left);
+        if (left === 0) bytes -= c.byteLength;
+      }
       this.frames.delete(sig);
-      if (this.cacheBytes() <= this.maxCacheBytes) return;
+      // 프레임이 없으면 그 지점에서 재개할 수도 없다. 짝을 같이 버린다 —
+      // 안 그러면 노브를 오래 훑는 동안 재개 지점만 수만 개가 남는다.
+      this.resumes.delete(sig);
+      this.phiHolders = this.phiHolders.filter((x) => x !== sig);
+      if (bytes <= this.maxCacheBytes) return;
     }
   }
 
@@ -411,7 +483,19 @@ export class Executor {
     }
     const keys = Object.keys(n.params).sort();
     const params = keys.map((k) => `${k}=${String(n.params[k])}`).join(",");
-    return hashString(`${parent}|${n.type}|${params}|${maskPart}`).toString(16);
+    const text = `${parent}|${n.type}|${params}|${maskPart}`;
+    /*
+     * 64비트로 잇는다.
+     *
+     * 서명이 같으면 **다시 계산하지 않는다.** 그러니 충돌은 오류가 아니라
+     * 조용한 오답이다 — 다른 노브 값의 프레임이 그대로 화면에 뜨고, 사용자는
+     * 자기가 방금 돌린 값을 보고 있다고 믿는다. 노브를 훑는 동안 서명이
+     * 수백 개씩 생기므로 32비트에서는 생일 문제가 무시할 만하지 않다.
+     * 시드를 바꿔 한 번 더 도는 비용은 문자열 길이만큼이고 단계당 한 번이다.
+     */
+    const a = hashString(text).toString(16);
+    const b = hashString(text, 0x27220a95).toString(16);
+    return `${a}${b}`;
   }
 
   private labelOf(n: RecipeNode): string {
@@ -422,7 +506,13 @@ export class Executor {
     return v === undefined || v === "" ? spec.label : `${spec.label} · ${String(v)}`;
   }
 
-  /** 마스크 입력을 (nx*ny) 배열로. 연결이 없으면 전면 개방. */
+  /**
+   * 마스크 입력을 (nx*ny) 배열로. 연결이 없으면 전면 개방.
+   *
+   * 편 결과를 기억해 둔다 — 같은 마스크가 단계마다 base64 디코드와 비트 풀기를
+   * 다시 거칠 이유가 없다. 열쇠에 비트 해시가 들어가므로 사용자가 마스크를
+   * 다시 그리면 저절로 다른 항목이 된다.
+   */
   private maskFor(n: RecipeNode): Uint8Array {
     const s = this.sim;
     const maskNodeId = this.graph.maskOf[n.id];
@@ -431,6 +521,18 @@ export class Executor {
     const mn = this.graph.byId[maskNodeId];
     const asset = this.project.masks.find((m) => m.id === mn?.params.maskId);
     if (!asset) return full();
+    const key = `${asset.id}:${asset.w}x${asset.h}:${hashString(asset.bits)}:${s.NX}x${s.NY}`;
+    const hit = this.maskCache.get(key);
+    if (hit) return hit;
+    const out = this.buildMask(asset);
+    // 몇 장 넘게 들고 있을 이유가 없다 — 한 레시피가 쓰는 마스크는 손에 꼽는다.
+    if (this.maskCache.size > 12) this.maskCache.clear();
+    this.maskCache.set(key, out);
+    return out;
+  }
+
+  private buildMask(asset: { w: number; h: number; bits: string; id: string; name: string }): Uint8Array {
+    const s = this.sim;
     const px = unpackMask(asset);
     if (asset.w === s.NX && asset.h === s.NY) return px;
     // 격자와 크기가 다르면 최근접 이웃으로 늘린다. 마스크를 다시 그리게 하는 것보다
@@ -506,6 +608,7 @@ export class Executor {
         return `절단 z${r.cut} · 제거 ${r.n.toLocaleString()}${dish}${ero}`;
       }
       case "implant": {
+        this.doped = true;
         const sp = lib.sp.index[str("species")];
         if (sp === undefined) throw new Error(`노드 '${n.id}'가 모르는 도펀트를 씁니다: ${str("species")}`);
         const d = opImplant(s, mat, conc, sp, this.maskFor(n), num("rp"), num("drp"), num("dose"), num("dx"), num("dy"));
@@ -523,7 +626,8 @@ export class Executor {
         // 산화는 고온이다. 그 동안 도펀트도 움직인다 — 필드 산화가 채널스톱
         // 주입을 밀어 넣는 것이 LOCOS 실습의 일부다. 도펀트가 없으면 건너뛴다.
         const ox = lib.proc.byId.oxidation[str("condition")];
-        if (ox && conc.some((f) => f.some((v) => v > 0))) {
+        // 주입이 한 번도 없었으면 3×N을 훑어 볼 것도 없다.
+        if (ox && this.doped && conc.some((f) => f.some((v) => v > 0))) {
           const pl = annealPlan(lib.sp, ox.temperature, num("seconds"), this.nmPerVoxel);
           opAnneal(s, mat, conc, pl.steps, pl.dt, pl.rel);
         }
