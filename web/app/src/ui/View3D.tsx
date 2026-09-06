@@ -14,6 +14,14 @@ import { buildMesh, buildSmoothMesh } from "../core/render/mesh";
 import type { DopingField } from "../core/render/slice";
 import type { ViewData } from "./useSimulation";
 
+/**
+ * 메시를 다시 만들기 전에 기다리는 시간.
+ *
+ * 슬라이더가 손을 따라오게 하는 값이다. 너무 짧으면 재생성이 밀리고, 너무 길면
+ * 단계를 옮길 때 빈 화면이 보인다. 메시 한 번이 200ms대라 그보다 짧게 둔다.
+ */
+const MESH_DEBOUNCE_MS = 110;
+
 export interface View3DProps {
   view: ViewData;
   /** 이 좌표보다 큰 쪽을 잘라낸다. */
@@ -247,8 +255,23 @@ export function View3D(p: View3DProps) {
     };
   }, []);
 
-  // 데이터가 바뀌면 메시를 다시 만든다.
+  /*
+   * 데이터가 바뀌면 메시를 다시 만든다 — 다만 **한 박자 늦춘다.**
+   *
+   * 완화·절단 슬라이더는 끄는 동안 값을 수십 번 던지는데, 메시 한 번이 200ms대다.
+   * 그대로 따라가면 재생성이 줄줄이 밀려 슬라이더가 손을 못 따라온다. 입력이
+   * 멎기를 기다렸다 한 번만 만들면 끄는 동안은 화면이 살아 있고, 결과는 어차피
+   * 마지막 값 하나다.
+   *
+   * 단계를 옮길 때는 이미 워커를 수백 ms 기다린 뒤라 이 지연이 안 보인다.
+   */
   useEffect(() => {
+    if (!stateRef.current) return;
+    const timer = setTimeout(() => build(), MESH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+
+    function build() {
+    // 늦춰 부르므로 그 사이에 화면이 사라졌을 수 있다. 여기서 다시 잡는다.
     const s = stateRef.current;
     if (!s) return;
     const { nx, ny, nz } = p.view;
@@ -296,6 +319,7 @@ export function View3D(p: View3DProps) {
     s.target.set(0, 0, 0);
     s.radius = 0.5 * Math.hypot(nx, ny, nz);
     (s as unknown as { place?: () => void }).place?.();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [p.view, p.cutX, p.cutAxis, p.showVoids, p.hidden, p.smooth, p.mode, p.doping, p.diff]);
 

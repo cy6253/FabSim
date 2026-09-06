@@ -134,10 +134,27 @@ export class Executor {
   /** φ 원본을 들고 있는 재개 지점의 서명. 오래된 것부터 버린다. */
   private phiHolders: string[] = [];
   private maxPhiHolders = 4;
-  /** 서명 → 프레임. 화면 스크럽이 여기서 읽는다. */
+  /** 서명 → 프레임. 화면 스크럽이 여기서 읽는다. Map은 넣은 순서를 지키므로 앞이 오래된 것이다. */
   private frames = new Map<string, Frame>();
+  /**
+   * 프레임 캐시 예산.
+   *
+   * 이게 없으면 캐시가 **끝없이 자란다.** 노브를 한 번 만질 때마다 서명이
+   * 달라지고 그 값의 프레임이 통째로 새로 쌓이는데, 예전에는 버리는 곳이
+   * 없었다 — 식각 시간 하나를 서른 번 만지면 56MB에서 814MB가 됐다. 슬라이더를
+   * 잠깐 훑는 것만으로 탭이 죽는다.
+   *
+   * 버려도 정확성에는 영향이 없다. 캐시가 없으면 그 단계를 다시 돌 뿐이다.
+   * 예산은 무거운 예제 한 벌(allops 77MB)에 여유를 얹은 값이다.
+   */
+  private maxCacheBytes: number;
+  /** 지금 돌고 있는 갈래의 서명. 이건 방금 만들었거나 곧 쓸 것이라 안 버린다. */
+  private activeSigs = new Set<string>();
 
-  constructor(project: Project) {
+  constructor(project: Project, opts: { maxCacheBytes?: number } = {}) {
+    // 기본값은 무거운 예제 한 벌(allops 77MB)에 여유를 얹은 값이다. 테스트는
+    // 작은 값을 넣어 실제로 버려지는지 본다.
+    this.maxCacheBytes = opts.maxCacheBytes ?? 128 * 1024 * 1024;
     this.project = project;
     this.lib = libraryOf(project);
     this.sim = createSim(project.grid.nx, project.grid.ny, project.grid.nz, this.lib);
@@ -247,10 +264,14 @@ export class Executor {
       s.concDirty = false;
     }
 
+    this.activeSigs = new Set(sigs);
+
     const out: Frame[] = [];
     for (let i = 0; i < startAt; i++) {
       const f = this.frames.get(sigs[i]);
-      if (f) out.push(f);
+      // 다시 넣어 맨 뒤로 보낸다 — 지금 보고 있는 갈래가 가장 최근이 되어야
+      // 버릴 때 예전 노브 값의 프레임부터 나간다.
+      if (f) { this.frames.delete(sigs[i]); this.frames.set(sigs[i], f); out.push(f); }
     }
 
     for (let i = startAt; i <= last; i++) {
@@ -280,7 +301,9 @@ export class Executor {
         ...stats!,
       };
       s.concDirty = false;
+      this.frames.delete(sigs[i]);
       this.frames.set(sigs[i], frame);
+      this.evict();
       out.push(frame);
       opt.onFrame?.(frame, i, last + 1);
 
@@ -330,6 +353,22 @@ export class Executor {
       };
     }
     return { counts, voidCount, topOccupied, changed: { added, removed, mutated }, addedPerColumn };
+  }
+
+  /**
+   * 예산을 넘으면 오래 안 쓴 프레임부터 버린다.
+   *
+   * 지금 갈래의 것은 건드리지 않는다. 방금 만든 것을 곧바로 버리면 다음 단계가
+   * 다시 만들고 또 버리는 헛돌기가 된다 — 격자가 커서 갈래 하나가 예산을
+   * 통째로 넘길 때 그렇게 된다. 그럴 때는 예산을 넘긴 채로 두는 것이 맞다.
+   */
+  private evict() {
+    if (this.cacheBytes() <= this.maxCacheBytes) return;
+    for (const sig of [...this.frames.keys()]) {
+      if (this.activeSigs.has(sig)) continue;
+      this.frames.delete(sig);
+      if (this.cacheBytes() <= this.maxCacheBytes) return;
+    }
   }
 
   private touchPhi(sig: string) {

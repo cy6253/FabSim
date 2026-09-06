@@ -14,6 +14,7 @@ import {
   newProject, parseProject, serializeProject, validateProject, GRID_PRESETS,
 } from "../project/serialize";
 import { chainTo, leaves, indexGraph, defaultLeaf } from "../project/graph";
+import { setParam } from "../project/edit";
 import { EXAMPLES, exampleById } from "../project/examples";
 import { defaultParams, NODE_SPECS, NODE_SPEC_BY_TYPE, optionsFor } from "../project/nodes";
 import { Executor, Cancelled } from "../runner/executor";
@@ -453,5 +454,41 @@ describe("노드 카탈로그", () => {
     expect(vals).not.toContain("PR_exposed");
     expect(vals).toContain("PR");
     expect(vals).toContain("aC");
+  });
+});
+
+/* ------------------------------------------------------------- 캐시 예산 */
+
+describe("프레임 캐시가 끝없이 자라지 않는다", () => {
+  it("노브를 계속 만져도 예산 근처에서 멎는다", () => {
+    /*
+     * 노브를 한 번 만질 때마다 서명이 달라지고 그 값의 프레임이 통째로 새로
+     * 쌓인다. 예전에는 버리는 곳이 없어서, 식각 시간 하나를 서른 번 만지면
+     * 캐시가 56MB에서 814MB가 됐다 — 슬라이더를 잠깐 훑는 것만으로 탭이 죽는다.
+     *
+     * 버려도 정확성에는 영향이 없다. 캐시가 없으면 그 단계를 다시 돌 뿐이라,
+     * 여기서 보는 것은 "결과가 맞나"가 아니라 "메모리가 멎나"다.
+     */
+    let p = exampleById("trench");
+    p = { ...p, grid: { nx: 48, ny: 24, nz: 32 } };
+    const budget = 2 * 1024 * 1024;
+    const ex = new Executor(p, { maxCacheBytes: budget });
+    const leaf = defaultLeaf(p)!;
+    ex.run(leaf);
+    const one = ex.cacheBytes();
+
+    const etch = chainTo(p, leaf).find((n) => n.type === "etch")!;
+    for (let k = 1; k <= 12; k++) {
+      p = setParam(p, etch.id, "seconds", 5 + k);
+      ex.update(p);
+      ex.run(defaultLeaf(p)!);
+    }
+    // 예산 + 지금 갈래 한 벌까지는 봐준다 — 돌고 있는 갈래는 안 버리기 때문이다.
+    expect(ex.cacheBytes(), `12번 만진 뒤 ${(ex.cacheBytes() / 1e6).toFixed(1)}MB`)
+      .toBeLessThanOrEqual(budget + one);
+    // 그래도 결과는 멀쩡해야 한다.
+    expect(ex.run(defaultLeaf(p)!).length).toBe(
+      chainTo(p, defaultLeaf(p)!).filter((n) => !NODE_SPEC_BY_TYPE[n.type]?.asset).length,
+    );
   });
 });

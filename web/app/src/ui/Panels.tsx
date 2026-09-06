@@ -4,7 +4,7 @@
  * 재질별 숨김 토글은 Unity 원본(MaterialToggle)에 있었는데 웹 재설계에서
  * 빠졌던 기능이다. 프로젝트 검토에서 되찾았다.
  */
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { MATNAME, MATCOL, EMPTY, VOIDCOL } from "../core/materials";
 import { countBySeverity, type Diagnostic, type Severity } from "../core/education/diagnostics";
 import { columnStack, voidStats } from "../core/education/measure";
@@ -289,14 +289,22 @@ export function Diagnostics(p: {
 
 /** 컬럼 하나를 찍어 층 두께를 읽는다. 3D를 클릭하면 여기가 갱신된다. */
 export function Probe(p: { view: ViewData; lib: Library; x: number; y: number; nmPerVoxel: number }) {
-  const stack = columnStack(
-    p.view.mat,
-    { nx: p.view.nx, ny: p.view.ny, nz: p.view.nz },
-    p.x,
-    p.y,
-    p.lib,
+  const g = { nx: p.view.nx, ny: p.view.ny, nz: p.view.nz };
+  const stack = useMemo(
+    () => columnStack(p.view.mat, g, p.x, p.y, p.lib),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [p.view, p.x, p.y, p.lib],
   );
-  const vs = voidStats(p.view.voids, { nx: p.view.nx, ny: p.view.ny, nz: p.view.nz });
+  /*
+   * 보이드 통계는 격자를 통째로 훑는다(100만 칸 남짓). 이 패널이 열려 있는 동안
+   * 앱이 다시 그려질 때마다 — 자동 진행 한 틱마다, 글자 하나 칠 때마다 — 그
+   * 전체 훑기가 다시 돌고 있었다. 자료가 그대로면 답도 그대로다.
+   */
+  const vs = useMemo(
+    () => voidStats(p.view.voids, g),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [p.view],
+  );
   return (
     <div className="panel tight">
       <h3>

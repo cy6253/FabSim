@@ -19,7 +19,7 @@
  *
  * Run 버튼은 여전히 없다 — 노브를 움직이면 그 지점부터 자동으로 다시 돈다(결정 ⑥).
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EXAMPLES, exampleById } from "../core/project/examples";
 import { parseProject, serializeProject, libraryOf, newProject } from "../core/project/serialize";
 import { insertStep, removeStep, moveStepDown, moveStepUp } from "../core/project/edit";
@@ -31,7 +31,6 @@ import { View3D } from "./View3D";
 import { RecipeList } from "./RecipeList";
 import { StepInspector } from "./StepInspector";
 import { Details } from "./Details";
-import { NodeEditor } from "./NodeEditor";
 import { Legend, StepBar } from "./Panels";
 import { exportSlicePNG, exportStepsCSV } from "./exports";
 import { MaskDesigner } from "./MaskDesigner";
@@ -39,6 +38,16 @@ import { LibraryEditor } from "./LibraryEditor";
 import { loadState, saveState } from "./persist";
 import { useUndoable } from "./useUndoable";
 import "./styles.css";
+
+/*
+ * 그래프 화면은 열 때 받아 온다.
+ *
+ * @xyflow는 이 앱에서 가장 무거운 의존이면서 모달 하나에서만 쓴다. 같이 묶어
+ * 두면 3D를 보러 온 사람도 그래프 편집기를 내려받고 나서야 첫 화면을 본다.
+ */
+const NodeEditor = lazy(() =>
+  import("./NodeEditor").then((m) => ({ default: m.NodeEditor })),
+);
 
 const HINT_KEY = "fabsim3d.hint.dismissed";
 
@@ -394,16 +403,18 @@ export function App() {
               <span className="spacer" />
               <button onClick={() => setModal(null)}>닫기</button>
             </header>
-            <NodeEditor
-              project={project}
-              onChange={setProject}
-              selectedId={currentId ?? null}
-              onSelect={(id) => {
-                const i = sim.chain.findIndex((c) => c.id === id);
-                if (i >= 0) goTo(i);
-              }}
-              activeId={currentId}
-            />
+            <Suspense fallback={<div className="placeholder">그래프 편집기를 불러오는 중…</div>}>
+              <NodeEditor
+                project={project}
+                onChange={setProject}
+                selectedId={currentId ?? null}
+                onSelect={(id) => {
+                  const i = sim.chain.findIndex((c) => c.id === id);
+                  if (i >= 0) goTo(i);
+                }}
+                activeId={currentId}
+              />
+            </Suspense>
           </div>
         </div>
       )}
