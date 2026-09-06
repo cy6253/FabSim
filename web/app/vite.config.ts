@@ -12,6 +12,8 @@ export default defineConfig({
     environment: "node",
     include: ["src/**/*.test.ts"],
     testTimeout: 120_000,
+    // CMOS 예제 한 벌이 64초다. beforeAll에서 돌리므로 hook도 넉넉해야 한다.
+    hookTimeout: 180_000,
     // 워커가 진행 보고의 응답을 집을 틈을 만든다. 이유는 setup 파일에 적었다.
     setupFiles: ["./src/test-setup.ts"],
   },

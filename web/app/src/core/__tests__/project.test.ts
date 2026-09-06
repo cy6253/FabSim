@@ -273,6 +273,9 @@ function sharedRun(id: string) {
 describe("예제 레시피가 실제로 그것을 가르치는가", () => {
   it("모든 예제가 끝까지 돈다", () => {
     for (const e of EXAMPLES) {
+      // 무거운 것(CMOS 93단계, 64초)은 제 파일에서 끝까지 본다 — 여기 끼우면
+      // 이 파일이 통째로 그만큼 길어지고, 파일은 병렬로 도니 나눠 두는 게 싸다.
+      if (e.heavy) continue;
       const { p, frames } = sharedRun(e.id);
       const steps = p.nodes.filter((n) => n.type !== "mask").length;
       expect(frames, e.id).toHaveLength(steps);

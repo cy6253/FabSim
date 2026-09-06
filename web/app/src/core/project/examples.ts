@@ -2,7 +2,15 @@
  * 예제 레시피 — 곧 커리큘럼이다.
  *
  * 교육 범위 결정(2026-09-04): 단위공정 실습(트렌치 증착·LOCOS·STI·게이트·
- * 콘택/플러그)과 완성형 NMOS 하나까지. CMOS 인버터는 범위 밖.
+ * 콘택/플러그)과 완성형 NMOS 하나까지.
+ *
+ * **CMOS는 범위 밖이었다가 들어왔다(2026-09-06).** 사용자가 이 도구로 93단계짜리
+ * 인버터를 직접 끝까지 만들었기 때문이다 — 범위를 정할 때의 근거는 "한 사람이
+ * 앉아서 만들기에 너무 길다"였는데, 만들어진 물건이 그 근거를 지웠다. 다만 코드로
+ * 옮겨 적지는 않았다. 아래 레시피들은 격자에 상대적인 길이로 쓰여 어느 격자에서도
+ * 같은 모양이 나오지만, CMOS는 특정 격자(300×100×64)에 맞춰 손으로 세운 것이라
+ * 그 성질이 없다. 그래서 **파일 그대로** 싣는다(recipes/cmos.fabsim.json).
+ * 사용자가 저장한 것과 학생이 여는 것이 같은 파일이라는 뜻이기도 하다.
  *
  * 각 레시피는 "무엇을 보라"가 분명해야 한다. 노드 주석(note)이 그 자리이고,
  * 가이드 레슨은 지금 단계에서 거기까지만 한다.
@@ -15,7 +23,8 @@
  * 산화는 두께가 시간에 비례하지 않아 특별하다. 원하는 두께를 `dealGroveTime`
  * 으로 시간으로 되돌려 쓴다.
  */
-import { newProject } from "./serialize";
+import { newProject, validateProject } from "./serialize";
+import cmosJson from "./recipes/cmos.fabsim.json";
 import { defaultParams } from "./nodes";
 import { dealGroveTime } from "../ops";
 import { DEFAULT_LIBRARY } from "../library";
@@ -523,7 +532,24 @@ export interface ExampleRecipe {
   title: string;
   summary: string;
   build: () => Project;
+  /**
+   * 한 벌 도는 데 1분 안팎, 메모리 수백 MB가 드는 예제인가.
+   *
+   * 화면은 이걸 보고 미리 알려 주고, 테스트는 이걸 보고 제 파일로 미룬다 —
+   * 다른 검사에 끼워 넣으면 그 파일이 통째로 그만큼 길어진다.
+   */
+  heavy?: boolean;
 }
+
+/**
+ * 파일로 실린 레시피.
+ *
+ * 들여온 JSON은 모듈 하나를 모두가 나눠 쓰므로 **그대로 내주면 안 된다** —
+ * 학생이 노브 하나만 만져도 다음에 여는 사람의 예제가 이미 바뀌어 있다.
+ * validateProject가 노드와 마스크는 새로 만들지만 간선까지는 아니라, 확실하게
+ * 한 번 복사해서 넘긴다. 60KB 한 번 훑는 값이라 여는 순간에만 든다.
+ */
+const fromFile = (raw: unknown) => () => validateProject(JSON.parse(JSON.stringify(raw)));
 
 export const EXAMPLES: ExampleRecipe[] = [
   {
@@ -555,6 +581,15 @@ export const EXAMPLES: ExampleRecipe[] = [
     title: "3D NAND",
     summary: "층을 쌓아 한 번에 뚫고, 질화막을 빼낸 자리에 워드라인을 넣는다",
     build: nand3d,
+  },
+  {
+    id: "cmos",
+    title: "CMOS 인버터",
+    summary:
+      "웰 둘·게이트·콘택·배선 2층까지 93단계. 절연막을 접어 둬서 소자가 바로 보입니다 — " +
+      "무겁습니다(끝까지 약 1분, 메모리 600MB)",
+    build: fromFile(cmosJson),
+    heavy: true,
   },
   {
     id: "allops",
